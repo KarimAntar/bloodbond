@@ -14,9 +14,9 @@ const BloodIcon = ({ focused }: { focused: boolean }) => (
   </View>
 );
 
-const TabIcon = ({ name, focused }: { name: string; focused: boolean }) => (
+const TabIcon = ({ name, focused }: { name: any; focused: boolean }) => (
   <Ionicons
-    name={name as any}
+    name={name}
     size={24}
     color={focused ? '#E53E3E' : '#666'}
   />
@@ -46,7 +46,7 @@ export default function TabLayout() {
           fontWeight: '500',
           marginTop: 4,
         },
-        headerShown: false,
+        headerShown: false, // Keep headers hidden on tab screens
       }}
     >
       <Tabs.Screen

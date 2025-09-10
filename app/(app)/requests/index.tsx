@@ -12,8 +12,8 @@ import {
   TextInput,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { db } from '../firebase/firebaseConfig';
-import { useAuth } from '../contexts/AuthContext';
+import { db } from '../../firebase/firebaseConfig';
+import { useAuth } from '../../contexts/AuthContext';
 import { collection, getDocs, query, orderBy, where } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
 

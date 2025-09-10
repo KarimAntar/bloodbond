@@ -1,5 +1,5 @@
 // app/(tabs)/profile.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,12 +9,14 @@ import {
   TouchableOpacity,
   Alert,
   Switch,
+  ActivityIndicator,
 } from 'react-native';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
+// ... (ProfileOption and StatCard components remain the same)
 const ProfileOption: React.FC<{
   icon: string;
   title: string;
@@ -50,36 +52,38 @@ const StatCard: React.FC<{
   </View>
 );
 
+
 export default function ProfileTabScreen() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [locationEnabled, setLocationEnabled] = useState(true);
-  const { user, userProfile, logout } = useAuth();
+  const { user, userProfile, logout, loading } = useAuth();
   const router = useRouter();
+  
+  useEffect(() => {
+    if (!loading && !user) {
+      router.replace('/auth/login');
+    }
+  }, [user, loading, router]);
+
 
   const handleLogout = () => {
     Alert.alert(
       'Confirm Logout',
-      'Are you sure you want to logout?',
+      'Are you sure you want to log out?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Logout',
           style: 'destructive',
-          onPress: async () => {
-            try {
-              await logout();
-              router.replace('/auth/login');
-            } catch (error) {
-              Alert.alert('Error', 'Failed to logout. Please try again.');
-            }
-          },
+          // The logout function from context now handles everything
+          onPress: logout,
         },
       ]
     );
   };
 
   const handleEditProfile = () => {
-    router.push('/profile/setup');
+    router.push('/profile/edit');
   };
 
   const handleMyRequests = () => {
@@ -91,39 +95,21 @@ export default function ProfileTabScreen() {
   };
 
   const handleSettings = () => {
-    router.push('/profile/settings');
+    // router.push('/profile/settings');
   };
 
   const handleEmergencyContacts = () => {
-    router.push('/profile/emergency-contacts');
+    // router.push('/profile/emergency-contacts');
   };
 
   const handleDonationHistory = () => {
     router.push('/profile/donation-history');
   };
 
-  if (!user) {
+  if (loading || !user || !userProfile) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loginPrompt}>
-          <Ionicons name="person-circle-outline" size={80} color="#ccc" />
-          <Text style={styles.loginTitle}>Welcome to BloodBond</Text>
-          <Text style={styles.loginDescription}>
-            Sign in to access your profile and track your blood donation journey
-          </Text>
-          <TouchableOpacity
-            style={styles.loginButton}
-            onPress={() => router.push('/auth/login')}
-          >
-            <Text style={styles.loginButtonText}>Sign In</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.registerButton}
-            onPress={() => router.push('/auth/register')}
-          >
-            <Text style={styles.registerButtonText}>Create Account</Text>
-          </TouchableOpacity>
-        </View>
+      <SafeAreaView style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#E53E3E" />
       </SafeAreaView>
     );
   }
@@ -321,10 +307,16 @@ export default function ProfileTabScreen() {
   );
 }
 
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',
+  },
+  loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
   },
   profileHeader: {
     paddingTop: 20,
@@ -474,55 +466,5 @@ const styles = StyleSheet.create({
   versionSubtext: {
     fontSize: 12,
     color: '#ccc',
-  },
-  loginPrompt: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 40,
-  },
-  loginTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
-    marginTop: 20,
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  loginDescription: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 32,
-  },
-  loginButton: {
-    backgroundColor: '#E53E3E',
-    paddingHorizontal: 32,
-    paddingVertical: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-    width: '100%',
-    alignItems: 'center',
-  },
-  loginButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  registerButton: {
-    backgroundColor: 'transparent',
-    borderWidth: 2,
-    borderColor: '#E53E3E',
-    paddingHorizontal: 32,
-    paddingVertical: 16,
-    borderRadius: 12,
-    width: '100%',
-    alignItems: 'center',
-  },
-  registerButtonText: {
-    color: '#E53E3E',
-    fontSize: 16,
-    fontWeight: '600',
   },
 });

@@ -10,6 +10,7 @@ import {
   signOut
 } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
+import { useRouter } from 'expo-router'; // Import useRouter
 
 interface UserProfile {
   fullName: string;
@@ -18,6 +19,7 @@ interface UserProfile {
   profileComplete: boolean;
   email: string;
   createdAt: any;
+  phone?: string;
 }
 
 type AuthContextType = {
@@ -41,6 +43,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const router = useRouter(); // Get the router instance
 
   // Fetch user profile from Firestore
   const fetchUserProfile = async (userId: string): Promise<UserProfile | null> => {
@@ -90,12 +93,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const logout = async () => {
-    await signOut(auth);
-    setUserProfile(null);
+    try {
+        await signOut(auth);
+        setUserProfile(null);
+        // Directly navigate to the login screen after signing out
+        router.replace('/auth/login');
+    } catch (error) {
+        console.error("Error during logout:", error);
+        // Handle any errors during sign-out if necessary
+    }
   };
+
   const register = async (email: string, password: string, fullName: string) => {
     await createUserWithEmailAndPassword(auth, email, password);
   };
+  
   const sendVerificationEmail = async () => {
     if (user) {
       await sendEmailVerification(user);

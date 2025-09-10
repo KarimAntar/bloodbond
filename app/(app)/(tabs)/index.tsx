@@ -1,21 +1,22 @@
-// app/(tabs)/index.tsx
-import React, { useEffect, useState } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ActivityIndicator, 
+// app/(app)/(tabs)/index.tsx
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ActivityIndicator,
   TouchableOpacity,
   SafeAreaView,
   ScrollView,
   Dimensions,
   Alert
 } from 'react-native';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
+// ... (Your components like StatsCard and ActionButton remain unchanged)
 const { width } = Dimensions.get('window');
 
 interface StatsCardProps {
@@ -68,28 +69,7 @@ export default function HomeScreen() {
     peopleSaved: 3
   });
 
-  useEffect(() => {
-    if (loading) return;
-    
-    if (!user) {
-      router.replace('/auth/login');
-      return;
-    }
-
-    if (user && !user.emailVerified) {
-      Alert.alert(
-        'Email Verification Required',
-        'Please verify your email address to continue using BloodBond.',
-        [{ text: 'OK', onPress: () => router.replace('/auth/login') }]
-      );
-      return;
-    }
-
-    if (user && (!userProfile || !userProfile.profileComplete)) {
-      router.replace('/profile/setup');
-      return;
-    }
-  }, [user, userProfile, loading, router]);
+  // REMOVED the useEffect for redirection. The (app)/_layout.tsx handles this now.
 
   const handleLogout = async () => {
     Alert.alert(
@@ -100,20 +80,13 @@ export default function HomeScreen() {
         { 
           text: 'Logout', 
           style: 'destructive',
-          onPress: async () => {
-            try {
-              await logout();
-              router.replace('/auth/login');
-            } catch (error) {
-              Alert.alert('Error', 'Failed to logout. Please try again.');
-            }
-          }
+          onPress: logout // Directly call logout from context
         }
       ]
     );
   };
 
-  if (loading) {
+  if (loading || !user || !userProfile) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#E53E3E" />
@@ -122,15 +95,10 @@ export default function HomeScreen() {
     );
   }
 
-  if (!user || !userProfile) {
-    return null;
-  }
-
   const firstName = userProfile.fullName.split(' ')[0];
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <Text style={styles.greeting}>Good morning</Text>
@@ -142,7 +110,6 @@ export default function HomeScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Hero Section */}
         <LinearGradient
           colors={['#E53E3E', '#C53030']}
           style={styles.heroSection}
@@ -157,8 +124,6 @@ export default function HomeScreen() {
             </Text>
           </View>
         </LinearGradient>
-
-        {/* Profile Info */}
         <View style={styles.profileCard}>
           <View style={styles.profileHeader}>
             <View style={[styles.bloodTypeBadge, { backgroundColor: '#E53E3E' }]}>
@@ -173,69 +138,23 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Stats */}
         <View style={styles.statsSection}>
           <Text style={styles.sectionTitle}>Your Impact</Text>
           <View style={styles.statsGrid}>
-            <StatsCard
-              icon="pulse"
-              title="Total Requests"
-              count={stats.totalRequests}
-              color="#E53E3E"
-            />
-            <StatsCard
-              icon="time"
-              title="Active Requests"
-              count={stats.activeRequests}
-              color="#F56500"
-            />
-            <StatsCard
-              icon="chatbubble-ellipses"
-              title="Responses Given"
-              count={stats.responsesGiven}
-              color="#38A169"
-            />
-            <StatsCard
-              icon="people"
-              title="Lives Touched"
-              count={stats.peopleSaved}
-              color="#3182CE"
-            />
+            <StatsCard icon="pulse" title="Total Requests" count={stats.totalRequests} color="#E53E3E"/>
+            <StatsCard icon="time" title="Active Requests" count={stats.activeRequests} color="#F56500"/>
+            <StatsCard icon="chatbubble-ellipses" title="Responses Given" count={stats.responsesGiven} color="#38A169"/>
+            <StatsCard icon="people" title="Lives Touched" count={stats.peopleSaved} color="#3182CE"/>
           </View>
         </View>
-
-        {/* Quick Actions */}
+        
         <View style={styles.actionsSection}>
           <Text style={styles.sectionTitle}>Quick Actions</Text>
           <View style={styles.actionsList}>
-            <ActionButton
-              icon="add-circle"
-              title="Create Request"
-              subtitle="Request blood donation"
-              onPress={() => router.push('/requests/create')}
-              color="#E53E3E"
-            />
-            <ActionButton
-              icon="list"
-              title="Browse Requests"
-              subtitle="Find people who need help"
-              onPress={() => router.push('/requests')}
-              color="#3182CE"
-            />
-            <ActionButton
-              icon="person"
-              title="Update Profile"
-              subtitle="Manage your information"
-              onPress={() => router.push('/profile/setup')}
-              color="#38A169"
-            />
-            <ActionButton
-              icon="notifications"
-              title="Notifications"
-              subtitle="Stay updated on responses"
-              onPress={() => {/* TODO: Implement notifications */}}
-              color="#F56500"
-            />
+            <ActionButton icon="add-circle" title="Create Request" subtitle="Request blood donation" onPress={() => router.push('/requests/create')} color="#E53E3E"/>
+            <ActionButton icon="list" title="Browse Requests" subtitle="Find people who need help" onPress={() => router.push('/requests')} color="#3182CE"/>
+            <ActionButton icon="person" title="Update Profile" subtitle="Manage your information" onPress={() => router.push('/profile/edit')} color="#38A169"/>
+            <ActionButton icon="notifications" title="Notifications" subtitle="Stay updated on responses" onPress={() => {}} color="#F56500"/>
           </View>
         </View>
       </ScrollView>
@@ -243,6 +162,7 @@ export default function HomeScreen() {
   );
 }
 
+// ... (styles remain the same)
 const styles = StyleSheet.create({
   container: {
     flex: 1,
