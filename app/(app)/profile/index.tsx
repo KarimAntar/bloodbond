@@ -1,4 +1,4 @@
-// app/(tabs)/profile.tsx
+// app/(app)/(tabs)/profile/index.tsx
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -9,14 +9,14 @@ import {
   TouchableOpacity,
   Alert,
   Switch,
-  ActivityIndicator,
+  ActivityIndicator
 } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
-// ... (ProfileOption and StatCard components remain the same)
+// ... (Your components like ProfileOption and StatCard remain the same)
 const ProfileOption: React.FC<{
   icon: string;
   title: string;
@@ -59,51 +59,43 @@ export default function ProfileTabScreen() {
   const { user, userProfile, logout, loading } = useAuth();
   const router = useRouter();
 
-  
-  useEffect(() => {
-    if (!loading && !user) {
-      router.replace('/(auth)/login');
-    }
-  }, [user, loading, router]);
-
-
   const handleLogout = () => {
     Alert.alert(
       'Confirm Logout',
-      'Are you sure you want to log out?',
+      'Are you sure you want to logout?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Logout',
           style: 'destructive',
-          onPress: logout, // Correctly calls the logout function
+          onPress: logout,
         },
       ]
     );
   };
 
   const handleEditProfile = () => {
-    router.push('/profile/edit');
+    router.push('/(app)/profile/edit');
   };
 
   const handleMyRequests = () => {
-    router.push('/profile/my-requests');
+    router.push('/(app)/profile/my-requests');
   };
 
   const handleMyResponses = () => {
-    router.push('/profile/my-responses');
+    router.push('/(app)/profile/my-responses');
   };
 
   const handleSettings = () => {
-    // router.push('/profile/settings');
+    // router.push('/(app)/profile/settings');
   };
 
   const handleEmergencyContacts = () => {
-    // router.push('/profile/emergency-contacts');
+    // router.push('/(app)/profile/emergency-contacts');
   };
 
   const handleDonationHistory = () => {
-    router.push('/profile/donation-history');
+    router.push('/(app)/profile/donation-history');
   };
 
   if (loading || !user || !userProfile) {
@@ -307,7 +299,7 @@ export default function ProfileTabScreen() {
   );
 }
 
-
+// ... (styles remain the same)
 const styles = StyleSheet.create({
   container: {
     flex: 1,

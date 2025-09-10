@@ -1,5 +1,5 @@
 // app/(app)/(tabs)/index.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,14 +11,15 @@ import {
   Dimensions,
   Alert
 } from 'react-native';
+import { AuthProvider } from '../../contexts/AuthContext'; // Adjust path as needed
 import { useAuth } from '../../contexts/AuthContext';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
-// ... (Your components like StatsCard and ActionButton remain unchanged)
 const { width } = Dimensions.get('window');
 
+// --- Your existing components (StatsCard, ActionButton) are correct and can stay here ---
 interface StatsCardProps {
   icon: string;
   title: string;
@@ -59,6 +60,7 @@ const ActionButton: React.FC<ActionButtonProps> = ({ icon, title, subtitle, onPr
   </TouchableOpacity>
 );
 
+
 export default function HomeScreen() {
   const { user, userProfile, loading, logout } = useAuth();
   const router = useRouter();
@@ -69,18 +71,24 @@ export default function HomeScreen() {
     peopleSaved: 3
   });
 
-  // REMOVED the useEffect for redirection. The (app)/_layout.tsx handles this now.
+  useEffect(() => {
+    // This effect redirects the user if their profile isn't complete.
+    // The main auth guard is now in (app)/_layout.tsx.
+    if (!loading && user && (!userProfile || !userProfile.profileComplete)) {
+      router.replace('/(app)/profile/setup');
+    }
+  }, [user, userProfile, loading, router]);
 
-  const handleLogout = async () => {
+  const handleLogout = () => {
     Alert.alert(
       'Confirm Logout',
       'Are you sure you want to logout?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Logout', 
+        {
+          text: 'Logout',
           style: 'destructive',
-          onPress: logout // Directly call logout from context
+          onPress: logout, // This calls the function from your AuthContext
         }
       ]
     );
@@ -98,71 +106,121 @@ export default function HomeScreen() {
   const firstName = userProfile.fullName.split(' ')[0];
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Text style={styles.greeting}>Good morning</Text>
-          <Text style={styles.userName}>{firstName} 👋</Text>
-        </View>
-        <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-          <Ionicons name="log-out-outline" size={24} color="#666" />
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <LinearGradient
-          colors={['#E53E3E', '#C53030']}
-          style={styles.heroSection}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        >
-          <View style={styles.heroContent}>
-            <Ionicons name="heart" size={32} color="white" />
-            <Text style={styles.heroTitle}>BloodBond</Text>
-            <Text style={styles.heroSubtitle}>
-              Connecting lives through the gift of blood
-            </Text>
+    <AuthProvider>
+      <SafeAreaView style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <Text style={styles.greeting}>Good morning</Text>
+            <Text style={styles.userName}>{firstName} 👋</Text>
           </View>
-        </LinearGradient>
-        <View style={styles.profileCard}>
-          <View style={styles.profileHeader}>
-            <View style={[styles.bloodTypeBadge, { backgroundColor: '#E53E3E' }]}>
-              <Text style={styles.bloodTypeText}>{userProfile.bloodType}</Text>
-            </View>
-            <View style={styles.profileInfo}>
-              <Text style={styles.profileName}>{userProfile.fullName}</Text>
-              <Text style={styles.profileLocation}>
-                <Ionicons name="location" size={14} color="#666" /> {userProfile.city}
+          {/* THE FIX IS HERE: Added onPress={handleLogout} */}
+          <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+            <Ionicons name="log-out-outline" size={24} color="#666" />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView showsVerticalScrollIndicator={false}>
+          {/* --- The rest of your home screen JSX is correct and can stay here --- */}
+          <LinearGradient
+            colors={['#E53E3E', '#C53030']}
+            style={styles.heroSection}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
+            <View style={styles.heroContent}>
+              <Ionicons name="heart" size={32} color="white" />
+              <Text style={styles.heroTitle}>BloodBond</Text>
+              <Text style={styles.heroSubtitle}>
+                Connecting lives through the gift of blood
               </Text>
             </View>
-          </View>
-        </View>
+          </LinearGradient>
 
-        <View style={styles.statsSection}>
-          <Text style={styles.sectionTitle}>Your Impact</Text>
-          <View style={styles.statsGrid}>
-            <StatsCard icon="pulse" title="Total Requests" count={stats.totalRequests} color="#E53E3E"/>
-            <StatsCard icon="time" title="Active Requests" count={stats.activeRequests} color="#F56500"/>
-            <StatsCard icon="chatbubble-ellipses" title="Responses Given" count={stats.responsesGiven} color="#38A169"/>
-            <StatsCard icon="people" title="Lives Touched" count={stats.peopleSaved} color="#3182CE"/>
+          <View style={styles.profileCard}>
+            <View style={styles.profileHeader}>
+              <View style={[styles.bloodTypeBadge, { backgroundColor: '#E53E3E' }]}>
+                <Text style={styles.bloodTypeText}>{userProfile.bloodType}</Text>
+              </View>
+              <View style={styles.profileInfo}>
+                <Text style={styles.profileName}>{userProfile.fullName}</Text>
+                <Text style={styles.profileLocation}>
+                  <Ionicons name="location" size={14} color="#666" /> {userProfile.city}
+                </Text>
+              </View>
+            </View>
           </View>
-        </View>
-        
-        <View style={styles.actionsSection}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
-          <View style={styles.actionsList}>
-            <ActionButton icon="add-circle" title="Create Request" subtitle="Request blood donation" onPress={() => router.push('/requests/create')} color="#E53E3E"/>
-            <ActionButton icon="list" title="Browse Requests" subtitle="Find people who need help" onPress={() => router.push('/requests')} color="#3182CE"/>
-            <ActionButton icon="person" title="Update Profile" subtitle="Manage your information" onPress={() => router.push('/profile/edit')} color="#38A169"/>
-            <ActionButton icon="notifications" title="Notifications" subtitle="Stay updated on responses" onPress={() => {}} color="#F56500"/>
+
+          <View style={styles.statsSection}>
+            <Text style={styles.sectionTitle}>Your Impact</Text>
+            <View style={styles.statsGrid}>
+              <StatsCard
+                icon="pulse"
+                title="Total Requests"
+                count={stats.totalRequests}
+                color="#E53E3E"
+              />
+              <StatsCard
+                icon="time"
+                title="Active Requests"
+                count={stats.activeRequests}
+                color="#F56500"
+              />
+              <StatsCard
+                icon="chatbubble-ellipses"
+                title="Responses Given"
+                count={stats.responsesGiven}
+                color="#38A169"
+              />
+              <StatsCard
+                icon="people"
+                title="Lives Touched"
+                count={stats.peopleSaved}
+                color="#3182CE"
+              />
+            </View>
           </View>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+
+          <View style={styles.actionsSection}>
+            <Text style={styles.sectionTitle}>Quick Actions</Text>
+            <View style={styles.actionsList}>
+              <ActionButton
+                icon="add-circle"
+                title="Create Request"
+                subtitle="Request blood donation"
+                onPress={() => router.push('/requests/create')}
+                color="#E53E3E"
+              />
+              <ActionButton
+                icon="list"
+                title="Browse Requests"
+                subtitle="Find people who need help"
+                onPress={() => router.push('/requests')}
+                color="#3182CE"
+              />
+              <ActionButton
+                icon="person"
+                title="Update Profile"
+                subtitle="Manage your information"
+                onPress={() => router.push('/(app)/profile/edit')}
+                color="#38A169"
+              />
+              <ActionButton
+                icon="notifications"
+                title="Notifications"
+                subtitle="Stay updated on responses"
+                onPress={() => {/* TODO: Implement notifications */}}
+                color="#F56500"
+              />
+            </View>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    </AuthProvider>
   );
 }
 
-// ... (styles remain the same)
+// --- Your styles are correct and can stay here ---
 const styles = StyleSheet.create({
   container: {
     flex: 1,

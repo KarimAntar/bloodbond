@@ -3,14 +3,12 @@ import React, { createContext, useState, useContext, ReactNode, useEffect } from
 import { auth, db } from '../firebase/firebaseConfig';
 import { 
   User as FirebaseUser, 
-  sendEmailVerification, 
   onAuthStateChanged,
   signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
   signOut
 } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
-import { useRouter } from 'expo-router'; // Import useRouter
+import { useRouter } from 'expo-router';
 
 interface UserProfile {
   fullName: string;
@@ -28,8 +26,6 @@ type AuthContextType = {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  register: (email: string, password: string, fullName: string) => Promise<void>;
-  sendVerificationEmail: () => Promise<void>;
   refreshUserProfile: () => Promise<void>;
 };
 
@@ -43,9 +39,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  const router = useRouter(); // Get the router instance
+  const router = useRouter();
 
-  // Fetch user profile from Firestore
   const fetchUserProfile = async (userId: string): Promise<UserProfile | null> => {
     try {
       const userDocRef = doc(db, 'users', userId);
@@ -61,7 +56,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  // Refresh user profile
   const refreshUserProfile = async () => {
     if (user) {
       const profile = await fetchUserProfile(user.uid);
@@ -69,16 +63,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  // Effect to handle user authentication state changes
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       
       if (currentUser) {
-        // Fetch user profile when user is authenticated
+        setLoading(true);
         const profile = await fetchUserProfile(currentUser.uid);
         setUserProfile(profile);
       } else {
+        router.replace('/(auth)/login');
         setUserProfile(null);
       }
       
@@ -88,32 +82,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    if (!loading && !user) {
+      router.replace('/(auth)/login');
+    }
+  }, [user, loading, router]);
+
   const login = async (email: string, password: string) => {
     await signInWithEmailAndPassword(auth, email, password);
   };
 
   const logout = async () => {
     try {
-        await signOut(auth);
-        setUserProfile(null);
-        // Directly navigate to the login screen after signing out
-        router.replace('/auth/login');
+      await signOut(auth);
+      router.replace('/(auth)/login');
     } catch (error) {
-        console.error("Error during logout:", error);
-        // Handle any errors during sign-out if necessary
+      console.error('Logout error:', error);
     }
-  };
-
-  const register = async (email: string, password: string, fullName: string) => {
-    await createUserWithEmailAndPassword(auth, email, password);
   };
   
-  const sendVerificationEmail = async () => {
-    if (user) {
-      await sendEmailVerification(user);
-    }
-  };
-
   return (
     <AuthContext.Provider value={{ 
       user, 
@@ -121,8 +108,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       loading, 
       login, 
       logout, 
-      register, 
-      sendVerificationEmail,
       refreshUserProfile 
     }}>
       {children}

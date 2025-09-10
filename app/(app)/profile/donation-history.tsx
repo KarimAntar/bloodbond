@@ -1,4 +1,4 @@
-// app/profile/donation-history.tsx
+// app/(app)/profile/donation-history.tsx
 import React from 'react';
 import {
   View,
@@ -16,25 +16,32 @@ interface Donation {
   date: string;
   location: string;
   bloodType: string;
+  status: 'Completed' | 'Scheduled';
 }
 
+// Mock data, to be replaced with Firestore data later
 const donationHistory: Donation[] = [
-  { id: '1', date: '2024-08-15', location: 'City Hospital', bloodType: 'A+' },
-  { id: '2', date: '2024-05-20', location: 'Red Crescent Center', bloodType: 'A+' },
-  { id: '3', date: '2024-02-10', location: 'Community Blood Drive', bloodType: 'A+' },
+  { id: '1', date: '2024-08-15', location: 'City General Hospital', bloodType: 'A+', status: 'Completed' },
+  { id: '2', date: '2024-05-20', location: 'Red Crescent Center', bloodType: 'A+', status: 'Completed' },
+  { id: '3', date: '2024-02-10', location: 'Community Blood Drive', bloodType: 'A+', status: 'Completed' },
 ];
 
 const DonationCard: React.FC<{ donation: Donation }> = ({ donation }) => (
   <View style={styles.donationCard}>
     <View style={styles.iconContainer}>
-      <Ionicons name="heart-circle" size={32} color="#E53E3E" />
+      <Ionicons name="heart-circle" size={40} color="#E53E3E" />
     </View>
     <View style={styles.donationInfo}>
-      <Text style={styles.donationDate}>{donation.date}</Text>
+      <Text style={styles.donationDate}>{new Date(donation.date).toDateString()}</Text>
       <Text style={styles.donationLocation}>{donation.location}</Text>
     </View>
-    <View style={styles.bloodTypeBadge}>
-      <Text style={styles.bloodTypeText}>{donation.bloodType}</Text>
+    <View style={styles.rightContainer}>
+        <View style={styles.bloodTypeBadge}>
+            <Text style={styles.bloodTypeText}>{donation.bloodType}</Text>
+        </View>
+        <Text style={[styles.statusText, { color: donation.status === 'Completed' ? '#38A169' : '#F59E0B'}]}>
+            {donation.status}
+        </Text>
     </View>
   </View>
 );
@@ -45,11 +52,11 @@ export default function DonationHistoryScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#1a1a1a" />
         </TouchableOpacity>
         <Text style={styles.title}>Donation History</Text>
-        <View style={{ width: 24 }} />
+        <View style={styles.headerRight} />
       </View>
       <FlatList
         data={donationHistory}
@@ -60,7 +67,7 @@ export default function DonationHistoryScreen() {
           <View style={styles.emptyContainer}>
             <Ionicons name="timer-outline" size={64} color="#ccc" />
             <Text style={styles.emptyTitle}>No Donations Yet</Text>
-            <Text style={styles.emptyText}>Your donation history will appear here.</Text>
+            <Text style={styles.emptyText}>Your past and scheduled donations will appear here.</Text>
           </View>
         )}
       />
@@ -77,11 +84,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     backgroundColor: 'white',
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
+  },
+  backButton: {
+    padding: 8,
+  },
+  headerRight: {
+      width: 40,
   },
   title: {
     fontSize: 20,
@@ -120,22 +133,31 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 4,
   },
+  rightContainer: {
+    alignItems: 'flex-end',
+  },
   bloodTypeBadge: {
     backgroundColor: '#FEE2E2',
     borderRadius: 12,
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
     paddingVertical: 4,
+    marginBottom: 8,
   },
   bloodTypeText: {
     color: '#E53E3E',
     fontSize: 12,
     fontWeight: 'bold',
   },
+  statusText: {
+      fontSize: 12,
+      fontWeight: '600'
+  },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: 64,
+    marginTop: 50,
   },
   emptyTitle: {
     fontSize: 20,
@@ -149,5 +171,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 8,
     lineHeight: 24,
+    paddingHorizontal: 20,
   },
 });

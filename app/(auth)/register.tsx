@@ -114,7 +114,7 @@ export default function RegisterScreen() {
             text: 'OK',
             onPress: () => {
               logout(); // Log them out until they verify
-              router.replace('/auth/login');
+              router.replace('/(auth)/login');
             }
           }
         ]
@@ -298,7 +298,7 @@ export default function RegisterScreen() {
           <View style={styles.footer}>
             <Text style={styles.footerText}>Already have an account?</Text>
             <TouchableOpacity
-              onPress={() => router.push('/auth/login')}
+              onPress={() => router.push('/(auth)/login')}
               disabled={loading}
             >
               <Text style={styles.signInText}>Sign In</Text>

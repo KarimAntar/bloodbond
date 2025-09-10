@@ -1,4 +1,4 @@
-// app/(tabs)/create.tsx
+// app/(app)/(tabs)/create.tsx
 import React from 'react';
 import {
   View,
@@ -9,14 +9,14 @@ import {
   ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../contexts/AuthContext'; // CORRECTED PATH
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const ActionCard: React.FC<{
   title: string;
   subtitle: string;
-  icon: string;
+  icon: any; // Changed to any to support all Ionicons names
   color: string;
   onPress: () => void;
 }> = ({ title, subtitle, icon, color, onPress }) => (
@@ -29,7 +29,7 @@ const ActionCard: React.FC<{
     >
       <View style={styles.actionContent}>
         <View style={styles.actionIconContainer}>
-          <Ionicons name={icon as any} size={32} color="white" />
+          <Ionicons name={icon} size={32} color="white" />
         </View>
         <View style={styles.actionTextContainer}>
           <Text style={styles.actionTitle}>{title}</Text>
@@ -44,14 +44,14 @@ const ActionCard: React.FC<{
 );
 
 const InfoCard: React.FC<{
-  icon: string;
+  icon: any; // Changed to any to support all Ionicons names
   title: string;
   description: string;
   color: string;
 }> = ({ icon, title, description, color }) => (
   <View style={styles.infoCard}>
     <View style={[styles.infoIcon, { backgroundColor: color + '20' }]}>
-      <Ionicons name={icon as any} size={24} color={color} />
+      <Ionicons name={icon} size={24} color={color} />
     </View>
     <View style={styles.infoContent}>
       <Text style={styles.infoTitle}>{title}</Text>
@@ -61,12 +61,12 @@ const InfoCard: React.FC<{
 );
 
 export default function CreateTabScreen() {
-  const { user, userProfile } = useAuth();
+  const { user } = useAuth();
   const router = useRouter();
 
   const handleCreateRequest = () => {
     if (!user) {
-      router.push('/auth/login');
+      router.push('/(auth)/login');
       return;
     }
     router.push('/requests/create');
@@ -74,15 +74,17 @@ export default function CreateTabScreen() {
 
   const handleBecomeDonor = () => {
     if (!user) {
-      router.push('/auth/login');
+      router.push('/(auth)/login');
       return;
     }
-    // Navigate to donor registration or profile
-    router.push('/profile/setup');
+    // Navigate to the profile edit screen, which is more appropriate
+    // for existing users than the initial setup screen.
+    router.push('/profile/edit');
   };
 
   const handleFindDonors = () => {
-    router.push('/(tabs)/requests');
+    // Corrected path to navigate to the requests tab
+    router.push('/requests');
   };
 
   return (
@@ -115,7 +117,7 @@ export default function CreateTabScreen() {
           
           <ActionCard
             title="Become a Donor"
-            subtitle="Register to help save lives"
+            subtitle="Update your profile to help"
             icon="heart"
             color="#38A169"
             onPress={handleBecomeDonor}
@@ -173,7 +175,7 @@ export default function CreateTabScreen() {
             </View>
             <TouchableOpacity style={styles.emergencyButton}>
               <Ionicons name="call" size={20} color="white" />
-              <Text style={styles.emergencyButtonText}>Call 123-456-7890</Text>
+              <Text style={styles.emergencyButtonText}>Call 123</Text>
             </TouchableOpacity>
           </View>
         </View>

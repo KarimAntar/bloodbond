@@ -111,6 +111,16 @@ export default function RespondScreen() {
         bloodType: userProfile?.bloodType || null,
       });
 
+      // Log this action to the user's activity feed
+      await addDoc(collection(db, 'activity'), {
+          userId: user?.uid,
+          type: 'response_sent',
+          title: 'Response Sent',
+          description: `You responded to a request for ${request?.bloodType || 'unknown'} blood.`,
+          timestamp: Timestamp.now(),
+          relatedId: requestId, // Link to the request document
+      });
+
       Alert.alert(
         'Response Sent! 🎉',
         'Your response has been submitted successfully. The requester will be able to contact you directly.',

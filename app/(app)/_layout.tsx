@@ -15,11 +15,8 @@ export default function AppLayout() {
   }
 
   if (!user) {
-    // Redirect to the login page if the user is not authenticated.
-    return <Redirect href="/auth/login" />;
+    return <Redirect href="/(auth)/login" />;
   }
 
-  // This layout can be a Stack that holds all your authenticated screens.
-  // We are hiding the header here to let child navigators manage their own.
   return <Stack screenOptions={{ headerShown: false }} />;
 }

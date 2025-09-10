@@ -138,7 +138,16 @@ export default function CreateRequestScreen() {
         status: 'active',
       };
 
-      await addDoc(collection(db, 'requests'), requestData);
+      const docRef = await addDoc(collection(db, 'requests'), requestData);
+
+      await addDoc(collection(db, 'activity'), {
+        userId: user?.uid,
+        type: 'request_created',
+        title: 'Blood Request Created',
+        description: `You created a request for ${formData.bloodType} blood.`,
+        timestamp: Timestamp.now(),
+        relatedId: docRef.id, // Link to the request document
+      });
 
       Alert.alert(
         'Request Created Successfully! 🩸',

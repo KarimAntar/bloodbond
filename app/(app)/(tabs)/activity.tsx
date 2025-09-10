@@ -1,5 +1,5 @@
-// app/(tabs)/activity.tsx
-import React, { useState, useEffect } from 'react';
+// app/(app)/(tabs)/activity.tsx
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,11 +11,12 @@ import {
   RefreshControl,
 } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { collection, query, where, orderBy, getDocs, limit } from 'firebase/firestore';
 import { db } from '../../firebase/firebaseConfig';
 
+// ... (ActivityCard and StatsCard components remain the same)
 interface ActivityItem {
   id: string;
   type: 'request_created' | 'response_sent' | 'request_received' | 'donation_completed';
@@ -111,6 +112,7 @@ const StatsCard: React.FC<{
   </View>
 );
 
+
 export default function ActivityTabScreen() {
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -129,110 +131,50 @@ export default function ActivityTabScreen() {
     if (!user) return;
 
     try {
-      // Mock activity data - in real app, this would come from Firestore
-      const mockActivities: ActivityItem[] = [
-        {
-          id: '1',
-          type: 'request_created',
-          title: 'Blood Request Created',
-          description: 'You created a blood request for John Doe',
-          timestamp: { toDate: () => new Date(Date.now() - 2 * 60 * 60 * 1000) },
-          bloodType: 'A+',
-          urgent: true,
-        },
-        {
-          id: '2',
-          type: 'response_sent',
-          title: 'Response Sent',
-          description: 'You responded to a blood request in Cairo',
-          timestamp: { toDate: () => new Date(Date.now() - 1 * 24 * 60 * 60 * 1000) },
-          bloodType: 'O-',
-        },
-        {
-          id: '3',
-          type: 'donation_completed',
-          title: 'Donation Completed',
-          description: 'Successfully donated blood at Cairo Hospital',
-          timestamp: { toDate: () => new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) },
-          bloodType: 'B+',
-        },
-        {
-          id: '4',
-          type: 'request_received',
-          title: 'Request Response',
-          description: 'Someone responded to your blood request',
-          timestamp: { toDate: () => new Date(Date.now() - 5 * 24 * 60 * 60 * 1000) },
-          bloodType: 'AB-',
-        },
-      ];
+      const q = query(
+        collection(db, 'activity'),
+        where('userId', '==', user.uid),
+        orderBy('timestamp', 'desc'),
+        limit(20)
+      );
 
-      setActivities(mockActivities);
+      const querySnapshot = await getDocs(q);
+      const fetchedActivities = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      } as ActivityItem));
+
+      setActivities(fetchedActivities);
       
-      // Mock stats
+      // Here you can also calculate stats based on fetchedActivities
+      // For now, we'll keep them as mock stats
       setStats({
-        requestsCreated: 3,
-        responsesSent: 8,
-        donationsCompleted: 5,
-        livesImpacted: 12,
+        requestsCreated: fetchedActivities.filter(a => a.type === 'request_created').length,
+        responsesSent: fetchedActivities.filter(a => a.type === 'response_sent').length,
+        donationsCompleted: 5, // Mock data
+        livesImpacted: 12, // Mock data
       });
+
     } catch (error) {
       console.error('Error fetching activities:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
   };
-
-  useEffect(() => {
-    const loadActivity = async () => {
+  
+  // useFocusEffect is like useEffect but runs every time the screen comes into view
+  useFocusEffect(
+    useCallback(() => {
       setLoading(true);
-      await fetchUserActivity();
-      setLoading(false);
-    };
+      fetchUserActivity();
+    }, [user])
+  );
 
-    if (user) {
-      loadActivity();
-    } else {
-      setLoading(false);
-    }
-  }, [user]);
-
-  const onRefresh = async () => {
+  const onRefresh = () => {
     setRefreshing(true);
-    await fetchUserActivity();
-    setRefreshing(false);
+    fetchUserActivity();
   };
-
-  const handleActivityPress = (activity: ActivityItem) => {
-    // Navigate based on activity type
-    switch (activity.type) {
-      case 'request_created':
-      case 'request_received':
-        router.push('/(tabs)/requests');
-        break;
-      case 'response_sent':
-      case 'donation_completed':
-        router.push('/(tabs)/requests');
-        break;
-    }
-  };
-
-  if (!user) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loginPrompt}>
-          <Ionicons name="person-circle-outline" size={64} color="#ccc" />
-          <Text style={styles.loginTitle}>Login Required</Text>
-          <Text style={styles.loginDescription}>
-            Sign in to view your activity and track your impact
-          </Text>
-          <TouchableOpacity
-            style={styles.loginButton}
-            onPress={() => router.push('/auth/login')}
-          >
-            <Text style={styles.loginButtonText}>Sign In</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
 
   if (loading) {
     return (
@@ -256,66 +198,35 @@ export default function ActivityTabScreen() {
           />
         }
       >
-        {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>Your Activity</Text>
           <Text style={styles.subtitle}>Track your blood donation impact</Text>
         </View>
 
-        {/* Stats */}
         <View style={styles.statsSection}>
           <Text style={styles.sectionTitle}>Your Impact</Text>
           <View style={styles.statsGrid}>
-            <StatsCard
-              icon="add-circle"
-              title="Requests"
-              value={stats.requestsCreated}
-              subtitle="Created"
-              color="#E53E3E"
-            />
-            <StatsCard
-              icon="paper-plane"
-              title="Responses"
-              value={stats.responsesSent}
-              subtitle="Sent"
-              color="#3182CE"
-            />
-            <StatsCard
-              icon="heart"
-              title="Donations"
-              value={stats.donationsCompleted}
-              subtitle="Completed"
-              color="#38A169"
-            />
-            <StatsCard
-              icon="people"
-              title="Lives"
-              value={stats.livesImpacted}
-              subtitle="Impacted"
-              color="#F56500"
-            />
+            <StatsCard icon="add-circle" title="Requests" value={stats.requestsCreated} subtitle="Created" color="#E53E3E"/>
+            <StatsCard icon="paper-plane" title="Responses" value={stats.responsesSent} subtitle="Sent" color="#3182CE"/>
+            <StatsCard icon="heart" title="Donations" value={stats.donationsCompleted} subtitle="Completed" color="#38A169"/>
+            <StatsCard icon="people" title="Lives" value={stats.livesImpacted} subtitle="Impacted" color="#F56500"/>
           </View>
         </View>
 
-        {/* Recent Activity */}
         <View style={styles.activitySection}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Recent Activity</Text>
-            <TouchableOpacity>
-              <Text style={styles.viewAllText}>View All</Text>
-            </TouchableOpacity>
           </View>
-
           {activities.length === 0 ? (
             <View style={styles.emptyActivity}>
               <Ionicons name="pulse-outline" size={48} color="#ccc" />
               <Text style={styles.emptyTitle}>No Activity Yet</Text>
               <Text style={styles.emptyDescription}>
-                Start by creating a blood request or responding to existing ones
+                Start by creating a blood request or responding to existing ones.
               </Text>
               <TouchableOpacity
                 style={styles.getStartedButton}
-                onPress={() => router.push('/(tabs)/create')}
+                onPress={() => router.push('/(app)/(tabs)/create')}
               >
                 <Text style={styles.getStartedButtonText}>Get Started</Text>
               </TouchableOpacity>
@@ -326,46 +237,16 @@ export default function ActivityTabScreen() {
                 <ActivityCard
                   key={activity.id}
                   activity={activity}
-                  onPress={() => handleActivityPress(activity)}
                 />
               ))}
             </View>
           )}
         </View>
-
-        {/* Achievement Section */}
-        <View style={styles.achievementSection}>
-          <Text style={styles.sectionTitle}>Achievements</Text>
-          <View style={styles.achievementCard}>
-            <View style={styles.achievementIcon}>
-              <Ionicons name="trophy" size={24} color="#F59E0B" />
-            </View>
-            <View style={styles.achievementContent}>
-              <Text style={styles.achievementTitle}>First Response</Text>
-              <Text style={styles.achievementDescription}>
-                You sent your first response to a blood request!
-              </Text>
-            </View>
-          </View>
-          <View style={styles.achievementCard}>
-            <View style={[styles.achievementIcon, { backgroundColor: '#E5E7EB' }]}>
-              <Ionicons name="star" size={24} color="#9CA3AF" />
-            </View>
-            <View style={styles.achievementContent}>
-              <Text style={[styles.achievementTitle, { color: '#9CA3AF' }]}>
-                Life Saver
-              </Text>
-              <Text style={[styles.achievementDescription, { color: '#9CA3AF' }]}>
-                Complete 5 donations (3/5)
-              </Text>
-            </View>
-          </View>
-        </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
-
+// ... (styles remain the same)
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -579,75 +460,6 @@ const styles = StyleSheet.create({
   getStartedButtonText: {
     color: 'white',
     fontSize: 14,
-    fontWeight: '600',
-  },
-  achievementSection: {
-    paddingHorizontal: 20,
-    paddingBottom: 100, // Extra padding for tab bar
-  },
-  achievementCard: {
-    flexDirection: 'row',
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  achievementIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#FEF3C7',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  achievementContent: {
-    flex: 1,
-  },
-  achievementTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1a1a1a',
-    marginBottom: 4,
-  },
-  achievementDescription: {
-    fontSize: 14,
-    color: '#666',
-  },
-  loginPrompt: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 40,
-  },
-  loginTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  loginDescription: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 32,
-  },
-  loginButton: {
-    backgroundColor: '#E53E3E',
-    paddingHorizontal: 32,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  loginButtonText: {
-    color: 'white',
-    fontSize: 16,
     fontWeight: '600',
   },
 });
