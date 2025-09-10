@@ -2,9 +2,9 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, SafeAreaView } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { db } from '../../../../firebase/firebaseConfig';
+import { db } from '../../../../../firebase/firebaseConfig';
 import { collection, getDocs, doc, getDoc, query, orderBy } from 'firebase/firestore';
-import { useAuth } from '../../../../contexts/AuthContext';
+import { useAuth } from '../../../../../contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 
 interface Response {

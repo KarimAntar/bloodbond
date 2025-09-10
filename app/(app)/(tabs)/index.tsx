@@ -11,8 +11,8 @@ import {
   Dimensions,
   Alert
 } from 'react-native';
-import { AuthProvider } from '../../contexts/AuthContext'; // Adjust path as needed
-import { useAuth } from '../../contexts/AuthContext';
+import { AuthProvider } from '../../../contexts/AuthContext'; // Adjust path as needed
+import { useAuth } from '../../../contexts/AuthContext';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';

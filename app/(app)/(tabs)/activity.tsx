@@ -10,11 +10,11 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../../contexts/AuthContext';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { collection, query, where, orderBy, getDocs, limit } from 'firebase/firestore';
-import { db } from '../../firebase/firebaseConfig';
+import { db } from '../../../firebase/firebaseConfig';
 
 // ... (ActivityCard and StatsCard components remain the same)
 interface ActivityItem {

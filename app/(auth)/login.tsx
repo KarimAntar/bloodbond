@@ -14,9 +14,9 @@ import {
   ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { sendEmailVerification } from 'firebase/auth';
-import { auth } from '../firebase/firebaseConfig';
+import { auth } from '../../firebase/firebaseConfig';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -40,35 +40,45 @@ export default function LoginScreen() {
   }, [user, userProfile]);
 
   const handleLogin = async () => {
-  if (!email.trim() || !password) {
-    setErrorMessage('Please enter both email and password');
-    return;
-  }
-
-  setLoading(true);
-  setErrorMessage('');
-  console.log('Attempting to sign in user...');
-
-  try {
-    await login(email.trim(), password);
-    console.log('Sign-in successful.');
-
-    if (auth.currentUser && !auth.currentUser.emailVerified) {
-      setErrorMessage('Please verify your email before logging in.');
-      setVerificationSent(true);
+    if (!email.trim() || !password) {
+      setErrorMessage('Please enter both email and password');
       return;
     }
 
-    // Redirect logic is handled by the AuthContext listener
-  } catch (error: any) {
-    console.error('Login error caught:', error);
-    let message = 'An error occurred during login';
-    // ... (existing error handling)
-    setErrorMessage(message);
-  } finally {
-    setLoading(false);
-  }
-};
+    setLoading(true);
+    setErrorMessage('');
+
+    try {
+      await login(email.trim(), password);
+      
+      if (auth.currentUser && !auth.currentUser.emailVerified) {
+        setErrorMessage('Please verify your email before logging in.');
+        setVerificationSent(true);
+        return;
+      }
+
+      // Navigation will be handled by the auth state change in home screen
+    } catch (error: any) {
+      console.error('Login error:', error);
+      
+      let message = 'An error occurred during login';
+      if (error.code === 'auth/user-not-found') {
+        message = 'No account found with this email address';
+      } else if (error.code === 'auth/wrong-password') {
+        message = 'Incorrect password';
+      } else if (error.code === 'auth/invalid-email') {
+        message = 'Please enter a valid email address';
+      } else if (error.code === 'auth/user-disabled') {
+        message = 'This account has been disabled';
+      } else if (error.code === 'auth/too-many-requests') {
+        message = 'Too many failed attempts. Please try again later';
+      }
+      
+      setErrorMessage(message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleResendVerification = async () => {
     if (auth.currentUser) {

@@ -14,8 +14,8 @@ import {
   Platform
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
-import { db } from '../../firebase/firebaseConfig';
-import { useAuth } from '../../contexts/AuthContext';
+import { db } from '../../../firebase/firebaseConfig';
+import { useAuth } from '../../../contexts/AuthContext';
 import { doc, setDoc } from 'firebase/firestore';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';

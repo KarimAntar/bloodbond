@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, Alert, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
-import { db } from '../../firebase/firebaseConfig';
-import { useAuth } from '../../contexts/AuthContext';
+import { db } from '../../../firebase/firebaseConfig';
+import { useAuth } from '../../../contexts/AuthContext';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { useRouter } from 'expo-router';
 

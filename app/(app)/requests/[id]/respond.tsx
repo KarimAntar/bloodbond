@@ -14,9 +14,9 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { db } from '../../../firebase/firebaseConfig';
+import { db } from '../../../../firebase/firebaseConfig';
 import { addDoc, collection, Timestamp, doc, getDoc } from 'firebase/firestore';
-import { useAuth } from '../../../contexts/AuthContext';
+import { useAuth } from '../../../../contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 

@@ -15,9 +15,9 @@ import {
   Switch,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { db } from '../../firebase/firebaseConfig';
+import { db } from '../../../firebase/firebaseConfig';
 import { collection, addDoc, Timestamp } from 'firebase/firestore';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../../contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 

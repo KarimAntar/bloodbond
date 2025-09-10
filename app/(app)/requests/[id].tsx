@@ -13,10 +13,10 @@ import {
   Linking,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { db } from '../../firebase/firebaseConfig';
+import { db } from '../../../firebase/firebaseConfig';
 import { doc, getDoc, collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../../contexts/AuthContext';
 import { LinearGradient } from 'expo-linear-gradient';
 
 interface BloodRequest {
@@ -154,7 +154,7 @@ export default function RequestDetailScreen() {
       Alert.alert(
         'Login Required',
         'Please login to respond to blood requests.',
-        [{ text: 'Login', onPress: () => router.push('/auth/login') }]
+        [{ text: 'Login', onPress: () => router.push('/(auth)/login') }]
       );
       return;
     }
