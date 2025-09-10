@@ -1,14 +1,34 @@
+// app/contexts/AuthContext.tsx
 import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
-import { auth } from '../firebase/firebaseConfig'; // Ensure this is your Firebase config file
-import { User as FirebaseUser, sendEmailVerification, onAuthStateChanged } from 'firebase/auth'; // Import Firebase types
+import { auth, db } from '../firebase/firebaseConfig';
+import { 
+  User as FirebaseUser, 
+  sendEmailVerification, 
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut
+} from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+
+interface UserProfile {
+  fullName: string;
+  bloodType: string;
+  city: string;
+  profileComplete: boolean;
+  email: string;
+  createdAt: any;
+}
 
 type AuthContextType = {
   user: FirebaseUser | null;
+  userProfile: UserProfile | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  register: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string, fullName: string) => Promise<void>;
   sendVerificationEmail: () => Promise<void>;
+  refreshUserProfile: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -19,41 +39,84 @@ interface AuthProviderProps {
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+
+  // Fetch user profile from Firestore
+  const fetchUserProfile = async (userId: string): Promise<UserProfile | null> => {
+    try {
+      const userDocRef = doc(db, 'users', userId);
+      const userDocSnap = await getDoc(userDocRef);
+      
+      if (userDocSnap.exists()) {
+        return userDocSnap.data() as UserProfile;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error fetching user profile:', error);
+      return null;
+    }
+  };
+
+  // Refresh user profile
+  const refreshUserProfile = async () => {
+    if (user) {
+      const profile = await fetchUserProfile(user.uid);
+      setUserProfile(profile);
+    }
+  };
 
   // Effect to handle user authentication state changes
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser); // Set user state based on the auth state
-      setLoading(false); // Once auth state is checked, stop the loading spinner
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setUser(currentUser);
+      
+      if (currentUser) {
+        // Fetch user profile when user is authenticated
+        const profile = await fetchUserProfile(currentUser.uid);
+        setUserProfile(profile);
+      } else {
+        setUserProfile(null);
+      }
+      
+      setLoading(false);
     });
 
-    // Clean up the listener on component unmount
     return () => unsubscribe();
   }, []);
 
-  // Implement login, logout, register, and sendVerificationEmail functions
   const login = async (email: string, password: string) => {
-    // Logic for logging in
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    return userCredential;
   };
 
   const logout = async () => {
-    // Logic for logging out
+    await signOut(auth);
+    setUserProfile(null);
   };
 
-  const register = async (email: string, password: string) => {
-    // Logic for registering
+  const register = async (email: string, password: string, fullName: string) => {
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    return userCredential;
   };
 
   const sendVerificationEmail = async () => {
     if (user) {
-      // Cast the user explicitly to FirebaseUser to access sendEmailVerification
       await sendEmailVerification(user);
     }
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, register, sendVerificationEmail }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      userProfile, 
+      loading, 
+      login, 
+      logout, 
+      register, 
+      sendVerificationEmail,
+      refreshUserProfile 
+    }}>
       {children}
     </AuthContext.Provider>
   );
