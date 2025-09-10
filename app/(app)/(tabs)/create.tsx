@@ -168,14 +168,37 @@ export default function CreateTabScreen() {
         {/* Emergency Numbers */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Emergency Contacts</Text>
+
           <View style={styles.emergencyCard}>
             <View style={styles.emergencyHeader}>
               <Ionicons name="medical" size={24} color="#E53E3E" />
-              <Text style={styles.emergencyTitle}>24/7 Blood Emergency</Text>
+              <Text style={styles.emergencyTitle}>Egyptian Red Crescent</Text>
             </View>
             <TouchableOpacity style={styles.emergencyButton}>
               <Ionicons name="call" size={20} color="white" />
-              <Text style={styles.emergencyButtonText}>Call 123</Text>
+              <Text style={styles.emergencyButtonText}>Call 15333</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.emergencyCard}>
+            <View style={styles.emergencyHeader}>
+              <Ionicons name="shield-checkmark" size={24} color="#E53E3E" />
+              <Text style={styles.emergencyTitle}>Blood Bank Hotline</Text>
+            </View>
+            <TouchableOpacity style={styles.emergencyButton}>
+              <Ionicons name="call" size={20} color="white" />
+              <Text style={styles.emergencyButtonText}>Call 16023</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.emergencyCard}>
+            <View style={styles.emergencyHeader}>
+              <Ionicons name="warning" size={24} color="#E53E3E" />
+              <Text style={styles.emergencyTitle}>Medical Emergency</Text>
+            </View>
+            <TouchableOpacity style={styles.emergencyButton}>
+              <Ionicons name="call" size={20} color="white" />
+              <Text style={styles.emergencyButtonText}>Call 122</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -214,9 +237,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 20,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
   },
   headerContent: {
     flex: 1,

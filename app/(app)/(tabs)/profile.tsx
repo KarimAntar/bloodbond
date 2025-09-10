@@ -1,4 +1,4 @@
-// app/(tabs)/profile.tsx
+// app/(app)/(tabs)/profile.tsx
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
   Alert,
   Switch,
-  ActivityIndicator,
+  ActivityIndicator
 } from 'react-native';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useRouter } from 'expo-router';
@@ -58,53 +58,50 @@ export default function ProfileTabScreen() {
   const [locationEnabled, setLocationEnabled] = useState(true);
   const { user, userProfile, logout, loading } = useAuth();
   const router = useRouter();
-
   
-  useEffect(() => {
-    if (!loading && !user) {
-      router.replace('/(auth)/login');
+  const handleLogout = async () => {
+    console.log('=== HANDLE LOGOUT CALLED - DIRECT LOGOUT ===');
+    console.log('Starting logout process directly...');
+    try {
+      await logout();
+      console.log('Logout completed successfully');
+      // The root layout will handle redirecting to the login screen.
+    } catch (error) {
+      console.error('Logout failed:', error);
+      Alert.alert(
+        'Logout Failed',
+        'Unable to log out. Please check your internet connection and try again.',
+        [{ text: 'OK' }]
+      );
     }
-  }, [user, loading, router]);
-
-
-  const handleLogout = () => {
-    Alert.alert(
-      'Confirm Logout',
-      'Are you sure you want to log out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Logout',
-          style: 'destructive',
-          onPress: logout, // Correctly calls the logout function
-        },
-      ]
-    );
   };
+  
+  // ... (other handlers remain the same)
 
   const handleEditProfile = () => {
-    router.push('/profile/edit');
+    router.push('/(app)/profile/edit');
   };
 
   const handleMyRequests = () => {
-    router.push('/profile/my-requests');
+    router.push('/(app)/profile/my-requests');
   };
 
   const handleMyResponses = () => {
-    router.push('/profile/my-responses');
+    router.push('/(app)/profile/my-responses');
   };
 
   const handleSettings = () => {
-    // router.push('/profile/settings');
+    // router.push('/(app)/profile/settings');
   };
 
   const handleEmergencyContacts = () => {
-    // router.push('/profile/emergency-contacts');
+    router.push('/emergency-contacts');
   };
 
   const handleDonationHistory = () => {
-    router.push('/profile/donation-history');
+    router.push('/(app)/profile/donation-history');
   };
+
 
   if (loading || !user || !userProfile) {
     return (
@@ -117,7 +114,7 @@ export default function ProfileTabScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Profile Header */}
+         {/* Profile Header */}
         <LinearGradient
           colors={['#E53E3E', '#C53030']}
           style={styles.profileHeader}
@@ -170,6 +167,34 @@ export default function ProfileTabScreen() {
           />
         </View>
 
+        {/* Quick Actions */}
+        <View style={styles.quickActionsContainer}>
+          <Text style={styles.quickActionsTitle}>Quick Actions</Text>
+          <View style={styles.quickActionsGrid}>
+            <TouchableOpacity
+              style={[styles.quickActionButton, { backgroundColor: '#E53E3E' }]}
+              onPress={() => router.push('/requests/create')}
+            >
+              <Ionicons name="add-circle" size={24} color="white" />
+              <Text style={styles.quickActionText}>Create Request</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.quickActionButton, { backgroundColor: '#3182CE' }]}
+              onPress={() => router.push('/requests')}
+            >
+              <Ionicons name="search" size={24} color="white" />
+              <Text style={styles.quickActionText}>Find Donors</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.quickActionButton, { backgroundColor: '#38A169' }]}
+              onPress={handleDonationHistory}
+            >
+              <Ionicons name="heart" size={24} color="white" />
+              <Text style={styles.quickActionText}>History</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         {/* Profile Actions */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Profile</Text>
@@ -202,6 +227,15 @@ export default function ProfileTabScreen() {
               onPress={handleDonationHistory}
               color="#F56500"
             />
+            {userProfile?.role === 'admin' && (
+              <ProfileOption
+                icon="shield"
+                title="Admin Dashboard"
+                subtitle="Manage users and requests"
+                onPress={() => router.push('../admin')}
+                color="#8B5CF6"
+              />
+            )}
           </View>
         </View>
 
@@ -283,31 +317,27 @@ export default function ProfileTabScreen() {
             />
           </View>
         </View>
-
-        {/* Logout */}
+        
+        {/* Logout Button */}
         <View style={styles.section}>
           <View style={styles.optionsContainer}>
             <ProfileOption
               icon="log-out"
               title="Logout"
-              subtitle="Sign out of your account"
               onPress={handleLogout}
               color="#DC2626"
             />
           </View>
         </View>
 
-        {/* Version Info */}
         <View style={styles.versionContainer}>
           <Text style={styles.versionText}>BloodBond v1.0.0</Text>
-          <Text style={styles.versionSubtext}>Made with ❤️ for saving lives</Text>
         </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
-
-
+// Styles remain the same
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -409,6 +439,39 @@ const styles = StyleSheet.create({
   statTitle: {
     fontSize: 12,
     color: '#666',
+  },
+  quickActionsContainer: {
+    marginHorizontal: 20,
+    marginBottom: 20,
+  },
+  quickActionsTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1a1a1a',
+    marginBottom: 16,
+  },
+  quickActionsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  quickActionButton: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    marginHorizontal: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  quickActionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'white',
+    marginTop: 8,
   },
   section: {
     marginBottom: 8,

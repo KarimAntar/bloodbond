@@ -1,5 +1,5 @@
 // app/(app)/(tabs)/index.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,6 @@ import {
   Dimensions,
   Alert
 } from 'react-native';
-import { AuthProvider } from '../../../contexts/AuthContext'; // Adjust path as needed
 import { useAuth } from '../../../contexts/AuthContext';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,7 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 const { width } = Dimensions.get('window');
 
-// --- Your existing components (StatsCard, ActionButton) are correct and can stay here ---
+// --- Your existing components (StatsCard, ActionButton) can stay here ---
 interface StatsCardProps {
   icon: string;
   title: string;
@@ -71,34 +70,17 @@ export default function HomeScreen() {
     peopleSaved: 3
   });
 
-  useEffect(() => {
-    // This effect redirects the user if their profile isn't complete.
-    // The main auth guard is now in (app)/_layout.tsx.
-    if (!loading && user && (!userProfile || !userProfile.profileComplete)) {
-      router.replace('/(app)/profile/setup');
+  const handleLogout = async () => {
+    console.log('=== HOME PAGE HANDLE LOGOUT CALLED - DIRECT LOGOUT ===');
+    console.log('Starting logout process directly...');
+    try {
+      await logout();
+      console.log('Logout completed successfully from home page');
+      // The root layout will handle redirecting to the login screen automatically
+    } catch (e) {
+      console.error('Logout failed from home page', e);
+      Alert.alert('Logout Failed', 'An unexpected error occurred.');
     }
-  }, [user, userProfile, loading, router]);
-
-    const handleLogout = async () => {
-    Alert.alert(
-      'Confirm Logout',
-      'Are you sure you want to logout?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Logout',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await logout();
-              router.replace('/(auth)/login'); // Explicitly navigate to login page after successful logout
-            } catch (e) {
-              console.error('Logout failed', e);
-            }
-          },
-        }
-      ]
-    );
   };
 
 
@@ -112,20 +94,32 @@ export default function HomeScreen() {
   }
 
   const firstName = userProfile.fullName.split(' ')[0];
+  const currentHour = new Date().getHours();
+  const getGreeting = () => {
+    if (currentHour < 12) return 'Good morning';
+    if (currentHour < 17) return 'Good afternoon';
+    return 'Good evening';
+  };
 
   return (
-    <AuthProvider>
       <SafeAreaView style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <Text style={styles.greeting}>Good morning</Text>
+            <Text style={styles.greeting}>{getGreeting()}</Text>
             <Text style={styles.userName}>{firstName} 👋</Text>
           </View>
-          {/* THE FIX IS HERE: Added onPress={handleLogout} */}
-          <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-            <Ionicons name="log-out-outline" size={24} color="#666" />
-          </TouchableOpacity>
+          <View style={styles.headerRight}>
+            <TouchableOpacity style={styles.notificationButton} onPress={() => router.push('/notifications')}>
+              <Ionicons name="notifications-outline" size={24} color="#666" />
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationBadgeText}>3</Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+              <Ionicons name="log-out-outline" size={24} color="#666" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <ScrollView showsVerticalScrollIndicator={false}>
@@ -217,18 +211,16 @@ export default function HomeScreen() {
                 icon="notifications"
                 title="Notifications"
                 subtitle="Stay updated on responses"
-                onPress={() => {/* TODO: Implement notifications */}}
+                onPress={() => router.push('/notifications')}
                 color="#F56500"
               />
             </View>
           </View>
         </ScrollView>
       </SafeAreaView>
-    </AuthProvider>
   );
 }
-
-// --- Your styles are correct and can stay here ---
+// Your styles will remain the same
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -257,6 +249,10 @@ const styles = StyleSheet.create({
   headerLeft: {
     flex: 1,
   },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   greeting: {
     fontSize: 16,
     color: '#666',
@@ -266,6 +262,27 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1a1a1a',
     marginTop: 2,
+  },
+  notificationButton: {
+    position: 'relative',
+    padding: 8,
+    marginRight: 8,
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: '#E53E3E',
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  notificationBadgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
   logoutButton: {
     padding: 8,

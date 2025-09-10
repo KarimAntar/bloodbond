@@ -260,9 +260,12 @@ export default function RequestsTabScreen() {
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <Text style={styles.title}>Blood Requests</Text>
-          <Text style={styles.subtitle}>{requests.length} active requests</Text>
+          <Text style={styles.subtitle}>
+            {filteredRequests.length} of {requests.length} requests
+            {selectedFilter !== 'all' && ` • ${selectedFilter === 'myCity' ? 'My City' : selectedFilter === 'urgent' ? 'Urgent' : selectedFilter} filter`}
+          </Text>
         </View>
-        
+
         <TouchableOpacity
           style={styles.createButton}
           onPress={() => router.push('/requests/create')}

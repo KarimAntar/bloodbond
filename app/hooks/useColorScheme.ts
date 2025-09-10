@@ -4,3 +4,5 @@ export const useColorScheme = () => {
   const systemColorScheme = useSystemColorScheme();
   return systemColorScheme; // Returns either 'light' or 'dark'
 };
+
+export default useColorScheme;

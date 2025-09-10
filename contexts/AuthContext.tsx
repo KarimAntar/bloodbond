@@ -18,6 +18,7 @@ interface UserProfile {
   email: string;
   createdAt: any;
   phone?: string;
+  role: string;
 }
 
 type AuthContextType = {
@@ -25,7 +26,7 @@ type AuthContextType = {
   userProfile: UserProfile | null;
   loading: boolean;
   initializing: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<FirebaseUser>;
   logout: () => Promise<void>;
   refreshUserProfile: () => Promise<void>;
 };
@@ -72,24 +73,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     console.log('Setting up auth state listener');
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      console.log('Auth state changed:', {
+      console.log('=== AUTH STATE CHANGED ===');
+      console.log('Current user:', currentUser ? 'EXISTS' : 'NULL');
+      console.log('User details:', {
         email: currentUser?.email,
         verified: currentUser?.emailVerified,
         uid: currentUser?.uid
       });
-      
+
       setUser(currentUser);
-      
+
       if (currentUser) {
+        console.log('User is logged in, fetching profile...');
         setLoading(true);
         const profile = await fetchUserProfile(currentUser.uid);
         setUserProfile(profile);
         setLoading(false);
+        console.log('Profile loaded, loading set to false');
       } else {
+        console.log('User is logged out, clearing profile and setting loading to false');
         setUserProfile(null);
         setLoading(false);
       }
-      
+
       if (initializing) {
         console.log('Auth initialization complete');
         setInitializing(false);
@@ -102,11 +108,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
   }, [initializing]);
 
-  const login = async (email: string, password: string): Promise<void> => {
+  const login = async (email: string, password: string): Promise<FirebaseUser> => {
     try {
       console.log('Attempting login for:', email);
-      await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
       console.log('Login successful');
+      return userCredential.user;
     } catch (error) {
       console.error('Login error:', error);
       throw error;
@@ -115,15 +122,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = async (): Promise<void> => {
     try {
+      console.log('=== LOGOUT STARTED ===');
       setLoading(true);
-      console.log('Logging out user');
+      console.log('Loading set to true, calling Firebase signOut...');
       await signOut(auth);
-      setUser(null);
-      setUserProfile(null);
-    } catch (error) {
-      console.error('Logout error:', error);
-    } finally {
-      setLoading(false);
+      console.log('Firebase signOut completed successfully');
+      // Don't manually set user and userProfile to null here
+      // Let the onAuthStateChanged listener handle the state updates
+      console.log('Logout function completed, waiting for auth state change...');
+    } catch (error: any) {
+      console.error('=== LOGOUT ERROR ===', error);
+      console.error('Error code:', error?.code);
+      console.error('Error message:', error?.message);
+      setLoading(false); // Only set loading to false on error
+      throw error; // Re-throw the error so the UI can handle it
     }
   };
   

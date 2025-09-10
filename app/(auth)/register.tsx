@@ -17,11 +17,13 @@ import { createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/
 import { auth, db } from '../../firebase/firebaseConfig';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../contexts/AuthContext';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, collection, getDocs } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Picker } from '@react-native-picker/picker';
 
-// Toast Component
+// --- (Toast component remains the same) ---
+
 const Toast = ({ message, type, visible, onHide }: {
   message: string;
   type: 'success' | 'error' | 'info';
@@ -59,13 +61,24 @@ const Toast = ({ message, type, visible, onHide }: {
   );
 };
 
+const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+const CITIES = [
+  'Cairo', 'Alexandria', 'Giza', 'Shubra El Kheima', 'Port Said', 'Suez',
+  'Luxor', 'Aswan', 'Asyut', 'Ismailia', 'Faiyum', 'Zagazig', 'Ashmoun',
+  'Minya', 'Damanhur', 'Beni Suef', 'Hurghada', 'Qena', 'Sohag', 'Shibin El Kom'
+];
+
+
 export default function RegisterScreen() {
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
     password: '',
     confirmPassword: '',
+    bloodType: '', // Added field
+    city: '',      // Added field
   });
+  // ... (other state variables remain the same)
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -82,8 +95,11 @@ export default function RegisterScreen() {
   });
   const [verificationTimer, setVerificationTimer] = useState(0);
 
+
   const router = useRouter();
   const { logout } = useAuth();
+  
+  // ... (showToast, hideToast, useEffect for timer remain the same)
 
   const showToast = (message: string, type: 'success' | 'error' | 'info') => {
     setToast({ visible: true, message, type });
@@ -103,14 +119,13 @@ export default function RegisterScreen() {
     return () => clearInterval(interval);
   }, [verificationTimer]);
 
+
   const validateForm = () => {
     const newErrors: { [key: string]: string } = {};
     
-    if (!formData.fullName.trim()) {
-      newErrors.fullName = 'Full name is required';
-    } else if (formData.fullName.trim().length < 2) {
-      newErrors.fullName = 'Full name must be at least 2 characters';
-    }
+    if (!formData.fullName.trim()) newErrors.fullName = 'Full name is required';
+    if (!formData.bloodType) newErrors.bloodType = "Blood type is required";
+    if (!formData.city) newErrors.city = "City is required";
     
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!formData.email.trim()) {
@@ -119,17 +134,11 @@ export default function RegisterScreen() {
       newErrors.email = 'Please enter a valid email address';
     }
     
-    if (!formData.password) {
-      newErrors.password = 'Password is required';
-    } else if (formData.password.length < 6) {
-      newErrors.password = 'Password must be at least 6 characters';
-    }
+    if (!formData.password) newErrors.password = 'Password is required';
+    else if (formData.password.length < 6) newErrors.password = 'Password must be at least 6 characters';
     
-    if (!formData.confirmPassword) {
-      newErrors.confirmPassword = 'Please confirm your password';
-    } else if (formData.password !== formData.confirmPassword) {
-      newErrors.confirmPassword = 'Passwords do not match';
-    }
+    if (!formData.confirmPassword) newErrors.confirmPassword = 'Please confirm your password';
+    else if (formData.password !== formData.confirmPassword) newErrors.confirmPassword = 'Passwords do not match';
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -152,58 +161,52 @@ export default function RegisterScreen() {
     showToast('Creating your account...', 'info');
 
     try {
-      // Create user account
       const userCredential = await createUserWithEmailAndPassword(
-        auth, 
-        formData.email.trim(), 
+        auth,
+        formData.email.trim(),
         formData.password
       );
       const user = userCredential.user;
 
-      // Save user profile to Firestore
+      // Check if this is the first user
+      const usersSnapshot = await getDocs(collection(db, 'users'));
+      const isFirstUser = usersSnapshot.empty;
+      const role = isFirstUser ? 'admin' : 'user';
+
+      // Save user profile to Firestore with all details
       await setDoc(doc(db, 'users', user.uid), {
         fullName: formData.fullName.trim(),
         email: formData.email.trim(),
-        profileComplete: false,
+        bloodType: formData.bloodType,
+        city: formData.city,
+        profileComplete: true, // Profile is now complete on registration
+        role: role,
         createdAt: serverTimestamp(),
       });
 
-      // Send verification email
       await sendEmailVerification(user);
-      
-      // Sign out immediately to force verification
       await logout();
 
-      // Update UI to show verification step
       setRegistrationStep('verification');
-      setVerificationTimer(60); // 60 second cooldown
+      setVerificationTimer(60);
       showToast('Account created! Please check your email to verify.', 'success');
 
     } catch (error: any) {
       console.error('Registration error:', error);
       let message = 'Registration failed. Please try again.';
-      
-      switch (error.code) {
-        case 'auth/email-already-in-use':
+
+      if (error.code === 'auth/email-already-in-use') {
           message = 'This email is already registered. Try signing in instead.';
-          break;
-        case 'auth/weak-password':
-          message = 'Password is too weak. Please choose a stronger password.';
-          break;
-        case 'auth/invalid-email':
-          message = 'Please enter a valid email address.';
-          break;
-        case 'auth/network-request-failed':
-          message = 'Network error. Please check your connection.';
-          break;
       }
-      
+
       showToast(message, 'error');
     } finally {
       setLoading(false);
     }
   };
 
+  // ... (handleResendVerification and handleGoToLogin logic remains the same)
+  // ... (Verification step JSX remains the same)
   const handleResendVerification = async () => {
     if (verificationTimer > 0) return;
     
@@ -297,18 +300,17 @@ export default function RegisterScreen() {
     );
   }
 
-  // Registration Form
+
   return (
     <SafeAreaView style={styles.container}>
       <Toast {...toast} onHide={hideToast} />
-      
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
           <View style={styles.header}>
-            <LinearGradient colors={['#E53E3E', '#C53030']} style={styles.logoContainer}>
+             <LinearGradient colors={['#E53E3E', '#C53030']} style={styles.logoContainer}>
               <Ionicons name="heart" size={32} color="white" />
             </LinearGradient>
             <Text style={styles.title}>Join BloodBond</Text>
@@ -316,6 +318,7 @@ export default function RegisterScreen() {
           </View>
 
           <View style={styles.form}>
+            {/* Full Name */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Full Name</Text>
               <View style={[styles.inputContainer, errors.fullName && styles.inputError]}>
@@ -332,6 +335,39 @@ export default function RegisterScreen() {
               {errors.fullName && <Text style={styles.errorText}>{errors.fullName}</Text>}
             </View>
 
+            {/* Blood Type */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Blood Type</Text>
+              <View style={[styles.pickerContainer, errors.bloodType && styles.inputError]}>
+                <Picker
+                    selectedValue={formData.bloodType}
+                    style={styles.picker}
+                    onValueChange={(itemValue) => handleInputChange('bloodType', itemValue)}
+                >
+                    <Picker.Item label="Select your blood type..." value="" />
+                    {BLOOD_TYPES.map(type => <Picker.Item key={type} label={type} value={type} />)}
+                </Picker>
+              </View>
+              {errors.bloodType && <Text style={styles.errorText}>{errors.bloodType}</Text>}
+            </View>
+
+            {/* City */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>City</Text>
+              <View style={[styles.pickerContainer, errors.city && styles.inputError]}>
+                <Picker
+                    selectedValue={formData.city}
+                    style={styles.picker}
+                    onValueChange={(itemValue) => handleInputChange('city', itemValue)}
+                >
+                    <Picker.Item label="Select your city..." value="" />
+                    {CITIES.map(city => <Picker.Item key={city} label={city} value={city} />)}
+                </Picker>
+              </View>
+              {errors.city && <Text style={styles.errorText}>{errors.city}</Text>}
+            </View>
+            
+            {/* Email */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Email Address</Text>
               <View style={[styles.inputContainer, errors.email && styles.inputError]}>
@@ -349,7 +385,8 @@ export default function RegisterScreen() {
               </View>
               {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
             </View>
-
+            
+            {/* Password Fields */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Password</Text>
               <View style={[styles.inputContainer, errors.password && styles.inputError]}>
@@ -389,7 +426,8 @@ export default function RegisterScreen() {
               </View>
               {errors.confirmPassword && <Text style={styles.errorText}>{errors.confirmPassword}</Text>}
             </View>
-
+            
+            {/* Submit Button */}
             <TouchableOpacity 
               style={[styles.registerButton, loading && styles.buttonDisabled]} 
               onPress={handleRegister} 
@@ -419,12 +457,132 @@ export default function RegisterScreen() {
 }
 
 const styles = StyleSheet.create({
+  // ... (Existing styles plus new picker styles)
   container: { 
     flex: 1, 
     backgroundColor: '#f8f9fa' 
   },
-  
-  // Toast Styles
+  keyboardView: { 
+    flex: 1 
+  },
+  scrollContent: { 
+    flexGrow: 1, 
+    justifyContent: 'center', 
+    padding: 24 
+  },
+  header: { 
+    alignItems: 'center', 
+    marginBottom: 40 
+  },
+  logoContainer: { 
+    width: 64, 
+    height: 64, 
+    borderRadius: 32, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginBottom: 24 
+  },
+  title: { 
+    fontSize: 28, 
+    fontWeight: 'bold', 
+    color: '#1a1a1a' 
+  },
+  subtitle: { 
+    fontSize: 16, 
+    color: '#666', 
+    marginTop: 8, 
+    textAlign: 'center' 
+  },
+  form: { 
+    backgroundColor: 'white', 
+    borderRadius: 16, 
+    padding: 24, 
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 2 }, 
+    shadowOpacity: 0.1, 
+    shadowRadius: 8, 
+    elevation: 3 
+  },
+  inputGroup: { 
+    marginBottom: 20 
+  },
+  inputLabel: { 
+    fontSize: 14, 
+    fontWeight: '600', 
+    color: '#1a1a1a', 
+    marginBottom: 8 
+  },
+  inputContainer: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    borderWidth: 1, 
+    borderColor: '#e1e5e9', 
+    borderRadius: 12, 
+    paddingHorizontal: 16, 
+    backgroundColor: '#f8f9fa' 
+  },
+  pickerContainer: {
+    borderColor: '#e1e5e9',
+    borderWidth: 1,
+    borderRadius: 12,
+    backgroundColor: '#f8f9fa',
+    justifyContent: 'center',
+  },
+  picker: {
+    height: 58,
+  },
+  inputError: { 
+    borderColor: '#E53E3E' 
+  },
+  textInput: { 
+    flex: 1, 
+    paddingVertical: 16, 
+    paddingLeft: 12, 
+    fontSize: 16, 
+    color: '#1a1a1a' 
+  },
+  eyeButton: { 
+    padding: 4 
+  },
+  errorText: { 
+    color: '#E53E3E', 
+    fontSize: 12, 
+    marginTop: 4 
+  },
+  registerButton: { 
+    backgroundColor: '#E53E3E', 
+    borderRadius: 12, 
+    padding: 16, 
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  buttonDisabled: { 
+    opacity: 0.6 
+  },
+  registerButtonText: { 
+    color: 'white', 
+    fontSize: 16, 
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  footer: { 
+    flexDirection: 'row', 
+    justifyContent: 'center', 
+    marginTop: 32 
+  },
+  footerText: { 
+    fontSize: 14, 
+    color: '#666' 
+  },
+  signInText: { 
+    fontSize: 14, 
+    fontWeight: '600', 
+    color: '#E53E3E', 
+    marginLeft: 4 
+  },
+
+  // --- Verification and Toast Styles (no changes needed) ---
   toast: {
     position: 'absolute',
     top: 60,
@@ -448,8 +606,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginLeft: 8,
   },
-  
-  // Verification Styles
   verificationContainer: {
     flex: 1,
     padding: 24,
@@ -547,102 +703,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  
-  // Form Styles
-  keyboardView: { 
-    flex: 1 
-  },
-  scrollContent: { 
-    flexGrow: 1, 
-    justifyContent: 'center', 
-    padding: 24 
-  },
-  header: { 
-    alignItems: 'center', 
-    marginBottom: 40 
-  },
-  logoContainer: { 
-    width: 64, 
-    height: 64, 
-    borderRadius: 32, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    marginBottom: 24 
-  },
-  title: { 
-    fontSize: 28, 
-    fontWeight: 'bold', 
-    color: '#1a1a1a' 
-  },
-  subtitle: { 
-    fontSize: 16, 
-    color: '#666', 
-    marginTop: 8, 
-    textAlign: 'center' 
-  },
-  form: { 
-    backgroundColor: 'white', 
-    borderRadius: 16, 
-    padding: 24, 
-    shadowColor: '#000', 
-    shadowOffset: { width: 0, height: 2 }, 
-    shadowOpacity: 0.1, 
-    shadowRadius: 8, 
-    elevation: 3 
-  },
-  inputGroup: { 
-    marginBottom: 20 
-  },
-  inputLabel: { 
-    fontSize: 14, 
-    fontWeight: '600', 
-    color: '#1a1a1a', 
-    marginBottom: 8 
-  },
-  inputContainer: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    borderWidth: 1, 
-    borderColor: '#e1e5e9', 
-    borderRadius: 12, 
-    paddingHorizontal: 16, 
-    backgroundColor: '#f8f9fa' 
-  },
-  inputError: { 
-    borderColor: '#E53E3E' 
-  },
-  textInput: { 
-    flex: 1, 
-    paddingVertical: 16, 
-    paddingLeft: 12, 
-    fontSize: 16, 
-    color: '#1a1a1a' 
-  },
-  eyeButton: { 
-    padding: 4 
-  },
-  errorText: { 
-    color: '#E53E3E', 
-    fontSize: 12, 
-    marginTop: 4 
-  },
-  registerButton: { 
-    backgroundColor: '#E53E3E', 
-    borderRadius: 12, 
-    padding: 16, 
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'center',
-  },
-  buttonDisabled: { 
-    opacity: 0.6 
-  },
-  registerButtonText: { 
-    color: 'white', 
-    fontSize: 16, 
-    fontWeight: '600',
-    marginLeft: 8,
-  },
   loginButton: {
     backgroundColor: '#E53E3E',
     borderRadius: 12,
@@ -653,20 +713,5 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
-  },
-  footer: { 
-    flexDirection: 'row', 
-    justifyContent: 'center', 
-    marginTop: 32 
-  },
-  footerText: { 
-    fontSize: 14, 
-    color: '#666' 
-  },
-  signInText: { 
-    fontSize: 14, 
-    fontWeight: '600', 
-    color: '#E53E3E', 
-    marginLeft: 4 
   },
 });

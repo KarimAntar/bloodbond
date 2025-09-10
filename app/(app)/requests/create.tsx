@@ -13,13 +13,15 @@ import {
   ScrollView,
   SafeAreaView,
   Switch,
+  Modal,
+  FlatList,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { db } from '../../../firebase/firebaseConfig';
 import { collection, addDoc, Timestamp } from 'firebase/firestore';
 import { useAuth } from '../../../contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
-import { Picker } from '@react-native-picker/picker';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 
@@ -55,6 +57,81 @@ const BloodTypeSelector: React.FC<{
     ))}
   </View>
 );
+
+const CityDropdown: React.FC<{
+  selectedCity: string;
+  onSelect: (city: string) => void;
+  error?: boolean;
+}> = ({ selectedCity, onSelect, error }) => {
+  const [modalVisible, setModalVisible] = useState(false);
+
+  const handleSelect = (city: string) => {
+    onSelect(city);
+    setModalVisible(false);
+  };
+
+  return (
+    <>
+      <TouchableOpacity
+        style={[styles.dropdownContainer, error && styles.inputError]}
+        onPress={() => setModalVisible(true)}
+      >
+        <Ionicons name="location-outline" size={20} color="#666" />
+        <Text style={[styles.dropdownText, !selectedCity && styles.placeholderText]}>
+          {selectedCity || 'Select city'}
+        </Text>
+        <Ionicons name="chevron-down" size={20} color="#666" />
+      </TouchableOpacity>
+
+      <Modal
+        visible={modalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select City</Text>
+              <TouchableOpacity
+                onPress={() => setModalVisible(false)}
+                style={styles.closeButton}
+              >
+                <Ionicons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={CITIES}
+              keyExtractor={(item) => item}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[
+                    styles.cityItem,
+                    selectedCity === item && styles.cityItemSelected,
+                  ]}
+                  onPress={() => handleSelect(item)}
+                >
+                  <Text
+                    style={[
+                      styles.cityItemText,
+                      selectedCity === item && styles.cityItemTextSelected,
+                    ]}
+                  >
+                    {item}
+                  </Text>
+                  {selectedCity === item && (
+                    <Ionicons name="checkmark" size={20} color="#E53E3E" />
+                  )}
+                </TouchableOpacity>
+              )}
+              showsVerticalScrollIndicator={false}
+            />
+          </View>
+        </View>
+      </Modal>
+    </>
+  );
+};
 
 export default function CreateRequestScreen() {
   const [formData, setFormData] = useState({
@@ -177,16 +254,21 @@ export default function CreateRequestScreen() {
         style={styles.keyboardView}
       >
         {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity 
+        <LinearGradient
+          colors={['#E53E3E', '#C53030']}
+          style={styles.header}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          <TouchableOpacity
             style={styles.backButton}
             onPress={() => router.back()}
           >
-            <Ionicons name="arrow-back" size={24} color="#1a1a1a" />
+            <Ionicons name="arrow-back" size={24} color="white" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Create Request</Text>
           <View style={styles.headerRight} />
-        </View>
+        </LinearGradient>
 
         <ScrollView 
           contentContainerStyle={styles.scrollContent}
@@ -245,20 +327,11 @@ export default function CreateRequestScreen() {
               <Text style={styles.inputLabel}>
                 City <Text style={styles.required}>*</Text>
               </Text>
-              <View style={[styles.inputContainer, styles.pickerContainer, errors.city && styles.inputError]}>
-                <Ionicons name="location-outline" size={20} color="#666" />
-                <Picker
-                  selectedValue={formData.city}
-                  style={styles.picker}
-                  onValueChange={(value) => handleInputChange('city', value)}
-                  enabled={!loading}
-                >
-                  <Picker.Item label="Select city" value="" />
-                  {CITIES.map((city) => (
-                    <Picker.Item key={city} label={city} value={city} />
-                  ))}
-                </Picker>
-              </View>
+              <CityDropdown
+                selectedCity={formData.city}
+                onSelect={(city) => handleInputChange('city', city)}
+                error={!!errors.city}
+              />
               {errors.city && (
                 <Text style={styles.errorText}>{errors.city}</Text>
               )}
@@ -283,6 +356,30 @@ export default function CreateRequestScreen() {
               {errors.hospital && (
                 <Text style={styles.errorText}>{errors.hospital}</Text>
               )}
+            </View>
+
+            {/* Drop-off Location */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Drop-off Location (Optional)</Text>
+              <Text style={styles.helperText}>
+                Specify where donors should deliver the blood
+              </Text>
+              <View style={styles.locationContainer}>
+                <TouchableOpacity style={styles.locationButton}>
+                  <Ionicons name="location-outline" size={20} color="#E53E3E" />
+                  <Text style={styles.locationButtonText}>Use Current Location</Text>
+                </TouchableOpacity>
+                <Text style={styles.orText}>or</Text>
+                <View style={styles.inputContainer}>
+                  <Ionicons name="map-outline" size={20} color="#666" />
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder="Enter drop-off address"
+                    placeholderTextColor="#999"
+                    editable={!loading}
+                  />
+                </View>
+              </View>
             </View>
 
             {/* Contact Number */}
@@ -355,20 +452,27 @@ export default function CreateRequestScreen() {
             </View>
 
             {/* Submit Button */}
-            <TouchableOpacity
+            <LinearGradient
+              colors={['#E53E3E', '#C53030']}
               style={[styles.submitButton, loading && styles.buttonDisabled]}
-              onPress={handleSubmit}
-              disabled={loading}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
             >
-              {loading ? (
-                <ActivityIndicator size="small" color="white" />
-              ) : (
-                <>
-                  <Ionicons name="heart" size={20} color="white" />
-                  <Text style={styles.submitButtonText}>Post Blood Request</Text>
-                </>
-              )}
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.submitButtonInner}
+                onPress={handleSubmit}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <>
+                    <Ionicons name="heart" size={20} color="white" />
+                    <Text style={styles.submitButtonText}>Post Blood Request</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </LinearGradient>
 
             {/* Cancel Button */}
             <TouchableOpacity
@@ -399,9 +503,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
   },
   backButton: {
     padding: 8,
@@ -409,7 +510,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#1a1a1a',
+    color: 'white',
   },
   headerRight: {
     width: 40,
@@ -575,13 +676,14 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   submitButton: {
-    backgroundColor: '#E53E3E',
     borderRadius: 12,
     padding: 16,
+    marginBottom: 12,
+  },
+  submitButtonInner: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
   },
   buttonDisabled: {
     opacity: 0.6,
@@ -605,5 +707,102 @@ const styles = StyleSheet.create({
     color: '#E53E3E',
     fontSize: 12,
     marginTop: 4,
+  },
+  dropdownContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e1e5e9',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    backgroundColor: '#f8f9fa',
+    justifyContent: 'space-between',
+  },
+  dropdownText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#1a1a1a',
+    marginLeft: 12,
+  },
+  placeholderText: {
+    color: '#999',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '70%',
+    paddingBottom: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1a1a1a',
+  },
+  closeButton: {
+    padding: 4,
+  },
+  cityItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  cityItemSelected: {
+    backgroundColor: '#FEE2E2',
+  },
+  cityItemText: {
+    fontSize: 16,
+    color: '#1a1a1a',
+  },
+  cityItemTextSelected: {
+    color: '#E53E3E',
+    fontWeight: '600',
+  },
+  helperText: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 12,
+  },
+  locationContainer: {
+    gap: 12,
+  },
+  locationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EBF8FF',
+    borderWidth: 1,
+    borderColor: '#3182CE',
+    borderRadius: 12,
+    padding: 16,
+  },
+  locationButtonText: {
+    color: '#3182CE',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  orText: {
+    textAlign: 'center',
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
   },
 });

@@ -13,6 +13,7 @@ import {
 import { useAuth } from '../../../contexts/AuthContext';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { collection, query, where, orderBy, getDocs, limit } from 'firebase/firestore';
 import { db } from '../../../firebase/firebaseConfig';
 
@@ -198,10 +199,15 @@ export default function ActivityTabScreen() {
           />
         }
       >
-        <View style={styles.header}>
+        <LinearGradient
+          colors={['#E53E3E', '#C53030']}
+          style={styles.header}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
           <Text style={styles.title}>Your Activity</Text>
           <Text style={styles.subtitle}>Track your blood donation impact</Text>
-        </View>
+        </LinearGradient>
 
         <View style={styles.statsSection}>
           <Text style={styles.sectionTitle}>Your Impact</Text>

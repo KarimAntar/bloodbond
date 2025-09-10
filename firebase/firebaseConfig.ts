@@ -16,16 +16,23 @@ const firebaseConfig = {
 // Initialize Firebase app only if not already initialized
 let app;
 if (!getApps().length) {
+  console.log('Initializing Firebase app...');
   app = initializeApp(firebaseConfig);
+  console.log('Firebase app initialized successfully');
 } else {
+  console.log('Firebase app already exists, getting existing app');
   app = getApp();
 }
 
 // Initialize Firebase Auth
+console.log('Initializing Firebase Auth...');
 const auth = getAuth(app);
+console.log('Firebase Auth initialized successfully');
 
 export { auth };
 
+console.log('Initializing Firestore...');
 const db = getFirestore(app);
+console.log('Firestore initialized successfully');
 
 export { db };
