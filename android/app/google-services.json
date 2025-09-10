@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "589684037045",
+    "project_id": "bloodbond-892f7",
+    "storage_bucket": "bloodbond-892f7.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:589684037045:android:c970d92f5ec09f199975fc",
+        "android_client_info": {
+          "package_name": "com.karimdev.bloodbond"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "589684037045-4s0uf5t7gr5vqtg7s7u1vudthicuf6an.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAv2tLmqsgVJw_tXHB90HyBv8-D898QhCg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "589684037045-4s0uf5t7gr5vqtg7s7u1vudthicuf6an.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
