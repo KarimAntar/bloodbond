@@ -86,20 +86,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, []);
 
   const login = async (email: string, password: string) => {
-    const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    return userCredential;
+    await signInWithEmailAndPassword(auth, email, password);
   };
 
   const logout = async () => {
     await signOut(auth);
     setUserProfile(null);
   };
-
   const register = async (email: string, password: string, fullName: string) => {
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    return userCredential;
+    await createUserWithEmailAndPassword(auth, email, password);
   };
-
   const sendVerificationEmail = async () => {
     if (user) {
       await sendEmailVerification(user);

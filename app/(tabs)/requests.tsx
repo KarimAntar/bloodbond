@@ -1,4 +1,4 @@
-// app/requests/index.tsx
+// app/(tabs)/requests.tsx
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -10,11 +10,13 @@ import {
   FlatList,
   RefreshControl,
   TextInput,
+  Share,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { db } from '../firebase/firebaseConfig';
 import { useAuth } from '../contexts/AuthContext';
-import { collection, getDocs, query, orderBy, where } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
 
 interface BloodRequest {
@@ -30,7 +32,12 @@ interface BloodRequest {
   createdAt: any;
 }
 
-const RequestCard: React.FC<{ request: BloodRequest; onPress: () => void }> = ({ request, onPress }) => {
+const RequestCard: React.FC<{ 
+  request: BloodRequest; 
+  onPress: () => void; 
+  onRespond: () => void;
+  onShare: () => void;
+}> = ({ request, onPress, onRespond, onShare }) => {
   const timeAgo = React.useMemo(() => {
     if (!request.createdAt) return 'Recently';
     
@@ -83,12 +90,12 @@ const RequestCard: React.FC<{ request: BloodRequest; onPress: () => void }> = ({
       )}
 
       <View style={styles.cardFooter}>
-        <TouchableOpacity style={styles.respondButton}>
+        <TouchableOpacity style={styles.respondButton} onPress={onRespond}>
           <Ionicons name="hand-left" size={16} color="#E53E3E" />
           <Text style={styles.respondButtonText}>Respond</Text>
         </TouchableOpacity>
         
-        <TouchableOpacity style={styles.shareButton}>
+        <TouchableOpacity style={styles.shareButton} onPress={onShare}>
           <Ionicons name="share-outline" size={16} color="#666" />
         </TouchableOpacity>
       </View>
@@ -123,7 +130,7 @@ const FilterChip: React.FC<{
   </TouchableOpacity>
 );
 
-export default function RequestsScreen() {
+export default function RequestsTabScreen() {
   const [requests, setRequests] = useState<BloodRequest[]>([]);
   const [filteredRequests, setFilteredRequests] = useState<BloodRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -200,6 +207,27 @@ export default function RequestsScreen() {
     setRefreshing(false);
   };
 
+  const handleRespond = (request: BloodRequest) => {
+    if (!user) {
+      Alert.alert('Login Required', 'Please login to respond to requests.');
+      return;
+    }
+    router.push(`/requests/${request.id}/respond`);
+  };
+
+  const handleShare = async (request: BloodRequest) => {
+    try {
+      const message = `🩸 BLOOD DONATION NEEDED 🩸\n\nPatient: ${request.fullName}\nBlood Type: ${request.bloodType}\nLocation: ${request.city}\nHospital: ${request.hospital}\n${request.urgent ? '🚨 URGENT REQUEST' : ''}\n\nHelp save a life! Contact: ${request.contactNumber}`;
+      
+      await Share.share({
+        message,
+        title: 'Blood Donation Request',
+      });
+    } catch (error) {
+      console.error('Error sharing:', error);
+    }
+  };
+
   const getFilterCounts = () => {
     const counts: { [key: string]: number } = {
       all: requests.length,
@@ -249,7 +277,7 @@ export default function RequestsScreen() {
           <Ionicons name="search" size={20} color="#666" />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search by name, blood type, city, or hospital"
+            placeholder="Search requests..."
             value={searchText}
             onChangeText={setSearchText}
             placeholderTextColor="#999"
@@ -312,6 +340,8 @@ export default function RequestsScreen() {
             <RequestCard
               request={item}
               onPress={() => router.push(`/requests/${item.id}`)}
+              onRespond={() => handleRespond(item)}
+              onShare={() => handleShare(item)}
             />
           )}
           keyExtractor={(item) => item.id}
@@ -334,14 +364,6 @@ export default function RequestsScreen() {
                   : 'Be the first to create a blood request'
                 }
               </Text>
-              {!searchText && selectedFilter === 'all' && (
-                <TouchableOpacity
-                  style={styles.createFirstButton}
-                  onPress={() => router.push('/requests/create')}
-                >
-                  <Text style={styles.createFirstButtonText}>Create Request</Text>
-                </TouchableOpacity>
-              )}
             </View>
           )}
           showsVerticalScrollIndicator={false}
@@ -475,7 +497,7 @@ const styles = StyleSheet.create({
   },
   requestsList: {
     padding: 16,
-    paddingBottom: 32,
+    paddingBottom: 100, // Add padding for tab bar
   },
   requestCard: {
     backgroundColor: 'white',
@@ -611,17 +633,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 8,
     lineHeight: 24,
-  },
-  createFirstButton: {
-    backgroundColor: '#E53E3E',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-    marginTop: 20,
-  },
-  createFirstButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
   },
 });
