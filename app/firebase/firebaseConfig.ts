@@ -1,8 +1,7 @@
-// firebase/firebaseConfig.ts
+// app/firebase/firebaseConfig.ts
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
-
 
 const firebaseConfig = {
     apiKey: "AIzaSyA8Cd-czxRaLw-Lv-o7T34kAOgahGwCSVc",
@@ -17,15 +16,15 @@ const firebaseConfig = {
 // Initialize Firebase app only if not already initialized
 let app;
 if (!getApps().length) {
-  app = initializeApp(firebaseConfig); // Initialize Firebase only once
+  app = initializeApp(firebaseConfig);
 } else {
-  app = getApp(); // If already initialized, use the existing app
+  app = getApp();
 }
 
 // Initialize Firebase Auth
-const auth = getAuth(app); // Only declare it once
+const auth = getAuth(app);
 
-export { auth }; // Export the auth instance for use in other components
+export { auth };
 
 const db = getFirestore(app);
 

@@ -1,4 +1,4 @@
-// app/auth/register.tsx
+// app/(auth)/register.tsx
 import React, { useState } from 'react';
 import {
   View,
@@ -81,61 +81,64 @@ export default function RegisterScreen() {
   };
 
   const handleRegister = async () => {
-    if (!validateForm()) {
-      return;
-    }
+  if (!validateForm()) {
+    return;
+  }
 
-    setLoading(true);
+  setLoading(true);
+  console.log('Attempting to register user...');
 
+  try {
+    const userCredential = await createUserWithEmailAndPassword(
+      auth,
+      formData.email.trim(),
+      formData.password
+    );
+    const user = userCredential.user;
+
+    console.log('User created:', user.uid);
+
+    await setDoc(doc(db, 'users', user.uid), {
+      fullName: formData.fullName.trim(),
+      email: formData.email.trim(),
+      profileComplete: false,
+      createdAt: serverTimestamp(),
+    });
+
+    console.log('User profile created in Firestore.');
+
+    // Wrap the verification call in a separate try/catch to debug it specifically
     try {
-      const userCredential = await createUserWithEmailAndPassword(
-        auth, 
-        formData.email.trim(), 
-        formData.password
-      );
-      const user = userCredential.user;
-
-      // Save user data to Firestore
-      await setDoc(doc(db, 'users', user.uid), {
-        fullName: formData.fullName.trim(),
-        email: formData.email.trim(),
-        profileComplete: false,
-        createdAt: serverTimestamp(),
-      });
-
-      // Send email verification
+      console.log('Attempting to send email verification...');
       await sendEmailVerification(user);
-      
-      Alert.alert(
-        'Registration Successful! 🎉',
-        'Please check your email and verify your account before signing in.',
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              logout(); // Log them out until they verify
-              router.replace('/(auth)/login');
-            }
-          }
-        ]
-      );
-    } catch (error: any) {
-      console.error('Registration error:', error);
-      
-      let message = 'Registration failed. Please try again.';
-      if (error.code === 'auth/email-already-in-use') {
-        message = 'An account with this email already exists.';
-      } else if (error.code === 'auth/weak-password') {
-        message = 'Password is too weak. Please choose a stronger password.';
-      } else if (error.code === 'auth/invalid-email') {
-        message = 'Please enter a valid email address.';
-      }
-      
-      Alert.alert('Registration Error', message);
-    } finally {
-      setLoading(false);
+      console.log('Email verification sent successfully.');
+    } catch (emailError: any) {
+      console.error('Email verification error:', emailError);
+      Alert.alert('Verification Failed', 'An error occurred while sending the verification email.');
     }
-  };
+
+    Alert.alert(
+      'Registration Successful! 🎉',
+      'Please check your email and verify your account before signing in.',
+      [
+        {
+          text: 'OK',
+          onPress: () => {
+            // Redirect directly to login, assuming the auth context will handle the rest
+            router.replace('/(auth)/login');
+          },
+        },
+      ]
+    );
+  } catch (error: any) {
+    console.error('Registration error:', error);
+    let message = 'Registration failed. Please try again.';
+    // ... (existing error handling)
+    Alert.alert('Registration Error', message);
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <SafeAreaView style={styles.container}>

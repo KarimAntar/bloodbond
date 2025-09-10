@@ -79,7 +79,7 @@ export default function HomeScreen() {
     }
   }, [user, userProfile, loading, router]);
 
-  const handleLogout = () => {
+    const handleLogout = async () => {
     Alert.alert(
       'Confirm Logout',
       'Are you sure you want to logout?',
@@ -88,11 +88,19 @@ export default function HomeScreen() {
         {
           text: 'Logout',
           style: 'destructive',
-          onPress: logout, // This calls the function from your AuthContext
+          onPress: async () => {
+            try {
+              await logout();
+              router.replace('/(auth)/login'); // Explicitly navigate to login page after successful logout
+            } catch (e) {
+              console.error('Logout failed', e);
+            }
+          },
         }
       ]
     );
   };
+
 
   if (loading || !user || !userProfile) {
     return (

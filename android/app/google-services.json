@@ -29,6 +29,13 @@
             {
               "client_id": "589684037045-4s0uf5t7gr5vqtg7s7u1vudthicuf6an.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "589684037045-b2vbga5vivhppo02i5sftv4vvkceu3on.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.karimdev.bloodbond"
+              }
             }
           ]
         }
