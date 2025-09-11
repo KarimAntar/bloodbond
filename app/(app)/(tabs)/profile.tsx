@@ -12,6 +12,7 @@ import {
   ActivityIndicator
 } from 'react-native';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useUserStats } from '../../../contexts/UserStatsContext';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -57,6 +58,7 @@ export default function ProfileTabScreen() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [locationEnabled, setLocationEnabled] = useState(true);
   const { user, userProfile, logout, loading } = useAuth();
+  const { stats } = useUserStats();
   const router = useRouter();
   
   const handleLogout = async () => {
@@ -91,7 +93,7 @@ export default function ProfileTabScreen() {
   };
 
   const handleSettings = () => {
-    // router.push('/(app)/profile/settings');
+    router.push('/(app)/profile/settings');
   };
 
   const handleEmergencyContacts = () => {
@@ -149,21 +151,15 @@ export default function ProfileTabScreen() {
         <View style={styles.statsContainer}>
           <StatCard
             title="Requests"
-            value="3"
+            value={stats.requestsCreated.toString()}
             icon="add-circle"
             color="#E53E3E"
           />
           <StatCard
             title="Responses"
-            value="8"
+            value={stats.responsesSent.toString()}
             icon="paper-plane"
             color="#3182CE"
-          />
-          <StatCard
-            title="Donations"
-            value="5"
-            icon="heart"
-            color="#38A169"
           />
         </View>
 
@@ -298,21 +294,21 @@ export default function ProfileTabScreen() {
               icon="help-circle"
               title="Help & FAQ"
               subtitle="Get answers to common questions"
-              onPress={() => {}}
+              onPress={() => router.push('/(app)/profile/support')}
               color="#38A169"
             />
             <ProfileOption
               icon="mail"
               title="Contact Support"
               subtitle="Get help from our team"
-              onPress={() => {}}
+              onPress={() => router.push('/(app)/profile/support')}
               color="#3182CE"
             />
             <ProfileOption
               icon="information-circle"
               title="About BloodBond"
               subtitle="Learn more about our mission"
-              onPress={() => {}}
+              onPress={() => router.push('/(app)/profile/support')}
               color="#F56500"
             />
           </View>

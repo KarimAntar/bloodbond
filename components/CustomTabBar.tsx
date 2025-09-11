@@ -3,6 +3,7 @@ import { View, TouchableOpacity, StyleSheet, Dimensions, Text } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, usePathname } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useNotifications } from '../contexts/NotificationContext';
 
 const { width } = Dimensions.get('window');
 const TAB_BAR_HEIGHT = 80;

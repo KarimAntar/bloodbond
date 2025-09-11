@@ -1,6 +1,8 @@
 // app/_layout.tsx
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { AuthProvider, useAuth } from '../contexts/AuthContext';
+import { NotificationProvider } from '../contexts/NotificationContext';
+import { UserStatsProvider } from '../contexts/UserStatsContext';
 import { useEffect } from 'react';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
 
@@ -74,7 +76,11 @@ const InitialLayout = () => {
 export default function RootLayout() {
   return (
     <AuthProvider>
-      <InitialLayout />
+      <NotificationProvider>
+        <UserStatsProvider>
+          <InitialLayout />
+        </UserStatsProvider>
+      </NotificationProvider>
     </AuthProvider>
   );
 }

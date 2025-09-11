@@ -12,11 +12,13 @@ import {
   TextInput,
   Share,
   Alert,
+  Modal,
+  ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { db } from '../../../firebase/firebaseConfig';
 import { useAuth } from '../../../contexts/AuthContext';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, where, deleteDoc, doc } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
 
 interface BloodRequest {
@@ -30,14 +32,17 @@ interface BloodRequest {
   notes?: string;
   urgent?: boolean;
   createdAt: any;
+  responseCount?: number;
 }
 
-const RequestCard: React.FC<{ 
-  request: BloodRequest; 
-  onPress: () => void; 
+const RequestCard: React.FC<{
+  request: BloodRequest;
+  onPress: () => void;
   onRespond: () => void;
   onShare: () => void;
-}> = ({ request, onPress, onRespond, onShare }) => {
+  onDelete?: () => void;
+  showDeleteButton?: boolean;
+}> = ({ request, onPress, onRespond, onShare, onDelete, showDeleteButton }) => {
   const timeAgo = React.useMemo(() => {
     if (!request.createdAt) return 'Recently';
     
@@ -90,14 +95,32 @@ const RequestCard: React.FC<{
       )}
 
       <View style={styles.cardFooter}>
-        <TouchableOpacity style={styles.respondButton} onPress={onRespond}>
-          <Ionicons name="hand-left" size={16} color="#E53E3E" />
-          <Text style={styles.respondButtonText}>Respond</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity style={styles.shareButton} onPress={onShare}>
-          <Ionicons name="share-outline" size={16} color="#666" />
-        </TouchableOpacity>
+        <View style={styles.footerLeft}>
+          <TouchableOpacity style={styles.respondButton} onPress={onRespond}>
+            <Ionicons name="hand-left" size={16} color="#E53E3E" />
+            <Text style={styles.respondButtonText}>Respond</Text>
+          </TouchableOpacity>
+
+          {request.responseCount !== undefined && (
+            <View style={styles.responseCount}>
+              <Ionicons name="people" size={14} color="#666" />
+              <Text style={styles.responseCountText}>
+                {request.responseCount || 0} {(request.responseCount || 0) === 1 ? 'response' : 'responses'}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        <View style={styles.footerRight}>
+          {showDeleteButton && onDelete && (
+            <TouchableOpacity style={styles.deleteButton} onPress={onDelete}>
+              <Ionicons name="trash-outline" size={16} color="#E53E3E" />
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity style={styles.shareButton} onPress={onShare}>
+            <Ionicons name="share-outline" size={16} color="#666" />
+          </TouchableOpacity>
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -138,6 +161,8 @@ export default function RequestsTabScreen() {
   const [searchText, setSearchText] = useState('');
   const [selectedFilter, setSelectedFilter] = useState('all');
   const [error, setError] = useState<string | null>(null);
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [requestToDelete, setRequestToDelete] = useState<BloodRequest | null>(null);
 
   const { user, userProfile } = useAuth();
   const router = useRouter();
@@ -149,14 +174,37 @@ export default function RequestsTabScreen() {
         collection(db, 'requests'),
         orderBy('createdAt', 'desc')
       );
-      
+
       const querySnapshot = await getDocs(q);
       const fetchedRequests: BloodRequest[] = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       } as BloodRequest));
-      
-      setRequests(fetchedRequests);
+
+      // Fetch response counts for each request
+      const requestsWithCounts = await Promise.all(
+        fetchedRequests.map(async (request) => {
+          try {
+            const responsesQuery = query(
+              collection(db, 'responses'),
+              where('requestId', '==', request.id)
+            );
+            const responsesSnapshot = await getDocs(responsesQuery);
+            return {
+              ...request,
+              responseCount: responsesSnapshot.size
+            };
+          } catch (error) {
+            console.error(`Error fetching responses for request ${request.id}:`, error);
+            return {
+              ...request,
+              responseCount: 0
+            };
+          }
+        })
+      );
+
+      setRequests(requestsWithCounts);
     } catch (err) {
       console.error('Error fetching requests:', err);
       setError('Failed to load requests. Please try again.');
@@ -218,7 +266,7 @@ export default function RequestsTabScreen() {
   const handleShare = async (request: BloodRequest) => {
     try {
       const message = `🩸 BLOOD DONATION NEEDED 🩸\n\nPatient: ${request.fullName}\nBlood Type: ${request.bloodType}\nLocation: ${request.city}\nHospital: ${request.hospital}\n${request.urgent ? '🚨 URGENT REQUEST' : ''}\n\nHelp save a life! Contact: ${request.contactNumber}`;
-      
+
       await Share.share({
         message,
         title: 'Blood Donation Request',
@@ -227,6 +275,46 @@ export default function RequestsTabScreen() {
       console.error('Error sharing:', error);
     }
   };
+
+  const handleDeleteRequest = (request: BloodRequest) => {
+    console.log('Delete button pressed for request:', request.id);
+    setRequestToDelete(request);
+    setDeleteModalVisible(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!requestToDelete) return;
+
+    console.log('Delete confirmed for request:', requestToDelete.id);
+    setDeleteModalVisible(false);
+
+    try {
+      console.log('Attempting to delete document:', requestToDelete.id);
+      await deleteDoc(doc(db, 'requests', requestToDelete.id));
+      console.log('Document deleted from Firestore');
+
+      setRequests(prevRequests => {
+        const filtered = prevRequests.filter(r => r.id !== requestToDelete.id);
+        console.log('Updated local state, requests count:', filtered.length);
+        return filtered;
+      });
+
+      Alert.alert('Success', 'Request deleted successfully');
+      setRequestToDelete(null);
+    } catch (error) {
+      console.error('Error deleting request:', error);
+      Alert.alert('Error', 'Failed to delete request');
+      setRequestToDelete(null);
+    }
+  };
+
+  const cancelDelete = () => {
+    console.log('User canceled deletion');
+    setDeleteModalVisible(false);
+    setRequestToDelete(null);
+  };
+
+  const canDeleteRequests = userProfile?.role === 'admin' || userProfile?.role === 'moderator';
 
   const getFilterCounts = () => {
     const counts: { [key: string]: number } = {
@@ -256,122 +344,182 @@ export default function RequestsTabScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <Text style={styles.title}>Blood Requests</Text>
-          <Text style={styles.subtitle}>
-            {filteredRequests.length} of {requests.length} requests
-            {selectedFilter !== 'all' && ` • ${selectedFilter === 'myCity' ? 'My City' : selectedFilter === 'urgent' ? 'Urgent' : selectedFilter} filter`}
-          </Text>
-        </View>
-
-        <TouchableOpacity
-          style={styles.createButton}
-          onPress={() => router.push('/requests/create')}
-        >
-          <Ionicons name="add" size={24} color="white" />
-        </TouchableOpacity>
-      </View>
-
-      {/* Search */}
-      <View style={styles.searchContainer}>
-        <View style={styles.searchInputContainer}>
-          <Ionicons name="search" size={20} color="#666" />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search requests..."
-            value={searchText}
-            onChangeText={setSearchText}
-            placeholderTextColor="#999"
+      <ScrollView
+        style={styles.scrollContainer}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#E53E3E']}
+            tintColor="#E53E3E"
+            progressViewOffset={50}
           />
-          {searchText.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchText('')}>
-              <Ionicons name="close-circle" size={20} color="#666" />
+        }
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerContent}>
+            <Text style={styles.title}>Blood Requests</Text>
+            <Text style={styles.subtitle}>
+              {filteredRequests.length} of {requests.length} requests
+              {selectedFilter !== 'all' && ` • ${selectedFilter === 'myCity' ? 'My City' : selectedFilter === 'urgent' ? 'Urgent' : selectedFilter} filter`}
+            </Text>
+          </View>
+
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              style={styles.refreshButton}
+              onPress={onRefresh}
+              disabled={refreshing}
+            >
+              <Ionicons
+                name={refreshing ? "refresh-circle" : "refresh"}
+                size={20}
+                color={refreshing ? "#666" : "#10B981"}
+              />
             </TouchableOpacity>
-          )}
+
+            <TouchableOpacity
+              style={styles.createButton}
+              onPress={() => router.push('/requests/create')}
+            >
+              <Ionicons name="add" size={24} color="white" />
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
 
-      {/* Filters */}
-      <View style={styles.filtersContainer}>
-        <FlatList
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          data={[
-            { key: 'all', title: 'All' },
-            { key: 'myCity', title: 'My City' },
-            { key: 'urgent', title: 'Urgent' },
-            { key: 'A+', title: 'A+' },
-            { key: 'A-', title: 'A-' },
-            { key: 'B+', title: 'B+' },
-            { key: 'B-', title: 'B-' },
-            { key: 'AB+', title: 'AB+' },
-            { key: 'AB-', title: 'AB-' },
-            { key: 'O+', title: 'O+' },
-            { key: 'O-', title: 'O-' },
-          ]}
-          renderItem={({ item }) => (
-            <FilterChip
-              title={item.title}
-              isSelected={selectedFilter === item.key}
-              onPress={() => setSelectedFilter(item.key)}
-              count={filterCounts[item.key]}
+        {/* Search */}
+        <View style={styles.searchContainer}>
+          <View style={styles.searchInputContainer}>
+            <Ionicons name="search" size={20} color="#666" />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search requests..."
+              value={searchText}
+              onChangeText={setSearchText}
+              placeholderTextColor="#999"
             />
-          )}
-          keyExtractor={(item) => item.key}
-          contentContainerStyle={styles.filtersList}
-        />
-      </View>
-
-      {/* Error State */}
-      {error && (
-        <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle" size={24} color="#E53E3E" />
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={onRefresh}>
-            <Text style={styles.retryButtonText}>Retry</Text>
-          </TouchableOpacity>
+            {searchText.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchText('')}>
+                <Ionicons name="close-circle" size={20} color="#666" />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
-      )}
 
-      {/* Requests List */}
-      {!error && (
-        <FlatList
-          data={filteredRequests}
-          renderItem={({ item }) => (
-            <RequestCard
-              request={item}
-              onPress={() => router.push(`/requests/${item.id}`)}
-              onRespond={() => handleRespond(item)}
-              onShare={() => handleShare(item)}
-            />
-          )}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.requestsList}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={['#E53E3E']}
-              tintColor="#E53E3E"
-            />
-          }
-          ListEmptyComponent={() => (
-            <View style={styles.emptyContainer}>
-              <Ionicons name="heart-dislike" size={64} color="#ccc" />
-              <Text style={styles.emptyTitle}>No requests found</Text>
-              <Text style={styles.emptyText}>
-                {searchText || selectedFilter !== 'all' 
-                  ? 'Try adjusting your search or filters'
-                  : 'Be the first to create a blood request'
-                }
-              </Text>
+        {/* Filters */}
+        <View style={styles.filtersContainer}>
+          <FlatList
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            data={[
+              { key: 'all', title: 'All' },
+              { key: 'myCity', title: 'My City' },
+              { key: 'urgent', title: 'Urgent' },
+              { key: 'A+', title: 'A+' },
+              { key: 'A-', title: 'A-' },
+              { key: 'B+', title: 'B+' },
+              { key: 'B-', title: 'B-' },
+              { key: 'AB+', title: 'AB+' },
+              { key: 'AB-', title: 'AB-' },
+              { key: 'O+', title: 'O+' },
+              { key: 'O-', title: 'O-' },
+            ]}
+            renderItem={({ item }) => (
+              <FilterChip
+                title={item.title}
+                isSelected={selectedFilter === item.key}
+                onPress={() => setSelectedFilter(item.key)}
+                count={filterCounts[item.key]}
+              />
+            )}
+            keyExtractor={(item) => item.key}
+            contentContainerStyle={styles.filtersList}
+            scrollEnabled={false}
+          />
+        </View>
+
+        {/* Error State */}
+        {error && (
+          <View style={styles.errorContainer}>
+            <Ionicons name="alert-circle" size={24} color="#E53E3E" />
+            <Text style={styles.errorText}>{error}</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={onRefresh}>
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Requests List */}
+        {!error && (
+          <View style={styles.requestsContainer}>
+            {filteredRequests.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Ionicons name="heart-dislike" size={64} color="#ccc" />
+                <Text style={styles.emptyTitle}>No requests found</Text>
+                <Text style={styles.emptyText}>
+                  {searchText || selectedFilter !== 'all'
+                    ? 'Try adjusting your search or filters'
+                    : 'Be the first to create a blood request'
+                  }
+                </Text>
+              </View>
+            ) : (
+              filteredRequests.map((item) => (
+                <RequestCard
+                  key={item.id}
+                  request={item}
+                  onPress={() => router.push(`/requests/${item.id}`)}
+                  onRespond={() => handleRespond(item)}
+                  onShare={() => handleShare(item)}
+                  onDelete={() => handleDeleteRequest(item)}
+                  showDeleteButton={canDeleteRequests}
+                />
+              ))
+            )}
+          </View>
+        )}
+      </ScrollView>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        visible={deleteModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={cancelDelete}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Ionicons name="trash-outline" size={24} color="#E53E3E" />
+              <Text style={styles.modalTitle}>Delete Request</Text>
             </View>
-          )}
-          showsVerticalScrollIndicator={false}
-        />
-      )}
+
+            <Text style={styles.modalMessage}>
+              Are you sure you want to delete "{requestToDelete?.fullName}"'s blood donation request?
+              This action cannot be undone.
+            </Text>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={cancelDelete}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalButton, styles.deleteConfirmButton]}
+                onPress={confirmDelete}
+              >
+                <Ionicons name="trash" size={16} color="white" />
+                <Text style={styles.deleteConfirmButtonText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -380,6 +528,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',
+  },
+  scrollContainer: {
+    flex: 1,
   },
   loadingContainer: {
     flex: 1,
@@ -405,6 +556,21 @@ const styles = StyleSheet.create({
   headerContent: {
     flex: 1,
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  refreshButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#F0FDF4',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#D1FAE5',
+  },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
@@ -415,6 +581,7 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 2,
   },
+
   createButton: {
     backgroundColor: '#E53E3E',
     width: 44,
@@ -499,6 +666,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   requestsList: {
+    padding: 16,
+    paddingBottom: 100, // Add padding for tab bar
+  },
+  requestsContainer: {
     padding: 16,
     paddingBottom: 100, // Add padding for tab bar
   },
@@ -601,6 +772,16 @@ const styles = StyleSheet.create({
     borderTopColor: '#f0f0f0',
     paddingTop: 12,
   },
+  footerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  footerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   respondButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -614,6 +795,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     marginLeft: 4,
+  },
+  responseCount: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  responseCountText: {
+    fontSize: 12,
+    color: '#666',
+    marginLeft: 4,
+    fontWeight: '500',
+  },
+  deleteButton: {
+    padding: 8,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 6,
   },
   shareButton: {
     padding: 8,
@@ -636,5 +836,68 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 8,
     lineHeight: 24,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 24,
+    width: '90%',
+    maxWidth: 400,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1a1a1a',
+    marginLeft: 12,
+  },
+  modalMessage: {
+    fontSize: 16,
+    color: '#666',
+    lineHeight: 24,
+    marginBottom: 24,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  cancelButton: {
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1,
+    borderColor: '#e1e5e9',
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    color: '#666',
+    fontWeight: '600',
+  },
+  deleteConfirmButton: {
+    backgroundColor: '#E53E3E',
+  },
+  deleteConfirmButtonText: {
+    fontSize: 16,
+    color: 'white',
+    fontWeight: '600',
   },
 });

@@ -43,6 +43,7 @@ export default function RespondScreen() {
   const [loading, setLoading] = useState(false);
   const [fetchingRequest, setFetchingRequest] = useState(true);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [success, setSuccess] = useState(false);
 
   useEffect(() => {
     const fetchRequest = async () => {
@@ -102,7 +103,8 @@ export default function RespondScreen() {
     setLoading(true);
 
     try {
-      await addDoc(collection(db, 'requests', requestId as string, 'responses'), {
+      await addDoc(collection(db, 'responses'), {
+        requestId: requestId,
         userId: user?.uid,
         responderName: formData.name.trim(),
         message: formData.message.trim(),
@@ -121,16 +123,10 @@ export default function RespondScreen() {
           relatedId: requestId, // Link to the request document
       });
 
-      Alert.alert(
-        'Response Sent! 🎉',
-        'Your response has been submitted successfully. The requester will be able to contact you directly.',
-        [
-          {
-            text: 'View Request',
-            onPress: () => router.replace(`/requests/${requestId}`),
-          },
-        ]
-      );
+      // Show success message and navigate back
+      setTimeout(() => {
+        router.back();
+      }, 1000); // Small delay to show the success state
     } catch (error) {
       console.error('Error submitting response:', error);
       Alert.alert(

@@ -226,16 +226,37 @@ export default function CreateRequestScreen() {
         relatedId: docRef.id, // Link to the request document
       });
 
+      // Clear the form data immediately after successful submission
+      setFormData({
+        fullName: userProfile?.fullName || '',
+        bloodType: '',
+        city: userProfile?.city || '',
+        hospital: '',
+        contactNumber: '',
+        notes: '',
+        urgent: false,
+      });
+
       Alert.alert(
         'Request Created Successfully! 🩸',
         'Your blood request has been posted. Donors in your area will be able to see and respond to your request.',
         [
           {
             text: 'View Requests',
-            onPress: () => router.replace('/requests'),
+            onPress: () => router.replace('/(app)/(tabs)/requests'),
+          },
+          {
+            text: 'OK',
+            onPress: () => router.replace('/(app)/(tabs)/requests'),
+            style: 'default',
           },
         ]
       );
+
+      // Auto-navigate after 3 seconds if user doesn't press any button
+      setTimeout(() => {
+        router.replace('/(app)/(tabs)/requests');
+      }, 3000);
     } catch (error) {
       console.error('Error creating request:', error);
       Alert.alert(

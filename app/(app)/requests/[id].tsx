@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { db } from '../../../firebase/firebaseConfig';
-import { doc, getDoc, collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, query, orderBy, where } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../../contexts/AuthContext';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -113,10 +113,15 @@ export default function RequestDetailScreen() {
   useEffect(() => {
     const fetchRequestData = async () => {
       try {
+        console.log('Fetching request with ID:', id);
+
         // Fetch request details
         const requestRef = doc(db, 'requests', id as string);
         const requestDoc = await getDoc(requestRef);
-        
+
+        console.log('Request doc exists:', requestDoc.exists());
+        console.log('Request data:', requestDoc.data());
+
         if (requestDoc.exists()) {
           setRequest({ ...requestDoc.data(), id: requestDoc.id } as BloodRequest);
         } else {
@@ -124,9 +129,10 @@ export default function RequestDetailScreen() {
           return;
         }
 
-        // Fetch responses
+        // Fetch responses from the top-level responses collection
         const responsesQuery = query(
-          collection(db, 'requests', id as string, 'responses'),
+          collection(db, 'responses'),
+          where('requestId', '==', id),
           orderBy('createdAt', 'desc')
         );
         const responsesSnapshot = await getDocs(responsesQuery);
@@ -134,7 +140,8 @@ export default function RequestDetailScreen() {
           id: doc.id,
           ...doc.data()
         } as Response));
-        
+
+        console.log('Found responses:', responsesList.length);
         setResponses(responsesList);
       } catch (err) {
         console.error('Error fetching request:', err);

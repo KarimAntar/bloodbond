@@ -11,6 +11,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useUserStats } from '../../../contexts/UserStatsContext';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -118,43 +119,60 @@ export default function ActivityTabScreen() {
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [stats, setStats] = useState({
-    requestsCreated: 0,
-    responsesSent: 0,
-    donationsCompleted: 0,
-    livesImpacted: 0,
-  });
 
   const { user } = useAuth();
+  const { stats } = useUserStats();
   const router = useRouter();
 
   const fetchUserActivity = async () => {
     if (!user) return;
 
     try {
-      const q = query(
+      // Fetch user's activity (requests created and responses sent)
+      const activityQuery = query(
         collection(db, 'activity'),
         where('userId', '==', user.uid),
         orderBy('timestamp', 'desc'),
         limit(20)
       );
 
-      const querySnapshot = await getDocs(q);
-      const fetchedActivities = querySnapshot.docs.map(doc => ({
+      const activitySnapshot = await getDocs(activityQuery);
+      const activityData = activitySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
       } as ActivityItem));
 
-      setActivities(fetchedActivities);
-      
-      // Here you can also calculate stats based on fetchedActivities
-      // For now, we'll keep them as mock stats
-      setStats({
-        requestsCreated: fetchedActivities.filter(a => a.type === 'request_created').length,
-        responsesSent: fetchedActivities.filter(a => a.type === 'response_sent').length,
-        donationsCompleted: 5, // Mock data
-        livesImpacted: 12, // Mock data
+      // Also fetch responses where user is the responder
+      const responsesQuery = query(
+        collection(db, 'responses'),
+        where('userId', '==', user.uid),
+        orderBy('createdAt', 'desc'),
+        limit(10)
+      );
+
+      const responsesSnapshot = await getDocs(responsesQuery);
+      const responseActivities: ActivityItem[] = responsesSnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          type: 'response_sent' as const,
+          title: 'Response Sent',
+          description: `You responded to a ${data.bloodType} blood request`,
+          timestamp: data.createdAt,
+          bloodType: data.bloodType,
+        };
       });
+
+      // Combine and sort all activities
+      const allActivities = [...activityData, ...responseActivities]
+        .sort((a, b) => {
+          const aTime = a.timestamp?.toDate?.() || new Date(a.timestamp);
+          const bTime = b.timestamp?.toDate?.() || new Date(b.timestamp);
+          return bTime.getTime() - aTime.getTime();
+        })
+        .slice(0, 20); // Keep only the most recent 20
+
+      setActivities(allActivities);
 
     } catch (error) {
       console.error('Error fetching activities:', error);
@@ -205,17 +223,17 @@ export default function ActivityTabScreen() {
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
         >
-          <Text style={styles.title}>Your Activity</Text>
-          <Text style={styles.subtitle}>Track your blood donation impact</Text>
+          <View style={styles.headerContent}>
+            <Text style={styles.title}>Your Activity</Text>
+            <Text style={styles.subtitle}>Track your blood donation impact</Text>
+          </View>
         </LinearGradient>
 
         <View style={styles.statsSection}>
-          <Text style={styles.sectionTitle}>Your Impact</Text>
+          <Text style={styles.sectionTitle}>Your Activity</Text>
           <View style={styles.statsGrid}>
             <StatsCard icon="add-circle" title="Requests" value={stats.requestsCreated} subtitle="Created" color="#E53E3E"/>
             <StatsCard icon="paper-plane" title="Responses" value={stats.responsesSent} subtitle="Sent" color="#3182CE"/>
-            <StatsCard icon="heart" title="Donations" value={stats.donationsCompleted} subtitle="Completed" color="#38A169"/>
-            <StatsCard icon="people" title="Lives" value={stats.livesImpacted} subtitle="Impacted" color="#F56500"/>
           </View>
         </View>
 
@@ -272,19 +290,21 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 20,
     paddingVertical: 20,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+  },
+  headerContent: {
+    alignItems: 'center',
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#1a1a1a',
+    color: 'white',
+    textAlign: 'center',
   },
   subtitle: {
     fontSize: 16,
-    color: '#666',
+    color: 'rgba(255,255,255,0.9)',
     marginTop: 4,
+    textAlign: 'center',
   },
   sectionTitle: {
     fontSize: 20,

@@ -9,11 +9,13 @@ import {
   SafeAreaView,
   FlatList,
   RefreshControl,
+  Modal,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { db } from '../../../firebase/firebaseConfig';
 import { useAuth } from '../../../contexts/AuthContext';
-import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, where, orderBy, deleteDoc, doc } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
 
 interface BloodRequest {
@@ -26,17 +28,21 @@ interface BloodRequest {
   createdAt: any;
 }
 
-const RequestCard: React.FC<{ request: BloodRequest; onPress: () => void }> = ({ request, onPress }) => {
+const RequestCard: React.FC<{
+  request: BloodRequest;
+  onPress: () => void;
+  onDelete?: () => void;
+}> = ({ request, onPress, onDelete }) => {
   const timeAgo = React.useMemo(() => {
     if (!request.createdAt) return 'Recently';
-    
+
     const now = new Date();
     const requestTime = request.createdAt.toDate();
     const diffInHours = Math.floor((now.getTime() - requestTime.getTime()) / (1000 * 60 * 60));
-    
+
     if (diffInHours < 1) return 'Just now';
     if (diffInHours < 24) return `${diffInHours}h ago`;
-    
+
     const diffInDays = Math.floor(diffInHours / 24);
     return `${diffInDays}d ago`;
   }, [request.createdAt]);
@@ -63,9 +69,12 @@ const RequestCard: React.FC<{ request: BloodRequest; onPress: () => void }> = ({
               <Text style={styles.urgentText}>URGENT</Text>
             </View>
           )}
-          <Text style={styles.timeText}>{timeAgo}</Text>
+          <TouchableOpacity style={styles.deleteButton} onPress={onDelete}>
+            <Ionicons name="trash-outline" size={16} color="#E53E3E" />
+          </TouchableOpacity>
         </View>
       </View>
+      <Text style={styles.timeText}>{timeAgo}</Text>
     </TouchableOpacity>
   );
 };
@@ -74,7 +83,9 @@ export default function MyRequestsScreen() {
   const [requests, setRequests] = useState<BloodRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [requestToDelete, setRequestToDelete] = useState<BloodRequest | null>(null);
+
   const { user } = useAuth();
   const router = useRouter();
 
@@ -115,6 +126,33 @@ export default function MyRequestsScreen() {
     setRefreshing(false);
   };
 
+  const handleDeleteRequest = (request: BloodRequest) => {
+    setRequestToDelete(request);
+    setDeleteModalVisible(true);
+  };
+
+  const confirmDeleteRequest = async () => {
+    if (!requestToDelete) return;
+
+    setDeleteModalVisible(false);
+
+    try {
+      await deleteDoc(doc(db, 'requests', requestToDelete.id));
+      setRequests(requests.filter(r => r.id !== requestToDelete.id));
+      Alert.alert('Success', 'Request deleted successfully');
+      setRequestToDelete(null);
+    } catch (error) {
+      console.error('Error deleting request:', error);
+      Alert.alert('Error', 'Failed to delete request');
+      setRequestToDelete(null);
+    }
+  };
+
+  const cancelDeleteRequest = () => {
+    setDeleteModalVisible(false);
+    setRequestToDelete(null);
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -139,6 +177,7 @@ export default function MyRequestsScreen() {
           <RequestCard
             request={item}
             onPress={() => router.push(`/requests/${item.id}`)}
+            onDelete={() => handleDeleteRequest(item)}
           />
         )}
         keyExtractor={(item) => item.id}
@@ -160,6 +199,45 @@ export default function MyRequestsScreen() {
         )}
         showsVerticalScrollIndicator={false}
       />
+
+      {/* Delete Request Modal */}
+      <Modal
+        visible={deleteModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={cancelDeleteRequest}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Ionicons name="trash-outline" size={24} color="#E53E3E" />
+              <Text style={styles.modalTitle}>Delete Request</Text>
+            </View>
+
+            <Text style={styles.modalMessage}>
+              Are you sure you want to delete your request for "{requestToDelete?.fullName}"?
+              This action cannot be undone.
+            </Text>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={cancelDeleteRequest}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalButton, styles.deleteConfirmButton]}
+                onPress={confirmDeleteRequest}
+              >
+                <Ionicons name="trash" size={16} color="white" />
+                <Text style={styles.deleteConfirmButtonText}>Delete Request</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -273,6 +351,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#999',
   },
+  deleteButton: {
+    padding: 8,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 6,
+  },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -291,5 +374,68 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 8,
     lineHeight: 24,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 24,
+    width: '90%',
+    maxWidth: 400,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1a1a1a',
+    marginLeft: 12,
+  },
+  modalMessage: {
+    fontSize: 16,
+    color: '#666',
+    lineHeight: 24,
+    marginBottom: 24,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  cancelButton: {
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1,
+    borderColor: '#e1e5e9',
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    color: '#666',
+    fontWeight: '600',
+  },
+  deleteConfirmButton: {
+    backgroundColor: '#E53E3E',
+  },
+  deleteConfirmButtonText: {
+    fontSize: 16,
+    color: 'white',
+    fontWeight: '600',
   },
 });

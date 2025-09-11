@@ -12,6 +12,9 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { db } from '../../firebase/firebaseConfig';
+import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, Timestamp } from 'firebase/firestore';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface NotificationItem {
   id: string;
@@ -91,84 +94,116 @@ export default function NotificationsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
-
-  // Mock notifications data
-  const mockNotifications: NotificationItem[] = [
-    {
-      id: '1',
-      type: 'urgent_request',
-      title: 'Urgent Blood Request',
-      message: 'A+ blood needed urgently at City Hospital. Only 2 hours left.',
-      timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
-      read: false,
-      actionUrl: '/requests/urgent-1',
-    },
-    {
-      id: '2',
-      type: 'request_response',
-      title: 'New Response to Your Request',
-      message: 'John Doe has responded to your O- blood request.',
-      timestamp: new Date(Date.now() - 4 * 60 * 60 * 1000), // 4 hours ago
-      read: false,
-      actionUrl: '/requests/my-request-1/responses',
-    },
-    {
-      id: '3',
-      type: 'donation_reminder',
-      title: 'Donation Reminder',
-      message: 'It\'s been 56 days since your last donation. You can donate again!',
-      timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000), // 1 day ago
-      read: true,
-    },
-    {
-      id: '4',
-      type: 'system',
-      title: 'Welcome to BloodBond!',
-      message: 'Thank you for joining our community. Start by creating your first request.',
-      timestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), // 3 days ago
-      read: true,
-    },
-  ];
+  const { user } = useAuth();
 
   useEffect(() => {
-    loadNotifications();
-  }, []);
+    if (user) {
+      loadNotifications();
+    } else {
+      setLoading(false);
+    }
+  }, [user]);
 
   const loadNotifications = async () => {
+    if (!user) return;
+
     setLoading(true);
-    // Simulate API call
-    setTimeout(() => {
-      setNotifications(mockNotifications);
+
+    try {
+      // Listen to real-time notifications from Firebase
+      const q = query(
+        collection(db, 'notifications'),
+        where('userId', '==', user.uid),
+        orderBy('timestamp', 'desc')
+      );
+
+      const unsubscribe = onSnapshot(q, (querySnapshot) => {
+        const notificationsData: NotificationItem[] = [];
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          notificationsData.push({
+            id: doc.id,
+            type: data.type,
+            title: data.title,
+            message: data.message,
+            timestamp: data.timestamp?.toDate() || new Date(),
+            read: data.read || false,
+            actionUrl: data.actionUrl,
+          });
+        });
+        setNotifications(notificationsData);
+        setLoading(false);
+        setRefreshing(false);
+      });
+
+      return unsubscribe;
+    } catch (error) {
+      console.error('Error loading notifications:', error);
       setLoading(false);
-    }, 1000);
+      setRefreshing(false);
+    }
   };
 
   const onRefresh = () => {
     setRefreshing(true);
     loadNotifications();
-    setRefreshing(false);
   };
 
-  const handleNotificationPress = (notification: NotificationItem) => {
+  const handleNotificationPress = async (notification: NotificationItem) => {
+    // Mark as read when pressed
+    if (!notification.read) {
+      await handleMarkAsRead(notification.id);
+    }
+
     if (notification.actionUrl) {
       router.push(notification.actionUrl as any);
     }
   };
 
-  const handleMarkAsRead = (notificationId: string) => {
-    setNotifications(prev =>
-      prev.map(notification =>
-        notification.id === notificationId
-          ? { ...notification, read: true }
-          : notification
-      )
-    );
+  const handleMarkAsRead = async (notificationId: string) => {
+    try {
+      const notificationRef = doc(db, 'notifications', notificationId);
+      await updateDoc(notificationRef, {
+        read: true,
+        readAt: Timestamp.now(),
+      });
+
+      // Update local state immediately for better UX
+      setNotifications(prev =>
+        prev.map(notification =>
+          notification.id === notificationId
+            ? { ...notification, read: true }
+            : notification
+        )
+      );
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+    }
   };
 
-  const handleMarkAllAsRead = () => {
-    setNotifications(prev =>
-      prev.map(notification => ({ ...notification, read: true }))
-    );
+  const handleMarkAllAsRead = async () => {
+    if (!user) return;
+
+    try {
+      const unreadNotifications = notifications.filter(n => !n.read);
+
+      // Update all unread notifications in Firebase
+      const updatePromises = unreadNotifications.map(notification =>
+        updateDoc(doc(db, 'notifications', notification.id), {
+          read: true,
+          readAt: Timestamp.now(),
+        })
+      );
+
+      await Promise.all(updatePromises);
+
+      // Update local state
+      setNotifications(prev =>
+        prev.map(notification => ({ ...notification, read: true }))
+      );
+    } catch (error) {
+      console.error('Error marking all notifications as read:', error);
+    }
   };
 
   const unreadCount = notifications.filter(n => !n.read).length;

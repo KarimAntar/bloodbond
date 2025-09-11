@@ -12,6 +12,7 @@ import {
   Alert
 } from 'react-native';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useNotifications } from '../../../contexts/NotificationContext';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -62,6 +63,7 @@ const ActionButton: React.FC<ActionButtonProps> = ({ icon, title, subtitle, onPr
 
 export default function HomeScreen() {
   const { user, userProfile, loading, logout } = useAuth();
+  const { unreadCount } = useNotifications();
   const router = useRouter();
   const [stats, setStats] = useState({
     totalRequests: 12,
@@ -112,9 +114,13 @@ export default function HomeScreen() {
           <View style={styles.headerRight}>
             <TouchableOpacity style={styles.notificationButton} onPress={() => router.push('/notifications')}>
               <Ionicons name="notifications-outline" size={24} color="#666" />
-              <View style={styles.notificationBadge}>
-                <Text style={styles.notificationBadgeText}>3</Text>
-              </View>
+              {unreadCount > 0 && (
+                <View style={styles.notificationBadge}>
+                  <Text style={styles.notificationBadgeText}>
+                    {unreadCount > 99 ? '99+' : unreadCount.toString()}
+                  </Text>
+                </View>
+              )}
             </TouchableOpacity>
             <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
               <Ionicons name="log-out-outline" size={24} color="#666" />
