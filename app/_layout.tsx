@@ -41,16 +41,20 @@ const InitialLayout = () => {
     // Only handle authentication redirects, don't interfere with normal navigation
     if (user) {
       // User is authenticated
-      if ((userProfile && (userProfile.profileComplete === false || userProfile.profileComplete === undefined) || (user && !userProfile)) && inAppGroup) {
-        // User profile not complete or doesn't exist (Google sign-in), redirect to profile setup
-        console.log('User profile not complete or missing, redirecting to profile edit...');
+      const currentPath = segments.join('/');
+      const isOnProfilePage = currentPath.includes('profile');
+
+      if (userProfile && userProfile.profileComplete === false && inAppGroup && !isOnProfilePage) {
+        // User profile exists but not complete, redirect to profile setup (but not if already on profile page)
+        console.log('User profile not complete, redirecting to profile edit...');
+        router.replace('/(app)/profile/edit');
+      } else if (!userProfile && inAppGroup && !isOnProfilePage) {
+        // User profile doesn't exist (Google sign-in), redirect to profile setup
+        console.log('User profile missing, redirecting to profile edit...');
         router.replace('/(app)/profile/edit');
       } else if (userProfile && userProfile.profileComplete === true && !inAppGroup && !inAuthGroup) {
         // User profile complete and not on auth screens, redirect to main app
         router.replace('/(app)/(tabs)');
-      } else if (!user.emailVerified && inAppGroup) {
-        // User email not verified but trying to access app
-        router.replace('/(auth)/login');
       }
       // If user is verified and in app group, or unverified and on auth screens, do nothing
     } else if (inAppGroup) {

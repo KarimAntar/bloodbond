@@ -433,21 +433,26 @@ export default function EditProfileScreen() {
         role: userProfile?.role || 'user',
       };
 
+      console.log('Saving profile data:', profileData);
       await setDoc(userDocRef, profileData, { merge: true });
+
+      // Wait a moment for Firestore to update
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
       await refreshUserProfile();
 
-      // Try to go back, if it fails, go to home
-      try {
-        router.back();
-      } catch (error) {
-        // If back navigation fails, go to home
-        router.replace('/(app)/(tabs)');
-      }
-
-      Alert.alert('Success', 'Profile updated successfully!');
+      Alert.alert('Success', 'Profile updated successfully!', [
+        {
+          text: 'OK',
+          onPress: () => {
+            // Navigate to main app after successful save
+            router.replace('/(app)/(tabs)');
+          }
+        }
+      ]);
     } catch (error) {
       console.error('Error updating profile:', error);
-      Alert.alert('Error', 'Failed to update your profile.');
+      Alert.alert('Error', 'Failed to update your profile. Please try again.');
     } finally {
       setSaving(false);
     }
