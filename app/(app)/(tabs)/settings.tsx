@@ -9,7 +9,8 @@ import {
   TouchableOpacity,
   Alert,
   Switch,
-  ActivityIndicator
+  ActivityIndicator,
+  Image
 } from 'react-native';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useUserStats } from '../../../contexts/UserStatsContext';
@@ -19,9 +20,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Notifications from 'expo-notifications';
 import * as Location from 'expo-location';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, getDoc } from 'firebase/firestore';
 import { db } from '../../../firebase/firebaseConfig';
 import { SkeletonLoader, SkeletonList } from '../../../components/SkeletonLoader';
+import { useFocusEffect } from '@react-navigation/native';
 
 // Theme-aware components
 const ProfileOption: React.FC<{
@@ -111,7 +113,7 @@ const StatCard: React.FC<{
 export default function SettingsTabScreen() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [locationEnabled, setLocationEnabled] = useState(true);
-  const { user, userProfile, logout, loading } = useAuth();
+  const { user, userProfile, logout, loading, refreshUserProfile } = useAuth();
   const { stats } = useUserStats();
   const { colors } = useTheme();
   const router = useRouter();
@@ -122,6 +124,25 @@ export default function SettingsTabScreen() {
     }
     loadSettings();
   }, []);
+
+  // Fetch fresh user profile data every time the settings page comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      const fetchFreshProfileData = async () => {
+        if (!user?.uid) return;
+
+        try {
+          console.log('Refreshing user profile data for settings page...');
+          await refreshUserProfile();
+          console.log('User profile refreshed successfully');
+        } catch (error) {
+          console.error('Error refreshing user profile data for settings:', error);
+        }
+      };
+
+      fetchFreshProfileData();
+    }, [user?.uid, refreshUserProfile])
+  );
 
   const loadSettings = async () => {
     try {
@@ -223,6 +244,7 @@ export default function SettingsTabScreen() {
   // ... (other handlers remain the same)
 
   const handleEditProfile = () => {
+    // For existing users with completed profiles, go to edit page
     router.push('/(app)/profile/edit');
   };
 
@@ -384,11 +406,24 @@ export default function SettingsTabScreen() {
         >
           <View style={styles.profileInfo}>
             <View style={styles.avatarContainer}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>
-                  {userProfile?.fullName?.charAt(0) || user.email?.charAt(0) || '?'}
-                </Text>
-              </View>
+              {userProfile?.profilePicture && userProfile.profilePicture.trim() !== '' ? (
+                <Image
+                  source={{ uri: userProfile.profilePicture }}
+                  style={styles.avatarImage}
+                />
+              ) : (
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>
+                    {userProfile?.fullName
+                      ? userProfile.fullName
+                          .split(' ')
+                          .map(name => name.charAt(0).toUpperCase())
+                          .slice(0, 2)
+                          .join('')
+                      : user.email?.charAt(0)?.toUpperCase() || '?'}
+                  </Text>
+                </View>
+              )}
               {userProfile?.bloodType && (
                 <View style={styles.bloodTypeBadge}>
                   <Text style={styles.bloodTypeBadgeText}>{userProfile.bloodType}</Text>
@@ -638,6 +673,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  avatarImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     borderWidth: 3,
     borderColor: 'rgba(255,255,255,0.3)',
   },

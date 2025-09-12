@@ -10,6 +10,8 @@ import { LoadingScreen } from '../components/LoadingScreen';
 import { initializePerformanceOptimizations } from '../utils/performance';
 import { initializeNotifications } from '../firebase/pushNotifications';
 import { startProximityNotificationListener } from '../utils/proximityNotifications';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../firebase/firebaseConfig';
 
 const InitialLayout = () => {
   const { user, userProfile, initializing } = useAuth();
@@ -54,12 +56,12 @@ const InitialLayout = () => {
 
       if (userProfile && userProfile.profileComplete === false && inAppGroup && !isOnProfilePage) {
         // User profile exists but not complete, redirect to profile setup (but not if already on profile page)
-        console.log('User profile not complete, redirecting to profile edit...');
-        router.replace('/(app)/profile/edit');
+        console.log('User profile not complete, redirecting to profile setup...');
+        router.replace('/(app)/profile/setup');
       } else if (!userProfile && inAppGroup && !isOnProfilePage) {
         // User profile doesn't exist (Google sign-in), redirect to profile setup
-        console.log('User profile missing, redirecting to profile edit...');
-        router.replace('/(app)/profile/edit');
+        console.log('User profile missing, redirecting to profile setup...');
+        router.replace('/(app)/profile/setup');
       } else if (userProfile && userProfile.profileComplete === true && !inAppGroup && !inAuthGroup) {
         // User profile complete and not on auth screens, redirect to main app
         console.log('User profile complete, redirecting to main app...');
@@ -67,7 +69,31 @@ const InitialLayout = () => {
       } else if (userProfile && userProfile.profileComplete === true && inAppGroup && isOnHomePage) {
         // User is on home page with completed profile - this is correct, do nothing
         console.log('User on home page with completed profile - no redirect needed');
+      } else if (userProfile && userProfile.profileComplete === true && inAppGroup && currentPath.includes('/profile/setup')) {
+        // User has completed profile and is currently on profile setup page, redirecting to main app
+        console.log('User profile complete and on profile setup page, redirecting to main app...');
+        router.replace('/(app)/(tabs)');
+      } else if (inAppGroup && currentPath.includes('/profile/setup') && userProfile) {
+        // If user is on profile setup page and has a profile, check if it's complete by fetching fresh data
+        const checkProfileComplete = async () => {
+          try {
+            const userDocRef = doc(db, 'users', user?.uid);
+            const userDocSnap = await getDoc(userDocRef);
+            if (userDocSnap.exists()) {
+              const freshProfile = userDocSnap.data();
+              if (freshProfile?.profileComplete === true) {
+                console.log('Fresh profile check: profile is complete, redirecting to main app...');
+                router.replace('/(app)/(tabs)');
+              }
+            }
+          } catch (error) {
+            console.error('Error checking fresh profile:', error);
+          }
+        };
+        checkProfileComplete();
       }
+      // Don't redirect users who are already on profile page with completed profiles
+      // They should be able to modify their profile freely
       // If user is verified and in app group, or unverified and on auth screens, do nothing
     } else if (inAppGroup) {
       // User not authenticated but trying to access app

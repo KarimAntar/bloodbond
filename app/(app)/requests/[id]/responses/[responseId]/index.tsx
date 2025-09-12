@@ -3,34 +3,53 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, SafeAreaView, ScrollView, Alert, Linking } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { db } from '../../../../../../firebase/firebaseConfig';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, addDoc } from 'firebase/firestore';
 import { useTheme } from '../../../../../../contexts/ThemeContext';
 import { Colors } from '../../../../../../constants/Colors';
+import { useAuth } from '../../../../../../contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 
 interface Response {
   id: string;
+  userId?: string;
   responderName: string;
   message: string;
   contact: string;
   bloodType?: string;
   createdAt: any;
   requestId: string;
+  donated?: boolean;
+}
+
+interface Request {
+  id: string;
+  userId: string;
+  fullName: string;
+  bloodType: string;
+  city: string;
+  hospital: string;
+  contactNumber: string;
+  notes?: string;
+  urgent?: boolean;
+  createdAt: any;
 }
 
 export default function ResponseDetails() {
   const [response, setResponse] = useState<Response | null>(null);
+  const [request, setRequest] = useState<Request | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isRequestPoster, setIsRequestPoster] = useState(false);
   const router = useRouter();
   const { id, responseId } = useLocalSearchParams();
   const { currentTheme } = useTheme();
+  const { user } = useAuth();
   const colors = Colors[currentTheme];
 
   useEffect(() => {
-    const fetchResponse = async () => {
+    const fetchData = async () => {
       try {
-        if (responseId) {
-          // Fetch from main responses collection, not subcollection
+        if (responseId && id) {
+          // Fetch response
           const responseDocRef = doc(db, 'responses', responseId as string);
           const responseDocSnap = await getDoc(responseDocRef);
 
@@ -38,16 +57,30 @@ export default function ResponseDetails() {
             const responseData = { id: responseDocSnap.id, ...responseDocSnap.data() } as Response;
             setResponse(responseData);
           }
+
+          // Fetch request to check ownership
+          const requestDocRef = doc(db, 'requests', id as string);
+          const requestDocSnap = await getDoc(requestDocRef);
+
+          if (requestDocSnap.exists()) {
+            const requestData = { id: requestDocSnap.id, ...requestDocSnap.data() } as Request;
+            setRequest(requestData);
+
+            // Check if current user is the request poster
+            if (user && requestData.userId === user.uid) {
+              setIsRequestPoster(true);
+            }
+          }
         }
       } catch (error) {
-        console.error('Error fetching response details:', error);
+        console.error('Error fetching data:', error);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchResponse();
-  }, [responseId]);
+    fetchData();
+  }, [responseId, id, user]);
 
   const handleContactPress = async (contact: string) => {
     const phoneRegex = /^[\+]?[0-9\-\(\)\s]+$/;
@@ -79,19 +112,62 @@ export default function ResponseDetails() {
 
   const formatDate = (timestamp: any) => {
     if (!timestamp) return 'Recently';
-    
+
     const date = timestamp.toDate();
     const now = new Date();
     const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
-    
+
     if (diffInHours < 1) return 'Just now';
     if (diffInHours < 24) return `${diffInHours} hours ago`;
-    
+
     const diffInDays = Math.floor(diffInHours / 24);
     if (diffInDays === 1) return 'Yesterday';
     if (diffInDays < 7) return `${diffInDays} days ago`;
-    
+
     return date.toLocaleDateString();
+  };
+
+  const handleMarkAsDonated = async () => {
+    if (!response || !request || !user) return;
+
+    Alert.alert(
+      'Mark as Donated',
+      `Are you sure you want to mark ${response.responderName}'s response as donated? This will add this donation to their donation history.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Confirm',
+          onPress: async () => {
+            try {
+              // Update response to mark as donated
+              await updateDoc(doc(db, 'responses', response.id), {
+                donated: true,
+              });
+
+              // Create donation record
+              await addDoc(collection(db, 'donations'), {
+                donorId: response.userId || user.uid, // Assuming response has userId, fallback to current user
+                requestId: request.id,
+                responseId: response.id,
+                date: new Date(),
+                location: request.hospital,
+                bloodType: response.bloodType || request.bloodType,
+                status: 'Completed',
+                createdAt: new Date(),
+              });
+
+              // Update local state
+              setResponse({ ...response, donated: true });
+
+              Alert.alert('Success', 'Response marked as donated and added to donor\'s history!');
+            } catch (error) {
+              console.error('Error marking as donated:', error);
+              Alert.alert('Error', 'Failed to mark as donated. Please try again.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const dynamicStyles = StyleSheet.create({
@@ -267,6 +343,53 @@ export default function ResponseDetails() {
       fontSize: 14,
       fontWeight: '600',
     },
+    donateButton: {
+      backgroundColor: '#38A169',
+      paddingHorizontal: 24,
+      paddingVertical: 16,
+      borderRadius: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+    },
+    donateButtonText: {
+      color: '#fff',
+      fontSize: 16,
+      fontWeight: '600',
+    },
+    donatedBadge: {
+      backgroundColor: '#F0FDF4',
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      borderRadius: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      borderWidth: 1,
+      borderColor: '#BBF7D0',
+    },
+    donatedBadgeText: {
+      color: '#166534',
+      fontSize: 16,
+      fontWeight: '600',
+    },
+    privacyNotice: {
+      backgroundColor: colors.screenBackground,
+      padding: 16,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    privacyNoticeText: {
+      flex: 1,
+      fontSize: 14,
+      lineHeight: 20,
+    },
   });
 
   if (loading) {
@@ -340,22 +463,60 @@ export default function ResponseDetails() {
             </View>
           </View>
 
-          <View style={dynamicStyles.detailSection}>
-            <View style={dynamicStyles.sectionTitle}>
-              <Ionicons name="call" size={18} color={colors.primary} />
-              <Text style={[dynamicStyles.sectionTitle, { marginLeft: 8, marginBottom: 0 }]}>Contact Information</Text>
-            </View>
-            <TouchableOpacity 
-              style={dynamicStyles.contactContainer}
-              onPress={() => handleContactPress(response.contact)}
-            >
-              <Ionicons name="call-outline" size={20} color={colors.primary} />
-              <Text style={dynamicStyles.contactText}>{response.contact}</Text>
-              <View style={dynamicStyles.contactButton}>
-                <Text style={dynamicStyles.contactButtonText}>Contact</Text>
+          {/* Contact Information - Only show to request poster or response author */}
+          {(isRequestPoster || (user && response.userId === user.uid)) && (
+            <View style={dynamicStyles.detailSection}>
+              <View style={dynamicStyles.sectionTitle}>
+                <Ionicons name="call" size={18} color={colors.primary} />
+                <Text style={[dynamicStyles.sectionTitle, { marginLeft: 8, marginBottom: 0 }]}>Contact Information</Text>
               </View>
-            </TouchableOpacity>
-          </View>
+              <TouchableOpacity
+                style={dynamicStyles.contactContainer}
+                onPress={() => handleContactPress(response.contact)}
+              >
+                <Ionicons name="call-outline" size={20} color={colors.primary} />
+                <Text style={dynamicStyles.contactText}>{response.contact}</Text>
+                <View style={dynamicStyles.contactButton}>
+                  <Text style={dynamicStyles.contactButtonText}>Contact</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Privacy notice for unauthorized users */}
+          {(!isRequestPoster && (!user || response.userId !== user.uid)) && (
+            <View style={dynamicStyles.detailSection}>
+              <View style={dynamicStyles.privacyNotice}>
+                <Ionicons name="lock-closed" size={20} color={colors.secondaryText} />
+                <Text style={[dynamicStyles.privacyNoticeText, { color: colors.secondaryText }]}>
+                  Contact information is only visible to the request poster and the person who made this response.
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* Mark as Donated Button - Only show for request poster if not already donated */}
+          {isRequestPoster && !response.donated && (
+            <View style={dynamicStyles.detailSection}>
+              <TouchableOpacity
+                style={dynamicStyles.donateButton}
+                onPress={handleMarkAsDonated}
+              >
+                <Ionicons name="heart" size={20} color="#fff" />
+                <Text style={dynamicStyles.donateButtonText}>Mark as Donated</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Donated Badge - Show if already marked as donated */}
+          {response.donated && (
+            <View style={dynamicStyles.detailSection}>
+              <View style={dynamicStyles.donatedBadge}>
+                <Ionicons name="checkmark-circle" size={20} color="#38A169" />
+                <Text style={dynamicStyles.donatedBadgeText}>Marked as Donated</Text>
+              </View>
+            </View>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>

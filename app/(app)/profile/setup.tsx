@@ -1,4 +1,3 @@
-// app/profile/edit.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -26,7 +25,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { Colors } from '../../../constants/Colors';
 import { useFocusEffect } from '@react-navigation/native';
-
 
 const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 
@@ -165,7 +163,7 @@ const GOVERNORATE_CITIES: { [key: string]: string[] } = {
   ]
 };
 
-export default function EditProfileScreen() {
+export default function ProfileSetupScreen() {
   const [formData, setFormData] = useState({
     fullName: '',
     bloodType: '',
@@ -349,7 +347,7 @@ export default function EditProfileScreen() {
 
       // Upload to Firebase Storage
       await uploadBytes(storageRef, blob);
-      
+
       // Get download URL
       const downloadURL = await getDownloadURL(storageRef);
 
@@ -365,7 +363,7 @@ export default function EditProfileScreen() {
 
       // Update form data
       setFormData(prev => ({ ...prev, profilePicture: downloadURL }));
-      
+
       Alert.alert('Success', 'Profile picture uploaded successfully!');
     } catch (error) {
       console.error('Error uploading image:', error);
@@ -419,7 +417,7 @@ export default function EditProfileScreen() {
       );
     }
   };
-  
+
   const validateForm = () => {
     const newErrors: { [key: string]: string } = {};
     if (!formData.fullName.trim()) newErrors.fullName = "Full name is required";
@@ -438,7 +436,7 @@ export default function EditProfileScreen() {
     }
   };
 
-  const handleUpdateProfile = async () => {
+  const handleCompleteProfile = async () => {
     if (!validateForm()) return;
     if (!user) return;
 
@@ -453,50 +451,29 @@ export default function EditProfileScreen() {
         role: userProfile?.role || 'user',
       };
 
-      console.log('=== SAVING PROFILE ===');
+      console.log('=== COMPLETING PROFILE ===');
       console.log('User ID:', user.uid);
       console.log('Profile data to save:', profileData);
 
       await setDoc(userDocRef, profileData, { merge: true });
-      console.log('Profile saved to Firestore successfully');
+      console.log('Profile completed and saved to Firestore successfully');
 
       // Wait a moment for Firestore to update
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 500));
       console.log('Waiting for Firestore update...');
 
       // Refresh the user profile in context
       await refreshUserProfile();
       console.log('Profile refreshed in context');
 
-      // Verify the profile was updated
-      const updatedProfile = await fetchFreshProfileData(user.uid);
-      console.log('Verified updated profile:', updatedProfile);
-      console.log('Profile complete status:', updatedProfile?.profileComplete);
-
-      console.log('Profile updated successfully for existing user');
-      // For existing users editing their profile, redirect back to previous page
-      router.back();
+      console.log('Navigating to main app...');
+      // Navigate to main app
+      router.replace('/(app)/(tabs)');
     } catch (error) {
-      console.error('Error updating profile:', error);
-      Alert.alert('Error', 'Failed to update your profile. Please try again.');
+      console.error('Error completing profile:', error);
+      Alert.alert('Error', 'Failed to complete your profile. Please try again.');
     } finally {
       setSaving(false);
-    }
-  };
-
-  // Helper function to fetch fresh profile data
-  const fetchFreshProfileData = async (userId: string) => {
-    try {
-      const userDocRef = doc(db, 'users', userId);
-      const userDocSnap = await getDoc(userDocRef);
-
-      if (userDocSnap.exists()) {
-        return userDocSnap.data();
-      }
-      return null;
-    } catch (error) {
-      console.error('Error fetching fresh profile data:', error);
-      return null;
     }
   };
 
@@ -671,15 +648,15 @@ export default function EditProfileScreen() {
         <View style={dynamicStyles.header}>
           <TouchableOpacity
             onPress={() => {
-              // For profile editing, just go back to previous screen
-              router.back();
+              // For profile setup, redirect to main app instead of going back
+              router.replace('/(app)/(tabs)');
             }}
             style={styles.backButton}
           >
             <Ionicons name="arrow-back" size={24} color={colors.primaryText} />
           </TouchableOpacity>
           <View style={styles.titleContainer}>
-            <Text style={dynamicStyles.title}>Edit Profile</Text>
+            <Text style={dynamicStyles.title}>Complete Your Profile</Text>
           </View>
           <View style={styles.headerRight} />
         </View>
@@ -688,8 +665,8 @@ export default function EditProfileScreen() {
             {/* Profile Picture Section */}
             <View style={dynamicStyles.profilePictureSection}>
               <View style={dynamicStyles.profilePictureContainer}>
-                <TouchableOpacity 
-                  style={dynamicStyles.profilePicture} 
+                <TouchableOpacity
+                  style={dynamicStyles.profilePicture}
                   onPress={pickImage}
                   disabled={uploadingImage}
                 >
@@ -711,7 +688,7 @@ export default function EditProfileScreen() {
                       </Text>
                     </View>
                   )}
-                  
+
                   {uploadingImage && (
                     <View style={dynamicStyles.uploadingOverlay}>
                       <ActivityIndicator size="large" color="white" />
@@ -721,14 +698,14 @@ export default function EditProfileScreen() {
                     </View>
                   )}
                 </TouchableOpacity>
-                
+
                 {!uploadingImage && (
                   <TouchableOpacity style={dynamicStyles.cameraButton} onPress={pickImage}>
                     <Ionicons name="camera" size={18} color="white" />
                   </TouchableOpacity>
                 )}
               </View>
-              
+
               {(formData.profilePicture && formData.profilePicture.trim() !== '') && !uploadingImage && (
                 <TouchableOpacity style={dynamicStyles.removeButton} onPress={removeProfilePicture}>
                   <Ionicons name="trash-outline" size={16} color={colors.primary} />
@@ -800,16 +777,16 @@ export default function EditProfileScreen() {
               </TouchableOpacity>
               {errors.city && <Text style={dynamicStyles.errorText}>{errors.city}</Text>}
             </View>
-            
+
             <TouchableOpacity
               style={[styles.button, saving && styles.buttonDisabled, { backgroundColor: colors.primary }]}
-              onPress={handleUpdateProfile}
+              onPress={handleCompleteProfile}
               disabled={saving || uploadingImage}
             >
               {saving ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.buttonText}>Save Changes</Text>
+                <Text style={styles.buttonText}>Complete Profile</Text>
               )}
             </TouchableOpacity>
           </View>

@@ -17,6 +17,8 @@ import { db } from '../../../firebase/firebaseConfig';
 import { doc, getDoc, collection, getDocs, query, orderBy, where } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useTheme } from '../../../contexts/ThemeContext';
+import { Colors } from '../../../constants/Colors';
 import { LinearGradient } from 'expo-linear-gradient';
 
 interface BloodRequest {
@@ -88,14 +90,15 @@ const InfoCard: React.FC<{
   title: string;
   value: string;
   color: string;
-}> = ({ icon, title, value, color }) => (
-  <View style={styles.infoCard}>
+  colors: any;
+}> = ({ icon, title, value, color, colors }) => (
+  <View style={[styles.infoCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
     <View style={[styles.infoCardIcon, { backgroundColor: color + '20' }]}>
       <Ionicons name={icon as any} size={20} color={color} />
     </View>
     <View style={styles.infoCardContent}>
-      <Text style={styles.infoCardTitle}>{title}</Text>
-      <Text style={styles.infoCardValue}>{value}</Text>
+      <Text style={[styles.infoCardTitle, { color: colors.secondaryText }]}>{title}</Text>
+      <Text style={[styles.infoCardValue, { color: colors.primaryText }]}>{value}</Text>
     </View>
   </View>
 );
@@ -106,9 +109,11 @@ export default function RequestDetailScreen() {
   const [responses, setResponses] = useState<Response[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   const router = useRouter();
   const { user } = useAuth();
+  const { currentTheme } = useTheme();
+  const colors = Colors[currentTheme];
 
   useEffect(() => {
     const fetchRequestData = async () => {
@@ -212,27 +217,27 @@ export default function RequestDetailScreen() {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#E53E3E" />
-        <Text style={styles.loadingText}>Loading request details...</Text>
+      <View style={[styles.loadingContainer, { backgroundColor: colors.screenBackground }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={[styles.loadingText, { color: colors.secondaryText }]}>Loading request details...</Text>
       </View>
     );
   }
 
   if (error || !request) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.screenBackground }]}>
         <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle" size={64} color="#E53E3E" />
-          <Text style={styles.errorTitle}>Request Not Found</Text>
-          <Text style={styles.errorText}>
+          <Ionicons name="alert-circle" size={64} color={colors.danger} />
+          <Text style={[styles.errorTitle, { color: colors.primaryText }]}>Request Not Found</Text>
+          <Text style={[styles.errorText, { color: colors.secondaryText }]}>
             {error || 'The requested blood donation request could not be found.'}
           </Text>
-          <TouchableOpacity 
-            style={styles.errorButton} 
+          <TouchableOpacity
+            style={[styles.errorButton, { backgroundColor: colors.primary }]}
             onPress={() => router.back()}
           >
-            <Text style={styles.errorButtonText}>Go Back</Text>
+            <Text style={[styles.errorButtonText, { color: colors.primaryText }]}>Go Back</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -243,18 +248,18 @@ export default function RequestDetailScreen() {
   const timeAgo = getTimeAgo(request.createdAt);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.screenBackground }]}>
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity 
+      <View style={[styles.header, { backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
+        <TouchableOpacity
           style={styles.backButton}
           onPress={() => router.back()}
         >
-          <Ionicons name="arrow-back" size={24} color="#1a1a1a" />
+          <Ionicons name="arrow-back" size={24} color={colors.primaryText} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Request Details</Text>
+        <Text style={[styles.headerTitle, { color: colors.primaryText }]}>Request Details</Text>
         <TouchableOpacity style={styles.shareButton} onPress={handleShare}>
-          <Ionicons name="share-outline" size={24} color="#1a1a1a" />
+          <Ionicons name="share-outline" size={24} color={colors.primaryText} />
         </TouchableOpacity>
       </View>
 
@@ -283,31 +288,35 @@ export default function RequestDetailScreen() {
 
         {/* Request Info */}
         <View style={styles.infoSection}>
-          <Text style={styles.sectionTitle}>Request Information</Text>
+          <Text style={[styles.sectionTitle, { color: colors.primaryText }]}>Request Information</Text>
           <View style={styles.infoGrid}>
             <InfoCard
               icon="location"
               title="City"
               value={request.city}
               color="#3182CE"
+              colors={colors}
             />
             <InfoCard
               icon="medical"
               title="Hospital"
               value={request.hospital}
               color="#E53E3E"
+              colors={colors}
             />
             <InfoCard
               icon="call"
               title="Contact"
               value={request.contactNumber}
               color="#38A169"
+              colors={colors}
             />
             <InfoCard
               icon="time"
               title="Posted"
               value={timeAgo}
               color="#F56500"
+              colors={colors}
             />
           </View>
         </View>
@@ -315,17 +324,17 @@ export default function RequestDetailScreen() {
         {/* Notes */}
         {request.notes && (
           <View style={styles.notesSection}>
-            <Text style={styles.sectionTitle}>Additional Notes</Text>
-            <View style={styles.notesCard}>
-              <Ionicons name="document-text" size={20} color="#666" />
-              <Text style={styles.notesText}>{request.notes}</Text>
+            <Text style={[styles.sectionTitle, { color: colors.primaryText }]}>Additional Notes</Text>
+            <View style={[styles.notesCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+              <Ionicons name="document-text" size={20} color={colors.secondaryText} />
+              <Text style={[styles.notesText, { color: colors.primaryText }]}>{request.notes}</Text>
             </View>
           </View>
         )}
 
         {/* Actions */}
         <View style={styles.actionsSection}>
-          <Text style={styles.sectionTitle}>Actions</Text>
+          <Text style={[styles.sectionTitle, { color: colors.primaryText }]}>Actions</Text>
           
           <ActionButton
             icon="hand-left"
@@ -359,25 +368,25 @@ export default function RequestDetailScreen() {
         {responses.length > 0 && (
           <View style={styles.responsesSection}>
             <View style={styles.responsesSectionHeader}>
-              <Text style={styles.sectionTitle}>Recent Responses</Text>
+              <Text style={[styles.sectionTitle, { color: colors.primaryText }]}>Recent Responses</Text>
               <TouchableOpacity onPress={handleViewResponses}>
                 <Text style={styles.viewAllText}>View All ({responses.length})</Text>
               </TouchableOpacity>
             </View>
-            
+
             {responses.slice(0, 2).map((response) => (
-              <View key={response.id} style={styles.responsePreview}>
+              <View key={response.id} style={[styles.responsePreview, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
                 <View style={styles.responseAvatar}>
                   <Text style={styles.responseAvatarText}>
                     {response.responderName.charAt(0)}
                   </Text>
                 </View>
                 <View style={styles.responseContent}>
-                  <Text style={styles.responseName}>{response.responderName}</Text>
-                  <Text style={styles.responseMessage} numberOfLines={2}>
+                  <Text style={[styles.responseName, { color: colors.primaryText }]}>{response.responderName}</Text>
+                  <Text style={[styles.responseMessage, { color: colors.secondaryText }]} numberOfLines={2}>
                     {response.message}
                   </Text>
-                  <Text style={styles.responseTime}>
+                  <Text style={[styles.responseTime, { color: colors.secondaryText }]}>
                     {getTimeAgo(response.createdAt)}
                   </Text>
                 </View>
@@ -388,7 +397,7 @@ export default function RequestDetailScreen() {
 
         {/* Safety Guidelines */}
         <View style={styles.safetySection}>
-          <Text style={styles.sectionTitle}>Safety Guidelines</Text>
+          <Text style={[styles.sectionTitle, { color: colors.primaryText }]}>Safety Guidelines</Text>
           <View style={styles.safetyCard}>
             <Ionicons name="shield-checkmark" size={24} color="#38A169" />
             <View style={styles.safetyContent}>

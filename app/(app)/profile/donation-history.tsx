@@ -1,5 +1,5 @@
 // app/(app)/profile/donation-history.tsx
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -7,67 +7,138 @@ import {
   SafeAreaView,
   FlatList,
   TouchableOpacity,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { db } from '../../../firebase/firebaseConfig';
+import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
+import { useAuth } from '../../../contexts/AuthContext';
+import { useTheme } from '../../../contexts/ThemeContext';
+import { Colors } from '../../../constants/Colors';
 
 interface Donation {
   id: string;
-  date: string;
+  donorId: string;
+  requestId: string;
+  responseId: string;
+  date: any;
   location: string;
   bloodType: string;
-  status: 'Completed' | 'Scheduled';
+  status: string;
+  createdAt: any;
 }
 
-// Mock data, to be replaced with Firestore data later
-const donationHistory: Donation[] = [
-  { id: '1', date: '2024-08-15', location: 'City General Hospital', bloodType: 'A+', status: 'Completed' },
-  { id: '2', date: '2024-05-20', location: 'Red Crescent Center', bloodType: 'A+', status: 'Completed' },
-  { id: '3', date: '2024-02-10', location: 'Community Blood Drive', bloodType: 'A+', status: 'Completed' },
-];
+const DonationCard: React.FC<{ donation: Donation; colors: any }> = ({ donation, colors }) => {
+  const formatDate = (timestamp: any) => {
+    if (!timestamp) return 'Unknown Date';
 
-const DonationCard: React.FC<{ donation: Donation }> = ({ donation }) => (
-  <View style={styles.donationCard}>
-    <View style={styles.iconContainer}>
-      <Ionicons name="heart-circle" size={40} color="#E53E3E" />
-    </View>
-    <View style={styles.donationInfo}>
-      <Text style={styles.donationDate}>{new Date(donation.date).toDateString()}</Text>
-      <Text style={styles.donationLocation}>{donation.location}</Text>
-    </View>
-    <View style={styles.rightContainer}>
-        <View style={styles.bloodTypeBadge}>
-            <Text style={styles.bloodTypeText}>{donation.bloodType}</Text>
-        </View>
-        <Text style={[styles.statusText, { color: donation.status === 'Completed' ? '#38A169' : '#F59E0B'}]}>
-            {donation.status}
-        </Text>
-    </View>
-  </View>
-);
-
-export default function DonationHistoryScreen() {
-  const router = useRouter();
+    try {
+      const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+      return date.toDateString();
+    } catch (error) {
+      return 'Unknown Date';
+    }
+  };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
+    <View style={[styles.donationCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+      <View style={styles.iconContainer}>
+        <Ionicons name="heart-circle" size={40} color="#E53E3E" />
+      </View>
+      <View style={styles.donationInfo}>
+        <Text style={[styles.donationDate, { color: colors.primaryText }]}>{formatDate(donation.date)}</Text>
+        <Text style={[styles.donationLocation, { color: colors.secondaryText }]}>{donation.location}</Text>
+      </View>
+      <View style={styles.rightContainer}>
+        <View style={styles.bloodTypeBadge}>
+          <Text style={styles.bloodTypeText}>{donation.bloodType}</Text>
+        </View>
+        <Text style={[styles.statusText, { color: donation.status === 'Completed' ? '#38A169' : '#F59E0B' }]}>
+          {donation.status}
+        </Text>
+      </View>
+    </View>
+  );
+};
+
+export default function DonationHistoryScreen() {
+  const [donations, setDonations] = useState<Donation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+  const { user } = useAuth();
+  const { currentTheme } = useTheme();
+  const colors = Colors[currentTheme];
+
+  useEffect(() => {
+    const fetchDonations = async () => {
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const q = query(
+          collection(db, 'donations'),
+          where('donorId', '==', user.uid),
+          orderBy('createdAt', 'desc')
+        );
+        const querySnapshot = await getDocs(q);
+        const donationsList = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        } as Donation));
+
+        setDonations(donationsList);
+      } catch (error) {
+        console.error('Error fetching donations:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDonations();
+  }, [user]);
+
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.screenBackground }]}>
+        <View style={[styles.header, { backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color={colors.primaryText} />
+          </TouchableOpacity>
+          <Text style={[styles.title, { color: colors.primaryText }]}>Donation History</Text>
+          <View style={styles.headerRight} />
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.secondaryText }]}>Loading donations...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.screenBackground }]}>
+      <View style={[styles.header, { backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#1a1a1a" />
+          <Ionicons name="arrow-back" size={24} color={colors.primaryText} />
         </TouchableOpacity>
-        <Text style={styles.title}>Donation History</Text>
+        <Text style={[styles.title, { color: colors.primaryText }]}>Donation History</Text>
         <View style={styles.headerRight} />
       </View>
       <FlatList
-        data={donationHistory}
-        renderItem={({ item }) => <DonationCard donation={item} />}
+        data={donations}
+        renderItem={({ item }) => <DonationCard donation={item} colors={colors} />}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContainer}
         ListEmptyComponent={() => (
           <View style={styles.emptyContainer}>
-            <Ionicons name="timer-outline" size={64} color="#ccc" />
-            <Text style={styles.emptyTitle}>No Donations Yet</Text>
-            <Text style={styles.emptyText}>Your past and scheduled donations will appear here.</Text>
+            <Ionicons name="timer-outline" size={64} color={colors.secondaryText + '60'} />
+            <Text style={[styles.emptyTitle, { color: colors.primaryText }]}>No Donations Yet</Text>
+            <Text style={[styles.emptyText, { color: colors.secondaryText }]}>
+              Your past and scheduled donations will appear here.
+            </Text>
           </View>
         )}
       />
@@ -172,5 +243,15 @@ const styles = StyleSheet.create({
     marginTop: 8,
     lineHeight: 24,
     paddingHorizontal: 20,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#666',
   },
 });

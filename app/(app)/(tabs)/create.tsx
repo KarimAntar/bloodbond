@@ -10,6 +10,8 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../../contexts/AuthContext'; // CORRECTED PATH
+import { useTheme } from '../../../contexts/ThemeContext';
+import { Colors } from '../../../constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -19,7 +21,8 @@ const ActionCard: React.FC<{
   icon: any; // Changed to any to support all Ionicons names
   color: string;
   onPress: () => void;
-}> = ({ title, subtitle, icon, color, onPress }) => (
+  styles: any;
+}> = ({ title, subtitle, icon, color, onPress, styles }) => (
   <TouchableOpacity style={styles.actionCard} onPress={onPress}>
     <LinearGradient
       colors={[color, color + '80']}
@@ -48,7 +51,8 @@ const InfoCard: React.FC<{
   title: string;
   description: string;
   color: string;
-}> = ({ icon, title, description, color }) => (
+  styles: any;
+}> = ({ icon, title, description, color, styles }) => (
   <View style={styles.infoCard}>
     <View style={[styles.infoIcon, { backgroundColor: color + '20' }]}>
       <Ionicons name={icon} size={24} color={color} />
@@ -62,6 +66,8 @@ const InfoCard: React.FC<{
 
 export default function CreateTabScreen() {
   const { user } = useAuth();
+  const { currentTheme } = useTheme();
+  const colors = Colors[currentTheme];
   const router = useRouter();
 
   useEffect(() => {
@@ -93,137 +99,324 @@ export default function CreateTabScreen() {
     router.push('/requests');
   };
 
+  // Create dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.screenBackground,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 20,
+      paddingVertical: 20,
+    },
+    headerContent: {
+      flex: 1,
+    },
+    title: {
+      fontSize: 24,
+      fontWeight: 'bold',
+      color: colors.primaryText,
+    },
+    subtitle: {
+      fontSize: 16,
+      color: colors.secondaryText,
+      marginTop: 4,
+    },
+    bloodDropIcon: {
+      width: 56,
+      height: 56,
+      backgroundColor: colors.primary + '20',
+      borderRadius: 28,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    section: {
+      paddingHorizontal: 20,
+      paddingVertical: 16,
+    },
+    sectionTitle: {
+      fontSize: 20,
+      fontWeight: 'bold',
+      color: colors.primaryText,
+      marginBottom: 16,
+    },
+    actionCard: {
+      marginBottom: 12,
+      borderRadius: 16,
+      overflow: 'hidden',
+      shadowColor: colors.shadow || '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 8,
+      elevation: 3,
+    },
+    actionGradient: {
+      padding: 20,
+    },
+    actionContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    actionIconContainer: {
+      marginRight: 16,
+    },
+    actionTextContainer: {
+      flex: 1,
+    },
+    actionTitle: {
+      fontSize: 18,
+      fontWeight: 'bold',
+      color: 'white',
+      marginBottom: 4,
+    },
+    actionSubtitle: {
+      fontSize: 14,
+      color: 'white',
+      opacity: 0.9,
+    },
+    actionArrow: {
+      marginLeft: 12,
+    },
+    infoCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.cardBackground,
+      padding: 16,
+      borderRadius: 12,
+      marginBottom: 12,
+      shadowColor: colors.shadow || '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.05,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    infoIcon: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginRight: 16,
+    },
+    infoContent: {
+      flex: 1,
+    },
+    infoTitle: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.primaryText,
+      marginBottom: 4,
+    },
+    infoDescription: {
+      fontSize: 14,
+      color: colors.secondaryText,
+      lineHeight: 20,
+    },
+    emergencyCard: {
+      backgroundColor: colors.cardBackground,
+      borderRadius: 12,
+      padding: 20,
+      shadowColor: colors.shadow || '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.05,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    emergencyHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 12,
+    },
+    emergencyTitle: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.primaryText,
+      marginLeft: 12,
+    },
+    emergencyButton: {
+      backgroundColor: colors.primary,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 12,
+      paddingHorizontal: 20,
+      borderRadius: 8,
+    },
+    emergencyButtonText: {
+      color: 'white',
+      fontSize: 16,
+      fontWeight: '600',
+      marginLeft: 8,
+    },
+    statsContainer: {
+      flexDirection: 'row',
+      backgroundColor: colors.cardBackground,
+      borderRadius: 12,
+      padding: 20,
+      shadowColor: colors.shadow || '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.05,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    statItem: {
+      flex: 1,
+      alignItems: 'center',
+    },
+    statNumber: {
+      fontSize: 24,
+      fontWeight: 'bold',
+      color: colors.primary,
+      marginBottom: 4,
+    },
+    statLabel: {
+      fontSize: 12,
+      color: colors.secondaryText,
+      textAlign: 'center',
+    },
+  });
+
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={dynamicStyles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.headerContent}>
-            <Text style={styles.title}>Make a Difference</Text>
-            <Text style={styles.subtitle}>
+        <View style={dynamicStyles.header}>
+          <View style={dynamicStyles.headerContent}>
+            <Text style={dynamicStyles.title}>Make a Difference</Text>
+            <Text style={dynamicStyles.subtitle}>
               Every donation can save up to 3 lives
             </Text>
           </View>
-          <View style={styles.bloodDropIcon}>
-            <Ionicons name="water" size={32} color="#E53E3E" />
+          <View style={dynamicStyles.bloodDropIcon}>
+            <Ionicons name="water" size={32} color={colors.primary} />
           </View>
         </View>
 
         {/* Quick Actions */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
-          
+        <View style={dynamicStyles.section}>
+          <Text style={dynamicStyles.sectionTitle}>Quick Actions</Text>
+
           <ActionCard
             title="Request Blood"
             subtitle="Create a request for blood donation"
             icon="add-circle"
             color="#E53E3E"
             onPress={handleCreateRequest}
+            styles={dynamicStyles}
           />
-          
+
           <ActionCard
             title="Become a Donor"
             subtitle="Update your profile to help"
             icon="heart"
             color="#38A169"
             onPress={handleBecomeDonor}
+            styles={dynamicStyles}
           />
-          
+
           <ActionCard
             title="Find Donors"
             subtitle="Browse available blood requests"
             icon="search"
             color="#3182CE"
             onPress={handleFindDonors}
+            styles={dynamicStyles}
           />
         </View>
 
         {/* Blood Donation Info */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Why Donate Blood?</Text>
-          
+        <View style={dynamicStyles.section}>
+          <Text style={dynamicStyles.sectionTitle}>Why Donate Blood?</Text>
+
           <InfoCard
             icon="pulse"
             title="Save Lives"
             description="One donation can help up to 3 patients in need"
             color="#E53E3E"
+            styles={dynamicStyles}
           />
-          
+
           <InfoCard
             icon="time"
             title="Quick Process"
             description="Donation takes only 10-15 minutes of your time"
             color="#F56500"
+            styles={dynamicStyles}
           />
-          
+
           <InfoCard
             icon="refresh"
             title="Regular Impact"
             description="You can donate every 56 days and make ongoing impact"
             color="#38A169"
+            styles={dynamicStyles}
           />
-          
+
           <InfoCard
             icon="shield-checkmark"
             title="Health Benefits"
             description="Regular donation can improve your cardiovascular health"
             color="#3182CE"
+            styles={dynamicStyles}
           />
         </View>
 
         {/* Emergency Numbers */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Emergency Contacts</Text>
+        <View style={dynamicStyles.section}>
+          <Text style={dynamicStyles.sectionTitle}>Emergency Contacts</Text>
 
-          <View style={styles.emergencyCard}>
-            <View style={styles.emergencyHeader}>
-              <Ionicons name="medical" size={24} color="#E53E3E" />
-              <Text style={styles.emergencyTitle}>Egyptian Red Crescent</Text>
+          <View style={dynamicStyles.emergencyCard}>
+            <View style={dynamicStyles.emergencyHeader}>
+              <Ionicons name="medical" size={24} color={colors.primary} />
+              <Text style={dynamicStyles.emergencyTitle}>Egyptian Red Crescent</Text>
             </View>
-            <TouchableOpacity style={styles.emergencyButton}>
+            <TouchableOpacity style={dynamicStyles.emergencyButton}>
               <Ionicons name="call" size={20} color="white" />
-              <Text style={styles.emergencyButtonText}>Call 15333</Text>
+              <Text style={dynamicStyles.emergencyButtonText}>Call 15333</Text>
             </TouchableOpacity>
           </View>
 
-          <View style={styles.emergencyCard}>
-            <View style={styles.emergencyHeader}>
-              <Ionicons name="shield-checkmark" size={24} color="#E53E3E" />
-              <Text style={styles.emergencyTitle}>Blood Bank Hotline</Text>
+          <View style={dynamicStyles.emergencyCard}>
+            <View style={dynamicStyles.emergencyHeader}>
+              <Ionicons name="shield-checkmark" size={24} color={colors.primary} />
+              <Text style={dynamicStyles.emergencyTitle}>Blood Bank Hotline</Text>
             </View>
-            <TouchableOpacity style={styles.emergencyButton}>
+            <TouchableOpacity style={dynamicStyles.emergencyButton}>
               <Ionicons name="call" size={20} color="white" />
-              <Text style={styles.emergencyButtonText}>Call 16023</Text>
+              <Text style={dynamicStyles.emergencyButtonText}>Call 16023</Text>
             </TouchableOpacity>
           </View>
 
-          <View style={styles.emergencyCard}>
-            <View style={styles.emergencyHeader}>
-              <Ionicons name="warning" size={24} color="#E53E3E" />
-              <Text style={styles.emergencyTitle}>Medical Emergency</Text>
+          <View style={dynamicStyles.emergencyCard}>
+            <View style={dynamicStyles.emergencyHeader}>
+              <Ionicons name="warning" size={24} color={colors.primary} />
+              <Text style={dynamicStyles.emergencyTitle}>Medical Emergency</Text>
             </View>
-            <TouchableOpacity style={styles.emergencyButton}>
+            <TouchableOpacity style={dynamicStyles.emergencyButton}>
               <Ionicons name="call" size={20} color="white" />
-              <Text style={styles.emergencyButtonText}>Call 122</Text>
+              <Text style={dynamicStyles.emergencyButtonText}>Call 122</Text>
             </TouchableOpacity>
           </View>
         </View>
 
         {/* Statistics */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Community Impact</Text>
-          <View style={styles.statsContainer}>
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>2,450</Text>
-              <Text style={styles.statLabel}>Lives Saved</Text>
+        <View style={dynamicStyles.section}>
+          <Text style={dynamicStyles.sectionTitle}>Community Impact</Text>
+          <View style={dynamicStyles.statsContainer}>
+            <View style={dynamicStyles.statItem}>
+              <Text style={dynamicStyles.statNumber}>2,450</Text>
+              <Text style={dynamicStyles.statLabel}>Lives Saved</Text>
             </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>850</Text>
-              <Text style={styles.statLabel}>Active Donors</Text>
+            <View style={dynamicStyles.statItem}>
+              <Text style={dynamicStyles.statNumber}>850</Text>
+              <Text style={dynamicStyles.statLabel}>Active Donors</Text>
             </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>156</Text>
-              <Text style={styles.statLabel}>This Month</Text>
+            <View style={dynamicStyles.statItem}>
+              <Text style={dynamicStyles.statNumber}>156</Text>
+              <Text style={dynamicStyles.statLabel}>This Month</Text>
             </View>
           </View>
         </View>
@@ -231,182 +424,3 @@ export default function CreateTabScreen() {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8f9fa',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-  },
-  headerContent: {
-    flex: 1,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
-    marginTop: 4,
-  },
-  bloodDropIcon: {
-    width: 56,
-    height: 56,
-    backgroundColor: '#FEE2E2',
-    borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  section: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
-    marginBottom: 16,
-  },
-  actionCard: {
-    marginBottom: 12,
-    borderRadius: 16,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  actionGradient: {
-    padding: 20,
-  },
-  actionContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  actionIconContainer: {
-    marginRight: 16,
-  },
-  actionTextContainer: {
-    flex: 1,
-  },
-  actionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: 'white',
-    marginBottom: 4,
-  },
-  actionSubtitle: {
-    fontSize: 14,
-    color: 'white',
-    opacity: 0.9,
-  },
-  actionArrow: {
-    marginLeft: 12,
-  },
-  infoCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'white',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  infoIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  infoContent: {
-    flex: 1,
-  },
-  infoTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1a1a1a',
-    marginBottom: 4,
-  },
-  infoDescription: {
-    fontSize: 14,
-    color: '#666',
-    lineHeight: 20,
-  },
-  emergencyCard: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  emergencyHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  emergencyTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1a1a1a',
-    marginLeft: 12,
-  },
-  emergencyButton: {
-    backgroundColor: '#E53E3E',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-  },
-  emergencyButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  statItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  statNumber: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#E53E3E',
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#666',
-    textAlign: 'center',
-  },
-});

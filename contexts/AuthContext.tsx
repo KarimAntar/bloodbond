@@ -93,7 +93,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         email: user?.email || '', // Pre-fill with Google email
         createdAt: new Date(),
         role: 'user',
-        profilePicture: user?.photoURL || 'https://firebasestorage.googleapis.com/v0/b/bloodbond-2a2b3.appspot.com/o/default-profile.png?alt=media&token=default-profile-token', // Default profile picture
+        profilePicture: user?.photoURL || undefined, // Use Google profile picture if available
       };
 
       // Cache the basic profile
@@ -114,6 +114,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const refreshUserProfile = async (): Promise<void> => {
     if (user) {
+      // Clear cache for this user to force fresh fetch
+      profileCache.delete(user.uid);
       const profile = await fetchUserProfile(user.uid);
       setUserProfile(profile);
     }

@@ -12,6 +12,8 @@ import {
   Modal,
 } from 'react-native';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useTheme } from '../../../contexts/ThemeContext';
+import { Colors } from '../../../constants/Colors';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { db } from '../../../firebase/firebaseConfig';
@@ -54,6 +56,8 @@ interface BloodRequest {
 
 export default function AdminDashboard() {
   const { user, userProfile } = useAuth();
+  const { currentTheme } = useTheme();
+  const colors = Colors[currentTheme];
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'users' | 'requests' | 'notifications'>('users');
   const [users, setUsers] = useState<User[]>([]);
@@ -260,83 +264,383 @@ export default function AdminDashboard() {
     }
   };
 
+  // Create dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.screenBackground,
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: colors.screenBackground,
+    },
+    loadingText: {
+      marginTop: 16,
+      fontSize: 16,
+      color: colors.secondaryText,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 20,
+      paddingVertical: 16,
+      backgroundColor: colors.cardBackground,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    backButton: {
+      padding: 8,
+    },
+    headerTitle: {
+      fontSize: 20,
+      fontWeight: 'bold',
+      color: colors.primaryText,
+    },
+    notificationButton: {
+      padding: 8,
+    },
+    tabBar: {
+      flexDirection: 'row',
+      backgroundColor: colors.cardBackground,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    tab: {
+      flex: 1,
+      paddingVertical: 16,
+      alignItems: 'center',
+    },
+    activeTab: {
+      borderBottomWidth: 2,
+      borderBottomColor: colors.primary,
+    },
+    tabText: {
+      fontSize: 16,
+      color: colors.secondaryText,
+    },
+    activeTabText: {
+      color: colors.primary,
+      fontWeight: '600',
+    },
+    content: {
+      flex: 1,
+    },
+    section: {
+      padding: 20,
+    },
+    sectionTitle: {
+      fontSize: 18,
+      fontWeight: 'bold',
+      color: colors.primaryText,
+      marginBottom: 16,
+    },
+    userCard: {
+      backgroundColor: colors.cardBackground,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      shadowColor: colors.shadow || '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.05,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    userInfo: {
+      flex: 1,
+    },
+    userName: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.primaryText,
+    },
+    userEmail: {
+      fontSize: 14,
+      color: colors.secondaryText,
+      marginTop: 2,
+    },
+    userDetails: {
+      fontSize: 12,
+      color: colors.secondaryText,
+      marginTop: 4,
+    },
+    requestCard: {
+      backgroundColor: colors.cardBackground,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 12,
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      shadowColor: colors.shadow || '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.05,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    requestInfo: {
+      flex: 1,
+    },
+    requestTitle: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.primaryText,
+    },
+    requestDescription: {
+      fontSize: 14,
+      color: colors.secondaryText,
+      marginTop: 4,
+      lineHeight: 20,
+    },
+    requestDetails: {
+      fontSize: 12,
+      color: colors.secondaryText,
+      marginTop: 8,
+    },
+    requestNotes: {
+      fontSize: 12,
+      color: colors.secondaryText,
+      marginTop: 6,
+      fontStyle: 'italic',
+    },
+    userActions: {
+      flexDirection: 'row',
+      gap: 8,
+    },
+    roleButton: {
+      padding: 8,
+      backgroundColor: colors.primary + '20',
+      borderRadius: 6,
+    },
+    deleteButton: {
+      padding: 8,
+    },
+    modalContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    },
+    modalContent: {
+      backgroundColor: colors.cardBackground,
+      borderRadius: 16,
+      padding: 24,
+      width: '90%',
+      maxWidth: 400,
+    },
+    modalTitle: {
+      fontSize: 20,
+      fontWeight: 'bold',
+      color: colors.primaryText,
+      marginBottom: 20,
+      textAlign: 'center',
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 8,
+      padding: 12,
+      fontSize: 16,
+      marginBottom: 16,
+      color: colors.primaryText,
+      backgroundColor: colors.screenBackground,
+    },
+    messageInput: {
+      height: 100,
+      textAlignVertical: 'top',
+    },
+    modalActions: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    cancelButton: {
+      flex: 1,
+      padding: 12,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center',
+    },
+    cancelButtonText: {
+      fontSize: 16,
+      color: colors.secondaryText,
+    },
+    sendButton: {
+      flex: 1,
+      padding: 12,
+      borderRadius: 8,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+    },
+    sendButtonText: {
+      fontSize: 16,
+      color: 'white',
+      fontWeight: '600',
+    },
+    modalSubtitle: {
+      fontSize: 16,
+      color: colors.secondaryText,
+      textAlign: 'center',
+      marginBottom: 24,
+    },
+    roleOptions: {
+      gap: 12,
+      marginBottom: 24,
+    },
+    roleOption: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      padding: 16,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.cardBackground,
+    },
+    roleOptionSelected: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    roleOptionText: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.primaryText,
+      marginLeft: 12,
+      flex: 1,
+    },
+    roleOptionTextSelected: {
+      color: 'white',
+    },
+    roleOptionDesc: {
+      fontSize: 12,
+      color: colors.secondaryText,
+      marginTop: 2,
+    },
+    roleOptionDescSelected: {
+      color: 'rgba(255,255,255,0.8)',
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 16,
+    },
+    modalMessage: {
+      fontSize: 16,
+      color: colors.secondaryText,
+      lineHeight: 24,
+      marginBottom: 24,
+    },
+    modalButtons: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    modalButton: {
+      flex: 1,
+      paddingVertical: 12,
+      paddingHorizontal: 24,
+      borderRadius: 8,
+      alignItems: 'center',
+      flexDirection: 'row',
+      justifyContent: 'center',
+      gap: 8,
+    },
+    deleteConfirmButton: {
+      backgroundColor: colors.primary,
+    },
+    deleteConfirmButtonText: {
+      fontSize: 16,
+      color: 'white',
+      fontWeight: '600',
+    },
+  });
+
   if (!userProfile || userProfile.role !== 'admin') {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#E53E3E" />
-        <Text style={styles.loadingText}>Access denied</Text>
+      <View style={dynamicStyles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={dynamicStyles.loadingText}>Access denied</Text>
       </View>
     );
   }
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#E53E3E" />
-        <Text style={styles.loadingText}>Loading admin dashboard...</Text>
+      <View style={dynamicStyles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={dynamicStyles.loadingText}>Loading admin dashboard...</Text>
       </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#666" />
+    <SafeAreaView style={dynamicStyles.container}>
+      <View style={dynamicStyles.header}>
+        <TouchableOpacity onPress={() => router.back()} style={dynamicStyles.backButton}>
+          <Ionicons name="arrow-back" size={24} color={colors.secondaryText} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Admin Dashboard</Text>
+        <Text style={dynamicStyles.headerTitle}>Admin Dashboard</Text>
         <TouchableOpacity
           onPress={() => setNotificationModal(true)}
-          style={styles.notificationButton}
+          style={dynamicStyles.notificationButton}
         >
-          <Ionicons name="notifications-outline" size={24} color="#E53E3E" />
+          <Ionicons name="notifications-outline" size={24} color={colors.primary} />
         </TouchableOpacity>
       </View>
 
-      <View style={styles.tabBar}>
+      <View style={dynamicStyles.tabBar}>
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'users' && styles.activeTab]}
+          style={[dynamicStyles.tab, activeTab === 'users' && dynamicStyles.activeTab]}
           onPress={() => setActiveTab('users')}
         >
-          <Text style={[styles.tabText, activeTab === 'users' && styles.activeTabText]}>
+          <Text style={[dynamicStyles.tabText, activeTab === 'users' && dynamicStyles.activeTabText]}>
             Users ({users.length})
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'requests' && styles.activeTab]}
+          style={[dynamicStyles.tab, activeTab === 'requests' && dynamicStyles.activeTab]}
           onPress={() => setActiveTab('requests')}
         >
-          <Text style={[styles.tabText, activeTab === 'requests' && styles.activeTabText]}>
+          <Text style={[dynamicStyles.tabText, activeTab === 'requests' && dynamicStyles.activeTabText]}>
             Requests ({requests.length})
           </Text>
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content}>
+      <ScrollView style={dynamicStyles.content}>
         {activeTab === 'users' && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>User Management</Text>
+          <View style={dynamicStyles.section}>
+            <Text style={dynamicStyles.sectionTitle}>User Management</Text>
             {users.map(user => (
-              <View key={user.id} style={styles.userCard}>
-                <View style={styles.userInfo}>
-                  <Text style={styles.userName}>{user.fullName}</Text>
-                  <Text style={styles.userEmail}>{user.email}</Text>
-                  <Text style={styles.userDetails}>
+              <View key={user.id} style={dynamicStyles.userCard}>
+                <View style={dynamicStyles.userInfo}>
+                  <Text style={dynamicStyles.userName}>{user.fullName}</Text>
+                  <Text style={dynamicStyles.userEmail}>{user.email}</Text>
+                  <Text style={dynamicStyles.userDetails}>
                     {user.bloodType} • {user.city} • {user.role}
                   </Text>
                 </View>
-                <View style={styles.userActions}>
+                <View style={dynamicStyles.userActions}>
                   <TouchableOpacity
                     onPress={() => openRoleModal(user)}
-                    style={styles.roleButton}
+                    style={dynamicStyles.roleButton}
                   >
-                    <Ionicons name="person-outline" size={18} color="#3182CE" />
+                    <Ionicons name="person-outline" size={18} color={colors.primary} />
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={() => handleDeleteUser(user)}
-                    style={styles.deleteButton}
+                    style={dynamicStyles.deleteButton}
                   >
-                    <Ionicons name="trash-outline" size={20} color="#E53E3E" />
+                    <Ionicons name="trash-outline" size={20} color={colors.primary} />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -345,30 +649,30 @@ export default function AdminDashboard() {
         )}
 
         {activeTab === 'requests' && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Request Management</Text>
+          <View style={dynamicStyles.section}>
+            <Text style={dynamicStyles.sectionTitle}>Request Management</Text>
             {requests.map(request => (
-              <View key={request.id} style={styles.requestCard}>
-                <View style={styles.requestInfo}>
-                  <Text style={styles.requestTitle}>{request.fullName}</Text>
-                  <Text style={styles.requestDescription}>
+              <View key={request.id} style={dynamicStyles.requestCard}>
+                <View style={dynamicStyles.requestInfo}>
+                  <Text style={dynamicStyles.requestTitle}>{request.fullName}</Text>
+                  <Text style={dynamicStyles.requestDescription}>
                     {request.hospital} • {request.contactNumber}
                   </Text>
-                  <Text style={styles.requestDetails}>
+                  <Text style={dynamicStyles.requestDetails}>
                     {request.bloodType} • {request.city}
                     {request.urgent && ' • URGENT'}
                   </Text>
                   {request.notes && (
-                    <Text style={styles.requestNotes} numberOfLines={2}>
+                    <Text style={dynamicStyles.requestNotes} numberOfLines={2}>
                       {request.notes}
                     </Text>
                   )}
                 </View>
                 <TouchableOpacity
                   onPress={() => handleDeleteRequest(request)}
-                  style={styles.deleteButton}
+                  style={dynamicStyles.deleteButton}
                 >
-                  <Ionicons name="trash-outline" size={20} color="#E53E3E" />
+                  <Ionicons name="trash-outline" size={20} color={colors.primary} />
                 </TouchableOpacity>
               </View>
             ))}
@@ -377,19 +681,19 @@ export default function AdminDashboard() {
       </ScrollView>
 
       <Modal visible={notificationModal} animationType="slide" transparent>
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Send Notification</Text>
+        <View style={dynamicStyles.modalContainer}>
+          <View style={dynamicStyles.modalContent}>
+            <Text style={dynamicStyles.modalTitle}>Send Notification</Text>
 
             <TextInput
-              style={styles.input}
+              style={dynamicStyles.input}
               placeholder="Notification Title"
               value={notificationData.title}
               onChangeText={(text) => setNotificationData(prev => ({ ...prev, title: text }))}
             />
 
             <TextInput
-              style={[styles.input, styles.messageInput]}
+              style={[dynamicStyles.input, dynamicStyles.messageInput]}
               placeholder="Notification Message"
               value={notificationData.message}
               onChangeText={(text) => setNotificationData(prev => ({ ...prev, message: text }))}
@@ -398,7 +702,7 @@ export default function AdminDashboard() {
             />
 
             <TextInput
-              style={styles.input}
+              style={dynamicStyles.input}
               placeholder="Recipient Email (leave empty for all users)"
               value={notificationData.recipientEmail}
               onChangeText={(text) => setNotificationData(prev => ({ ...prev, recipientEmail: text }))}
@@ -406,15 +710,15 @@ export default function AdminDashboard() {
               autoCapitalize="none"
             />
 
-            <View style={styles.modalActions}>
+            <View style={dynamicStyles.modalActions}>
               <TouchableOpacity
                 onPress={() => setNotificationModal(false)}
-                style={styles.cancelButton}
+                style={dynamicStyles.cancelButton}
               >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+                <Text style={dynamicStyles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={handleSendNotification} style={styles.sendButton}>
-                <Text style={styles.sendButtonText}>Send</Text>
+              <TouchableOpacity onPress={handleSendNotification} style={dynamicStyles.sendButton}>
+                <Text style={dynamicStyles.sendButtonText}>Send</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -422,60 +726,60 @@ export default function AdminDashboard() {
       </Modal>
 
       <Modal visible={roleModal} animationType="slide" transparent>
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Change User Role</Text>
-            <Text style={styles.modalSubtitle}>
+        <View style={dynamicStyles.modalContainer}>
+          <View style={dynamicStyles.modalContent}>
+            <Text style={dynamicStyles.modalTitle}>Change User Role</Text>
+            <Text style={dynamicStyles.modalSubtitle}>
               Select a new role for {selectedUser?.fullName}
             </Text>
 
-            <View style={styles.roleOptions}>
+            <View style={dynamicStyles.roleOptions}>
               <TouchableOpacity
-                style={[styles.roleOption, selectedUser?.role === 'user' && styles.roleOptionSelected]}
+                style={[dynamicStyles.roleOption, selectedUser?.role === 'user' && dynamicStyles.roleOptionSelected]}
                 onPress={() => handleChangeRole('user')}
               >
-                <Ionicons name="person" size={24} color={selectedUser?.role === 'user' ? 'white' : '#666'} />
-                <Text style={[styles.roleOptionText, selectedUser?.role === 'user' && styles.roleOptionTextSelected]}>
+                <Ionicons name="person" size={24} color={selectedUser?.role === 'user' ? 'white' : colors.secondaryText} />
+                <Text style={[dynamicStyles.roleOptionText, selectedUser?.role === 'user' && dynamicStyles.roleOptionTextSelected]}>
                   User
                 </Text>
-                <Text style={[styles.roleOptionDesc, selectedUser?.role === 'user' && styles.roleOptionDescSelected]}>
+                <Text style={[dynamicStyles.roleOptionDesc, selectedUser?.role === 'user' && dynamicStyles.roleOptionDescSelected]}>
                   Regular user with basic access
                 </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.roleOption, selectedUser?.role === 'moderator' && styles.roleOptionSelected]}
+                style={[dynamicStyles.roleOption, selectedUser?.role === 'moderator' && dynamicStyles.roleOptionSelected]}
                 onPress={() => handleChangeRole('moderator')}
               >
-                <Ionicons name="shield-checkmark" size={24} color={selectedUser?.role === 'moderator' ? 'white' : '#666'} />
-                <Text style={[styles.roleOptionText, selectedUser?.role === 'moderator' && styles.roleOptionTextSelected]}>
+                <Ionicons name="shield-checkmark" size={24} color={selectedUser?.role === 'moderator' ? 'white' : colors.secondaryText} />
+                <Text style={[dynamicStyles.roleOptionText, selectedUser?.role === 'moderator' && dynamicStyles.roleOptionTextSelected]}>
                   Moderator
                 </Text>
-                <Text style={[styles.roleOptionDesc, selectedUser?.role === 'moderator' && styles.roleOptionDescSelected]}>
+                <Text style={[dynamicStyles.roleOptionDesc, selectedUser?.role === 'moderator' && dynamicStyles.roleOptionDescSelected]}>
                   Can delete requests only
                 </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.roleOption, selectedUser?.role === 'admin' && styles.roleOptionSelected]}
+                style={[dynamicStyles.roleOption, selectedUser?.role === 'admin' && dynamicStyles.roleOptionSelected]}
                 onPress={() => handleChangeRole('admin')}
               >
-                <Ionicons name="settings" size={24} color={selectedUser?.role === 'admin' ? 'white' : '#666'} />
-                <Text style={[styles.roleOptionText, selectedUser?.role === 'admin' && styles.roleOptionTextSelected]}>
+                <Ionicons name="settings" size={24} color={selectedUser?.role === 'admin' ? 'white' : colors.secondaryText} />
+                <Text style={[dynamicStyles.roleOptionText, selectedUser?.role === 'admin' && dynamicStyles.roleOptionTextSelected]}>
                   Admin
                 </Text>
-                <Text style={[styles.roleOptionDesc, selectedUser?.role === 'admin' && styles.roleOptionDescSelected]}>
+                <Text style={[dynamicStyles.roleOptionDesc, selectedUser?.role === 'admin' && dynamicStyles.roleOptionDescSelected]}>
                   Full administrative access
                 </Text>
               </TouchableOpacity>
             </View>
 
-            <View style={styles.modalActions}>
+            <View style={dynamicStyles.modalActions}>
               <TouchableOpacity
                 onPress={() => setRoleModal(false)}
-                style={styles.cancelButton}
+                style={dynamicStyles.cancelButton}
               >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+                <Text style={dynamicStyles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -489,32 +793,32 @@ export default function AdminDashboard() {
         animationType="fade"
         onRequestClose={cancelDeleteUser}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Ionicons name="person-remove" size={24} color="#E53E3E" />
-              <Text style={styles.modalTitle}>Delete User</Text>
+        <View style={dynamicStyles.modalOverlay}>
+          <View style={dynamicStyles.modalContent}>
+            <View style={dynamicStyles.modalHeader}>
+              <Ionicons name="person-remove" size={24} color={colors.primary} />
+              <Text style={dynamicStyles.modalTitle}>Delete User</Text>
             </View>
 
-            <Text style={styles.modalMessage}>
+            <Text style={dynamicStyles.modalMessage}>
               Are you sure you want to delete "{userToDelete?.fullName}"'s account?
               This action cannot be undone.
             </Text>
 
-            <View style={styles.modalButtons}>
+            <View style={dynamicStyles.modalButtons}>
               <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
+                style={[dynamicStyles.modalButton, dynamicStyles.cancelButton]}
                 onPress={cancelDeleteUser}
               >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+                <Text style={dynamicStyles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.modalButton, styles.deleteConfirmButton]}
+                style={[dynamicStyles.modalButton, dynamicStyles.deleteConfirmButton]}
                 onPress={confirmDeleteUser}
               >
                 <Ionicons name="person-remove" size={16} color="white" />
-                <Text style={styles.deleteConfirmButtonText}>Delete User</Text>
+                <Text style={dynamicStyles.deleteConfirmButtonText}>Delete User</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -528,32 +832,32 @@ export default function AdminDashboard() {
         animationType="fade"
         onRequestClose={cancelDeleteRequest}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Ionicons name="trash-outline" size={24} color="#E53E3E" />
-              <Text style={styles.modalTitle}>Delete Request</Text>
+        <View style={dynamicStyles.modalOverlay}>
+          <View style={dynamicStyles.modalContent}>
+            <View style={dynamicStyles.modalHeader}>
+              <Ionicons name="trash-outline" size={24} color={colors.primary} />
+              <Text style={dynamicStyles.modalTitle}>Delete Request</Text>
             </View>
 
-            <Text style={styles.modalMessage}>
+            <Text style={dynamicStyles.modalMessage}>
               Are you sure you want to delete "{requestToDelete?.fullName}"'s blood donation request?
               This action cannot be undone.
             </Text>
 
-            <View style={styles.modalButtons}>
+            <View style={dynamicStyles.modalButtons}>
               <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
+                style={[dynamicStyles.modalButton, dynamicStyles.cancelButton]}
                 onPress={cancelDeleteRequest}
               >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+                <Text style={dynamicStyles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.modalButton, styles.deleteConfirmButton]}
+                style={[dynamicStyles.modalButton, dynamicStyles.deleteConfirmButton]}
                 onPress={confirmDeleteRequest}
               >
                 <Ionicons name="trash" size={16} color="white" />
-                <Text style={styles.deleteConfirmButtonText}>Delete Request</Text>
+                <Text style={dynamicStyles.deleteConfirmButtonText}>Delete Request</Text>
               </TouchableOpacity>
             </View>
           </View>

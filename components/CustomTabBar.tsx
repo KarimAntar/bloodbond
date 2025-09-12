@@ -40,8 +40,9 @@ const TabBarButton: React.FC<TabBarButtonProps> = ({ route, icon, label, isActiv
   </TouchableOpacity>
 );
 
-const CustomTabBar: React.FC<any> = (props) => {
+const CustomTabBar: React.FC = () => {
   const router = useRouter();
+  const pathname = usePathname();
   const { currentTheme } = useTheme();
   const colors = Colors[currentTheme];
 
@@ -54,10 +55,73 @@ const CustomTabBar: React.FC<any> = (props) => {
   ];
 
   const handleTabPress = (route: string) => {
+    console.log('Tab pressed:', route);
     router.push(route as any);
   };
 
-  const currentTab = props.state.index;
+  // Determine active tab based on current pathname
+  const getCurrentTabIndex = () => {
+    // Debug: Log current pathname
+    console.log('🔍 Current pathname:', pathname);
+    console.log('📝 Pathname length:', pathname.length);
+
+    // Check for exact tab routes first
+    if (pathname === '/(app)/(tabs)' || pathname === '/(app)/(tabs)/index') {
+      console.log('✅ Matched Home tab (exact)');
+      return 0; // Home tab
+    }
+    if (pathname === '/(app)/(tabs)/requests') {
+      console.log('✅ Matched Requests tab (exact)');
+      return 1; // Requests tab
+    }
+    if (pathname === '/(app)/(tabs)/create') {
+      console.log('✅ Matched Create tab (exact)');
+      return 2; // Create tab
+    }
+    if (pathname === '/(app)/(tabs)/activity') {
+      console.log('✅ Matched Activity tab (exact)');
+      return 3; // Activity tab
+    }
+    if (pathname === '/(app)/(tabs)/settings') {
+      console.log('✅ Matched Settings tab (exact)');
+      return 4; // Settings tab
+    }
+
+    // Check for related routes (sub-pages) - more specific patterns first
+    if (pathname.startsWith('/profile')) {
+      console.log('✅ Matched profile pattern (starts with /profile)');
+      return 4; // Settings tab (for profile pages)
+    }
+    if (pathname.startsWith('/requests')) {
+      console.log('✅ Matched requests pattern (starts with /requests)');
+      return 1; // Requests tab (for request details, responses, etc.)
+    }
+    if (pathname.includes('/activity') || pathname.includes('/notifications')) {
+      console.log('✅ Matched activity pattern');
+      return 3; // Activity tab (for activity and notifications)
+    }
+    if (pathname.includes('/create') || pathname.includes('/donation')) {
+      console.log('✅ Matched create/donation pattern');
+      return 2; // Create tab (for donation-related pages)
+    }
+
+    // Additional checks for common patterns
+    if (pathname === '/settings' || pathname === '/profile/settings') {
+      console.log('✅ Matched settings/profile-settings pattern');
+      return 4; // Settings tab
+    }
+
+    console.log('⚠️ No pattern matched, defaulting to Home tab');
+    console.log('Available patterns checked:');
+    console.log('  - Exact tabs: /(app)/(tabs), /(app)/(tabs)/requests, /(app)/(tabs)/create, /(app)/(tabs)/activity, /(app)/(tabs)/settings');
+    console.log('  - Profile: starts with /profile');
+    console.log('  - Requests: starts with /requests');
+    console.log('  - Activity: contains /activity or /notifications');
+    console.log('  - Create: contains /create or /donation');
+    return 0; // Default to Home
+  };
+
+  const currentTab = getCurrentTabIndex();
 
   const dynamicStyles = StyleSheet.create({
     container: {
