@@ -63,9 +63,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       return profileCache.get(userId)!;
     }
 
-    // Ensure user is authenticated before accessing Firestore
-    if (!user || !user.uid) {
-      console.log('User not authenticated, cannot fetch profile');
+    // Ensure userId is provided
+    if (!userId) {
+      console.log('No userId provided, cannot fetch profile');
       return null;
     }
 
