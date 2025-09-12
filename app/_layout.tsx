@@ -43,6 +43,14 @@ const InitialLayout = () => {
       // User is authenticated
       const currentPath = segments.join('/');
       const isOnProfilePage = currentPath.includes('profile');
+      const isOnHomePage = currentPath === '(app)/(tabs)' || currentPath === '(app)' || segments.length === 1;
+
+      console.log('=== REDIRECT LOGIC DEBUG ===');
+      console.log('Current path:', currentPath);
+      console.log('Is on profile page:', isOnProfilePage);
+      console.log('Is on home page:', isOnHomePage);
+      console.log('User profile:', userProfile);
+      console.log('Profile complete:', userProfile?.profileComplete);
 
       if (userProfile && userProfile.profileComplete === false && inAppGroup && !isOnProfilePage) {
         // User profile exists but not complete, redirect to profile setup (but not if already on profile page)
@@ -54,11 +62,16 @@ const InitialLayout = () => {
         router.replace('/(app)/profile/edit');
       } else if (userProfile && userProfile.profileComplete === true && !inAppGroup && !inAuthGroup) {
         // User profile complete and not on auth screens, redirect to main app
+        console.log('User profile complete, redirecting to main app...');
         router.replace('/(app)/(tabs)');
+      } else if (userProfile && userProfile.profileComplete === true && inAppGroup && isOnHomePage) {
+        // User is on home page with completed profile - this is correct, do nothing
+        console.log('User on home page with completed profile - no redirect needed');
       }
       // If user is verified and in app group, or unverified and on auth screens, do nothing
     } else if (inAppGroup) {
       // User not authenticated but trying to access app
+      console.log('User not authenticated, redirecting to login...');
       router.replace('/(auth)/login');
     }
     // If user not authenticated and on auth screens, do nothing
