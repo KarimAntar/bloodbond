@@ -93,7 +93,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         email: user?.email || '', // Pre-fill with Google email
         createdAt: new Date(),
         role: 'user',
-        profilePicture: user?.photoURL || 'https://firebasestorage.googleapis.com/v0/b/bloodbond-2a2b3.appspot.com/o/default-profile.png?alt=media&token=default-profile-token', // Default profile picture
+        profilePicture: user?.photoURL || 'https://ui-avatars.com/api/?name=User&background=6366f1&color=fff&size=120', // Default profile picture
       };
 
       // Cache the basic profile

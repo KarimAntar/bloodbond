@@ -276,24 +276,31 @@ export default function EditProfileScreen() {
     const hasPermission = await requestImagePermissions();
     if (!hasPermission) return;
 
-    Alert.alert(
-      'Select Profile Picture',
-      'Choose how you want to select your profile picture',
-      [
-        {
-          text: 'Camera',
-          onPress: () => openCamera(),
-        },
-        {
-          text: 'Gallery',
-          onPress: () => openGallery(),
-        },
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-      ]
-    );
+    // Check if we're on web or mobile
+    if (Platform.OS === 'web') {
+      // On web, directly open gallery
+      openGallery();
+    } else {
+      // On mobile, show simple choice
+      Alert.alert(
+        'Select Profile Picture',
+        'Choose how you want to select your profile picture',
+        [
+          {
+            text: 'Camera',
+            onPress: () => openCamera(),
+          },
+          {
+            text: 'Gallery',
+            onPress: () => openGallery(),
+          },
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+        ]
+      );
+    }
   };
 
   const openCamera = async () => {
