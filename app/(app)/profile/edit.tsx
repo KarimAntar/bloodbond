@@ -433,18 +433,30 @@ export default function EditProfileScreen() {
         role: userProfile?.role || 'user',
       };
 
-      console.log('Saving profile data:', profileData);
+      console.log('=== SAVING PROFILE ===');
+      console.log('User ID:', user.uid);
+      console.log('Profile data to save:', profileData);
+
       await setDoc(userDocRef, profileData, { merge: true });
+      console.log('Profile saved to Firestore successfully');
 
       // Wait a moment for Firestore to update
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 500));
+      console.log('Waiting for Firestore update...');
 
+      // Refresh the user profile in context
       await refreshUserProfile();
+      console.log('Profile refreshed in context');
+
+      // Verify the profile was updated
+      const updatedProfile = await fetchFreshProfileData(user.uid);
+      console.log('Verified updated profile:', updatedProfile);
 
       Alert.alert('Success', 'Profile updated successfully!', [
         {
           text: 'OK',
           onPress: () => {
+            console.log('Navigating to main app...');
             // Navigate to main app after successful save
             router.replace('/(app)/(tabs)');
           }
@@ -455,6 +467,22 @@ export default function EditProfileScreen() {
       Alert.alert('Error', 'Failed to update your profile. Please try again.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Helper function to fetch fresh profile data
+  const fetchFreshProfileData = async (userId: string) => {
+    try {
+      const userDocRef = doc(db, 'users', userId);
+      const userDocSnap = await getDoc(userDocRef);
+
+      if (userDocSnap.exists()) {
+        return userDocSnap.data();
+      }
+      return null;
+    } catch (error) {
+      console.error('Error fetching fresh profile data:', error);
+      return null;
     }
   };
 
