@@ -454,11 +454,15 @@ export default function EditProfileScreen() {
 
       Alert.alert('Success', 'Profile updated successfully!', [
         {
-          text: 'OK',
+          text: 'Continue',
           onPress: () => {
             console.log('Navigating to main app...');
-            // Navigate to main app after successful save
+            // Force navigation to main app
             router.replace('/(app)/(tabs)');
+            // Also try push as fallback
+            setTimeout(() => {
+              router.push('/(app)/(tabs)');
+            }, 100);
           }
         }
       ]);

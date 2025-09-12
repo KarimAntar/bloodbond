@@ -85,14 +85,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Profile doesn't exist, create a basic one for Google sign-in users
       console.log('No user profile found, creating basic profile for Google user');
       const basicProfile: UserProfile = {
-        fullName: '', // Will be filled in profile setup
+        fullName: user?.displayName || '', // Pre-fill with Google display name
         bloodType: '',
         governorate: '',
         city: '',
         profileComplete: false, // Mark as incomplete so user gets redirected to setup
-        email: '', // Will be updated when profile is completed
+        email: user?.email || '', // Pre-fill with Google email
         createdAt: new Date(),
         role: 'user',
+        profilePicture: user?.photoURL || 'https://firebasestorage.googleapis.com/v0/b/bloodbond-2a2b3.appspot.com/o/default-profile.png?alt=media&token=default-profile-token', // Default profile picture
       };
 
       // Cache the basic profile
