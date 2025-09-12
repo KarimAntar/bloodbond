@@ -8,6 +8,8 @@ Notifications.setNotificationHandler({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
   }),
 });
 
@@ -134,6 +136,15 @@ export const registerPushToken = async (userId: string, token: string) => {
 // Initialize notifications
 export const initializeNotifications = async () => {
   try {
+    // Check if we're in Expo Go or web environment
+    const isExpoGo = !!(typeof window !== 'undefined' && window.location && window.location.protocol === 'exp://');
+    const isWeb = typeof window !== 'undefined' && window.document;
+
+    if (isExpoGo || isWeb) {
+      console.log('Notifications not fully supported in Expo Go/Web. Skipping initialization.');
+      return false;
+    }
+
     await requestNotificationPermissions();
 
     // Set up notification categories
@@ -157,6 +168,7 @@ export const initializeNotifications = async () => {
     return true;
   } catch (error) {
     console.error('Error initializing notifications:', error);
+    // Don't throw error, just return false to indicate initialization failed
     return false;
   }
 };

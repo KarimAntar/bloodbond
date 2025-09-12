@@ -22,14 +22,145 @@ import { collection, addDoc, Timestamp } from 'firebase/firestore';
 import { useAuth } from '../../../contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { getCurrentLocation, getCityCoordinates, getAddressFromCoordinates, LocationData } from '../../../utils/locationServices';
+import { performAntiSpamVerification, initializeRecaptcha } from '../../../utils/captcha';
 
 const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 
-const CITIES = [
-  'Cairo', 'Alexandria', 'Giza', 'Shubra El Kheima', 'Port Said', 'Suez',
-  'Luxor', 'Aswan', 'Asyut', 'Ismailia', 'Faiyum', 'Zagazig', 'Ashmoun',
-  'Minya', 'Damanhur', 'Beni Suef', 'Hurghada', 'Qena', 'Sohag', 'Shibin El Kom'
+const GOVERNORATES = [
+  'Cairo', 'Alexandria', 'Giza', 'Port Said', 'Suez', 'Luxor', 'Aswan',
+  'Asyut', 'Ismailia', 'Faiyum', 'Zagazig', 'Damanhur', 'Beni Suef',
+  'Hurghada', 'Qena', 'Sohag', 'Minya', 'Arish', 'Tanta', 'Mansoura',
+  'Kafr El Sheikh', 'Damietta', 'Beheira', 'Matruh', 'New Valley',
+  'Red Sea', 'South Sinai', 'North Sinai', 'Monufia', 'Gharbia', 'Sharqia',
+  'Qalyubia', 'Dakahlia'
 ];
+
+const GOVERNORATE_CITIES: { [key: string]: string[] } = {
+  'Cairo': [
+    'Cairo', 'Helwan', 'Maadi', 'Zamalek', 'Dokki', 'Mohandessin', 'Agouza',
+    'Imbaba', 'Boulaq', 'Kasr El Nil', 'Downtown Cairo', 'Islamic Cairo',
+    'Coptic Cairo', 'Garden City', 'New Cairo', 'Nasr City', 'Heliopolis',
+    'Al Rehab', 'Sheikh Zayed', '6th of October', 'Obour', 'Badr City',
+    '15th of May', 'Shorouk', '10th of Ramadan', 'Shubra El Kheima'
+  ],
+  'Alexandria': [
+    'Alexandria', 'Montaza', 'Miami', 'Borg El Arab', 'North Coast', 'Abu Qir',
+    'Dekheila', 'Amreya', 'Sidi Gaber', 'Smouha', 'Victoria', 'Raml Station',
+    'Moharam Bek', 'Stanley', 'San Stefano', 'Rushdy', 'Louran', 'Glim',
+    'Fleming', 'Sporting', 'Karmouz', 'Asafra', 'Mandara', 'El Max', 'El Soyof'
+  ],
+  'Giza': [
+    'Giza', 'Dokki', 'Mohandessin', 'Agouza', 'Imbaba', 'Boulaq', 'Zamalek',
+    'Maadi', 'Helwan', '6th of October', 'Sheikh Zayed', 'New Cairo', 'Nasr City',
+    'Heliopolis', 'Al Rehab', 'Obour', 'Badr City', 'Shorouk', '10th of Ramadan'
+  ],
+  'Port Said': ['Port Said', 'Port Fuad'],
+  'Suez': ['Suez', 'Ain Sokhna', 'Ras Sedr', 'Ataka', 'Fanara', 'Ras Gharib'],
+  'Luxor': [
+    'Luxor', 'Armant', 'Qena', 'Nag Hammadi', 'Dishna', 'Farshout', 'Qus',
+    'Girga', 'Akhmim', 'Sohag', 'Tahta', 'Gerga', 'El Maragha', 'El Idwa',
+    'El Balyana', 'El Fashn', 'Abu Tesht', 'El Badari', 'El Fakhaniya',
+    'Beni Mazar', 'Deir Mawas', 'Samasta'
+  ],
+  'Aswan': [
+    'Aswan', 'Kom Ombo', 'Edfu', 'Esna', 'Armant'
+  ],
+  'Asyut': [
+    'Assiut', 'Dayrout', 'Manfalut', 'Abu Tig', 'El Ghanayem', 'Sahel Selim',
+    'Bani Adi', 'El Badari', 'Sidfa', 'El Fakhaniya', 'Abnub', 'El Fath',
+    'El Gamaliya', 'El Andalus', 'El Hamra', 'El Helal', 'El Mahager',
+    'El Mansha', 'El Masara', 'El Qusiya', 'El Salam', 'El Sewak',
+    'El Shohada', 'El Waqf', 'El Zawya', 'New Assiut'
+  ],
+  'Ismailia': [
+    'Ismailia', 'Fayed', 'Qantara Sharq', 'Abu Suwir El Mahatta', 'Qantara Gharb'
+  ],
+  'Faiyum': [
+    'Faiyum', 'Sennuris', 'Ibsheway', 'Itsa', 'Yousef El Seddik', 'Tamiya',
+    'Al Wasta', 'New Faiyum'
+  ],
+  'Zagazig': [
+    'Zagazig', 'Bilbeis', 'Minya El Qamh', 'Abu Hammad', 'Abu Kabir', 'Faqous'
+  ],
+  'Damanhur': [
+    'Damanhur', 'Kafr El Dawwar', 'Rashid', 'Edku', 'Abu Hummus', 'Wadi El Natrun',
+    'Kom Hamada', 'Badr'
+  ],
+  'Beni Suef': [
+    'Beni Suef', 'El Wasta', 'Nasser', 'Ihnasya', 'Beba', 'Fashn', 'Somasta',
+    'Al Wasta', 'New Beni Suef'
+  ],
+  'Hurghada': [
+    'Hurghada', 'Safaga', 'El Quseir', 'Marsa Alam', 'El Gouna', 'Sahl Hasheesh'
+  ],
+  'Qena': ['Qena', 'Nag Hammadi', 'Dishna', 'Farshout', 'Qus'],
+  'Sohag': [
+    'Sohag', 'Girga', 'Akhmim', 'Tahta', 'Gerga', 'El Maragha', 'El Idwa',
+    'El Balyana', 'El Fashn', 'Abu Tesht', 'El Badari', 'El Fakhaniya',
+    'Beni Mazar', 'Deir Mawas', 'Samasta'
+  ],
+  'Minya': [
+    'Minya', 'Maghagha', 'Bani Mazar', 'Samalut', 'Mallawi', 'Deir Mawas',
+    'Abu Qurqas', 'El Idwa', 'New Minya'
+  ],
+  'Arish': ['Arish'],
+  'Tanta': [
+    'Tanta', 'Kafr El Zayat', 'Zefta', 'El Mahalla El Kubra', 'Samannud',
+    'Biyala', 'Sers El Lyan', 'Zifta'
+  ],
+  'Mansoura': [
+    'Mansoura', 'Talkha', 'Mitat Ghamr', 'Dekernes', 'Aga', 'El Kurdi',
+    'Beni Ebeid', 'El Senbellawein'
+  ],
+  'Kafr El Sheikh': [
+    'Kafr El Sheikh', 'Sidi Salem', 'El Hamoul', 'Baltim', 'Abu Hammad',
+    'Mashtul El Sukhna', 'Hihya', 'Qutur'
+  ],
+  'Damietta': [
+    'Damietta', 'New Damietta', 'Faraskur', 'Zarqa', 'Kafr Saad'
+  ],
+  'Beheira': [
+    'Rosetta', 'Edku', 'Kafr El Dawwar', 'Abu Qir', 'El Alamein'
+  ],
+  'Matruh': [
+    'Marsa Matruh', 'Siwa'
+  ],
+  'New Valley': [
+    'Dakhla', 'Kharga', 'Baris', 'Farafra', 'Bahariya'
+  ],
+  'Red Sea': [
+    'Hurghada', 'Safaga', 'El Quseir', 'Marsa Alam', 'Shalateen', 'Halaib'
+  ],
+  'South Sinai': [
+    'Sharm El Sheikh', 'Dahab', 'Nuweiba', 'Taba'
+  ],
+  'North Sinai': [
+    'Arish'
+  ],
+  'Monufia': [
+    'Shibin El Kom', 'Mit Ghamr', 'Dikirnis', 'Samannud'
+  ],
+  'Gharbia': [
+    'Tanta', 'Kafr El Zayat', 'Zefta', 'El Mahalla El Kubra', 'Samannud',
+    'Biyala', 'Sers El Lyan', 'Zifta'
+  ],
+  'Sharqia': [
+    'Zagazig', 'Bilbeis', 'Minya El Qamh', 'Abu Hammad', 'Abu Kabir', 'Faqous',
+    'Mansoura', 'Talkha', 'Mitat Ghamr', 'Dekernes', 'Aga', 'El Kurdi',
+    'Beni Ebeid', 'El Senbellawein'
+  ],
+  'Qalyubia': [
+    'Banha', 'Qalyub', 'Shubra El Kheima', 'Tukh', 'Qaha', 'Kafr Shukr',
+    'El Khanka', 'Khusus', 'Obour', 'Badr City', '15th of May', 'Shorouk',
+    '10th of Ramadan'
+  ],
+  'Dakahlia': [
+    'Mansoura', 'Talkha', 'Mitat Ghamr', 'Dekernes', 'Aga', 'El Kurdi',
+    'Beni Ebeid', 'El Senbellawein', 'Gamasa', 'El Mansoura El Gedida',
+    'Shirbin', 'Belqas', 'Meet Salsil', 'El Mataria'
+  ]
+};
 
 const BloodTypeSelector: React.FC<{
   selectedType: string;
@@ -58,15 +189,15 @@ const BloodTypeSelector: React.FC<{
   </View>
 );
 
-const CityDropdown: React.FC<{
-  selectedCity: string;
-  onSelect: (city: string) => void;
+const GovernorateDropdown: React.FC<{
+  selectedGovernorate: string;
+  onSelect: (governorate: string) => void;
   error?: boolean;
-}> = ({ selectedCity, onSelect, error }) => {
+}> = ({ selectedGovernorate, onSelect, error }) => {
   const [modalVisible, setModalVisible] = useState(false);
 
-  const handleSelect = (city: string) => {
-    onSelect(city);
+  const handleSelect = (governorate: string) => {
+    onSelect(governorate);
     setModalVisible(false);
   };
 
@@ -77,8 +208,8 @@ const CityDropdown: React.FC<{
         onPress={() => setModalVisible(true)}
       >
         <Ionicons name="location-outline" size={20} color="#666" />
-        <Text style={[styles.dropdownText, !selectedCity && styles.placeholderText]}>
-          {selectedCity || 'Select city'}
+        <Text style={[styles.dropdownText, !selectedGovernorate && styles.placeholderText]}>
+          {selectedGovernorate || 'Select governorate'}
         </Text>
         <Ionicons name="chevron-down" size={20} color="#666" />
       </TouchableOpacity>
@@ -92,7 +223,7 @@ const CityDropdown: React.FC<{
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select City</Text>
+              <Text style={styles.modalTitle}>Select Governorate</Text>
               <TouchableOpacity
                 onPress={() => setModalVisible(false)}
                 style={styles.closeButton}
@@ -101,7 +232,86 @@ const CityDropdown: React.FC<{
               </TouchableOpacity>
             </View>
             <FlatList
-              data={CITIES}
+              data={GOVERNORATES}
+              keyExtractor={(item) => item}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[
+                    styles.cityItem,
+                    selectedGovernorate === item && styles.cityItemSelected,
+                  ]}
+                  onPress={() => handleSelect(item)}
+                >
+                  <Text
+                    style={[
+                      styles.cityItemText,
+                      selectedGovernorate === item && styles.cityItemTextSelected,
+                    ]}
+                  >
+                    {item}
+                  </Text>
+                  {selectedGovernorate === item && (
+                    <Ionicons name="checkmark" size={20} color="#E53E3E" />
+                  )}
+                </TouchableOpacity>
+              )}
+              showsVerticalScrollIndicator={false}
+            />
+          </View>
+        </View>
+      </Modal>
+    </>
+  );
+};
+
+const CityDropdown: React.FC<{
+  selectedCity: string;
+  selectedGovernorate: string;
+  onSelect: (city: string) => void;
+  error?: boolean;
+}> = ({ selectedCity, selectedGovernorate, onSelect, error }) => {
+  const [modalVisible, setModalVisible] = useState(false);
+
+  const handleSelect = (city: string) => {
+    onSelect(city);
+    setModalVisible(false);
+  };
+
+  const availableCities = selectedGovernorate ? GOVERNORATE_CITIES[selectedGovernorate] || [] : [];
+
+  return (
+    <>
+      <TouchableOpacity
+        style={[styles.dropdownContainer, error && styles.inputError]}
+        onPress={() => setModalVisible(true)}
+        disabled={!selectedGovernorate}
+      >
+        <Ionicons name="location-outline" size={20} color="#666" />
+        <Text style={[styles.dropdownText, !selectedCity && styles.placeholderText]}>
+          {selectedCity || (selectedGovernorate ? 'Select city' : 'Select governorate first')}
+        </Text>
+        <Ionicons name="chevron-down" size={20} color="#666" />
+      </TouchableOpacity>
+
+      <Modal
+        visible={modalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select City in {selectedGovernorate}</Text>
+              <TouchableOpacity
+                onPress={() => setModalVisible(false)}
+                style={styles.closeButton}
+              >
+                <Ionicons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={availableCities}
               keyExtractor={(item) => item}
               renderItem={({ item }) => (
                 <TouchableOpacity
@@ -137,14 +347,19 @@ export default function CreateRequestScreen() {
   const [formData, setFormData] = useState({
     fullName: '',
     bloodType: '',
+    governorate: '',
     city: '',
     hospital: '',
     contactNumber: '',
     notes: '',
     urgent: false,
+    dropOffAddress: '',
   });
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [currentLocation, setCurrentLocation] = useState<LocationData | null>(null);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [verificationLoading, setVerificationLoading] = useState(false);
 
   const router = useRouter();
   const { user, userProfile } = useAuth();
@@ -157,6 +372,11 @@ export default function CreateRequestScreen() {
         fullName: userProfile.fullName || '',
         city: userProfile.city || '',
       }));
+    }
+
+    // Initialize reCAPTCHA on web
+    if (Platform.OS === 'web') {
+      initializeRecaptcha().catch(console.error);
     }
   }, [userProfile]);
 
@@ -196,21 +416,89 @@ export default function CreateRequestScreen() {
     }
   };
 
+  const handleUseCurrentLocation = async () => {
+    setLocationLoading(true);
+    try {
+      const location = await getCurrentLocation();
+      if (location) {
+        setCurrentLocation(location);
+        const address = await getAddressFromCoordinates(location.latitude, location.longitude);
+        if (address) {
+          handleInputChange('dropOffAddress', address);
+        }
+        Alert.alert(
+          'Location Found',
+          `Current location has been set as the drop-off location.`,
+          [{ text: 'OK', style: 'default' }]
+        );
+      } else {
+        Alert.alert(
+          'Location Error',
+          'Unable to get your current location. Please make sure location services are enabled and try again.',
+          [{ text: 'OK', style: 'default' }]
+        );
+      }
+    } catch (error) {
+      console.error('Error getting current location:', error);
+      Alert.alert(
+        'Location Error',
+        'Failed to get your current location. Please try again or enter the address manually.',
+        [{ text: 'OK', style: 'default' }]
+      );
+    } finally {
+      setLocationLoading(false);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!validateForm()) return;
 
+    if (!user?.uid) {
+      Alert.alert('Error', 'You must be logged in to create a request');
+      return;
+    }
+
     setLoading(true);
+    setVerificationLoading(true);
 
     try {
+      // Perform anti-spam verification
+      const verification = await performAntiSpamVerification(
+        user.uid,
+        'request',
+        'create_blood_request'
+      );
+
+      setVerificationLoading(false);
+
+      if (!verification.success) {
+        Alert.alert(
+          'Request Blocked',
+          verification.error || 'Unable to verify request. Please try again later.',
+          [{ text: 'OK' }]
+        );
+        setLoading(false);
+        return;
+      }
+      // Get coordinates for the city (fallback if no precise location)
+      const cityCoordinates = getCityCoordinates(formData.city);
+      
       const requestData = {
-        userId: user?.uid,
+        userId: user.uid,
         fullName: formData.fullName.trim(),
         bloodType: formData.bloodType,
+        governorate: formData.governorate,
         city: formData.city,
         hospital: formData.hospital.trim(),
         contactNumber: formData.contactNumber.trim(),
         notes: formData.notes.trim(),
         urgent: formData.urgent,
+        dropOffAddress: formData.dropOffAddress.trim(),
+        // Location data for proximity notifications
+        location: currentLocation || cityCoordinates || null,
+        // Anti-spam verification data
+        captchaToken: verification.captchaToken,
+        verifiedAt: Timestamp.now(),
         createdAt: Timestamp.now(),
         status: 'active',
       };
@@ -218,7 +506,7 @@ export default function CreateRequestScreen() {
       const docRef = await addDoc(collection(db, 'requests'), requestData);
 
       await addDoc(collection(db, 'activity'), {
-        userId: user?.uid,
+        userId: user.uid,
         type: 'request_created',
         title: 'Blood Request Created',
         description: `You created a request for ${formData.bloodType} blood.`,
@@ -230,11 +518,13 @@ export default function CreateRequestScreen() {
       setFormData({
         fullName: userProfile?.fullName || '',
         bloodType: '',
+        governorate: '',
         city: userProfile?.city || '',
         hospital: '',
         contactNumber: '',
         notes: '',
         urgent: false,
+        dropOffAddress: '',
       });
 
       Alert.alert(
@@ -259,12 +549,23 @@ export default function CreateRequestScreen() {
       }, 3000);
     } catch (error) {
       console.error('Error creating request:', error);
-      Alert.alert(
-        'Error',
-        'Failed to create your request. Please try again.'
-      );
+      
+      // Handle specific spam/verification errors
+      if (error instanceof Error && error.message.includes('spam')) {
+        Alert.alert(
+          'Request Blocked',
+          'Your request has been blocked due to spam protection. Please try again later or contact support if you believe this is an error.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert(
+          'Error',
+          'Failed to create your request. Please check your internet connection and try again.'
+        );
+      }
     } finally {
       setLoading(false);
+      setVerificationLoading(false);
     }
   };
 
@@ -343,6 +644,24 @@ export default function CreateRequestScreen() {
               )}
             </View>
 
+            {/* Governorate */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>
+                Governorate <Text style={styles.required}>*</Text>
+              </Text>
+              <GovernorateDropdown
+                selectedGovernorate={formData.governorate}
+                onSelect={(governorate) => {
+                  handleInputChange('governorate', governorate);
+                  handleInputChange('city', ''); // Clear city when governorate changes
+                }}
+                error={!!errors.governorate}
+              />
+              {errors.governorate && (
+                <Text style={styles.errorText}>{errors.governorate}</Text>
+              )}
+            </View>
+
             {/* City */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>
@@ -350,6 +669,7 @@ export default function CreateRequestScreen() {
               </Text>
               <CityDropdown
                 selectedCity={formData.city}
+                selectedGovernorate={formData.governorate}
                 onSelect={(city) => handleInputChange('city', city)}
                 error={!!errors.city}
               />
@@ -386,9 +706,19 @@ export default function CreateRequestScreen() {
                 Specify where donors should deliver the blood
               </Text>
               <View style={styles.locationContainer}>
-                <TouchableOpacity style={styles.locationButton}>
-                  <Ionicons name="location-outline" size={20} color="#E53E3E" />
-                  <Text style={styles.locationButtonText}>Use Current Location</Text>
+                <TouchableOpacity 
+                  style={styles.locationButton}
+                  onPress={handleUseCurrentLocation}
+                  disabled={locationLoading}
+                >
+                  {locationLoading ? (
+                    <ActivityIndicator size="small" color="#3182CE" />
+                  ) : (
+                    <Ionicons name="location-outline" size={20} color="#3182CE" />
+                  )}
+                  <Text style={styles.locationButtonText}>
+                    {locationLoading ? 'Getting Location...' : 'Use Current Location'}
+                  </Text>
                 </TouchableOpacity>
                 <Text style={styles.orText}>or</Text>
                 <View style={styles.inputContainer}>
@@ -397,6 +727,8 @@ export default function CreateRequestScreen() {
                     style={styles.textInput}
                     placeholder="Enter drop-off address"
                     placeholderTextColor="#999"
+                    value={formData.dropOffAddress}
+                    onChangeText={(value) => handleInputChange('dropOffAddress', value)}
                     editable={!loading}
                   />
                 </View>
@@ -472,19 +804,37 @@ export default function CreateRequestScreen() {
               </Text>
             </View>
 
+            {/* Security Notice */}
+            <View style={styles.securityBox}>
+              <Ionicons name="shield-checkmark" size={20} color="#10B981" />
+              <Text style={styles.securityText}>
+                This form is protected by anti-spam verification to ensure legitimate requests only.
+              </Text>
+            </View>
+
+            {/* Verification Status */}
+            {verificationLoading && (
+              <View style={styles.verificationBox}>
+                <ActivityIndicator size="small" color="#F59E0B" />
+                <Text style={styles.verificationText}>
+                  Verifying request authenticity...
+                </Text>
+              </View>
+            )}
+
             {/* Submit Button */}
             <LinearGradient
               colors={['#E53E3E', '#C53030']}
-              style={[styles.submitButton, loading && styles.buttonDisabled]}
+              style={[styles.submitButton, (loading || verificationLoading) && styles.buttonDisabled]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
             >
               <TouchableOpacity
                 style={styles.submitButtonInner}
                 onPress={handleSubmit}
-                disabled={loading}
+                disabled={loading || verificationLoading}
               >
-                {loading ? (
+                {loading || verificationLoading ? (
                   <ActivityIndicator size="small" color="white" />
                 ) : (
                   <>
@@ -499,7 +849,7 @@ export default function CreateRequestScreen() {
             <TouchableOpacity
               style={styles.cancelButton}
               onPress={() => router.back()}
-              disabled={loading}
+              disabled={loading || verificationLoading}
             >
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
@@ -824,6 +1174,35 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 14,
     color: '#666',
+    fontWeight: '500',
+  },
+  securityBox: {
+    flexDirection: 'row',
+    backgroundColor: '#ECFDF5',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    alignItems: 'flex-start',
+  },
+  securityText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#065F46',
+    marginLeft: 12,
+    lineHeight: 20,
+  },
+  verificationBox: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFBEB',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  verificationText: {
+    fontSize: 14,
+    color: '#92400E',
+    marginLeft: 12,
     fontWeight: '500',
   },
 });

@@ -1,21 +1,26 @@
 // app/(app)/(tabs)/index.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ActivityIndicator,
   TouchableOpacity,
   SafeAreaView,
   ScrollView,
   Dimensions,
-  Alert
+  Alert,
+  RefreshControl,
+  ActivityIndicator,
+  Image
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useNotifications } from '../../../contexts/NotificationContext';
+import { useTheme } from '../../../contexts/ThemeContext';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { SkeletonCard } from '../../../components/SkeletonLoader';
 
 const { width } = Dimensions.get('window');
 
@@ -25,16 +30,30 @@ interface StatsCardProps {
   title: string;
   count: number;
   color: string;
+  colors: any;
 }
 
-const StatsCard: React.FC<StatsCardProps> = ({ icon, title, count, color }) => (
-  <View style={[styles.statsCard, { borderLeftColor: color }]}>
+const StatsCard: React.FC<StatsCardProps> = ({ icon, title, count, color, colors }) => (
+  <View style={[{
+    backgroundColor: colors.cardBackground,
+    width: (width - 60) / 2,
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: color,
+    shadowColor: colors.shadow || '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  }]}>
     <View style={styles.statsIconContainer}>
       <Ionicons name={icon as any} size={24} color={color} />
     </View>
     <View style={styles.statsContent}>
-      <Text style={styles.statsCount}>{count}</Text>
-      <Text style={styles.statsTitle}>{title}</Text>
+      <Text style={[styles.statsCount, { color: colors.primaryText }]}>{count}</Text>
+      <Text style={[styles.statsTitle, { color: colors.secondaryText }]}>{title}</Text>
     </View>
   </View>
 );
@@ -45,18 +64,28 @@ interface ActionButtonProps {
   subtitle: string;
   onPress: () => void;
   color: string;
+  colors: any;
 }
 
-const ActionButton: React.FC<ActionButtonProps> = ({ icon, title, subtitle, onPress, color }) => (
-  <TouchableOpacity style={styles.actionButton} onPress={onPress}>
+const ActionButton: React.FC<ActionButtonProps> = ({ icon, title, subtitle, onPress, color, colors }) => (
+  <TouchableOpacity 
+    style={[{
+      flexDirection: 'row',
+      alignItems: 'center',
+      padding: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    }]} 
+    onPress={onPress}
+  >
     <View style={[styles.actionIconContainer, { backgroundColor: color + '15' }]}>
       <Ionicons name={icon as any} size={24} color={color} />
     </View>
     <View style={styles.actionContent}>
-      <Text style={styles.actionTitle}>{title}</Text>
-      <Text style={styles.actionSubtitle}>{subtitle}</Text>
+      <Text style={[styles.actionTitle, { color: colors.primaryText }]}>{title}</Text>
+      <Text style={[styles.actionSubtitle, { color: colors.secondaryText }]}>{subtitle}</Text>
     </View>
-    <Ionicons name="chevron-forward" size={20} color="#666" />
+    <Ionicons name="chevron-forward" size={20} color={colors.secondaryText} />
   </TouchableOpacity>
 );
 
@@ -64,12 +93,96 @@ const ActionButton: React.FC<ActionButtonProps> = ({ icon, title, subtitle, onPr
 export default function HomeScreen() {
   const { user, userProfile, loading, logout } = useAuth();
   const { unreadCount } = useNotifications();
+  const { colors } = useTheme();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [stats, setStats] = useState({
     totalRequests: 12,
     activeRequests: 5,
     responsesGiven: 8,
     peopleSaved: 3
+  });
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.title = 'Home - BloodBond';
+    }
+  }, []);
+
+  // Create dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.screenBackground,
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: colors.screenBackground,
+    },
+    loadingText: {
+      marginTop: 12,
+      fontSize: 16,
+      color: colors.secondaryText,
+    },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: 20,
+      paddingTop: 10,
+      paddingBottom: 20,
+      backgroundColor: colors.cardBackground,
+    },
+    greeting: {
+      fontSize: 16,
+      color: colors.secondaryText,
+    },
+    userName: {
+      fontSize: 24,
+      fontWeight: 'bold',
+      color: colors.primaryText,
+      marginTop: 2,
+    },
+    profileCard: {
+      margin: 20,
+      backgroundColor: colors.cardBackground,
+      borderRadius: 12,
+      padding: 20,
+      shadowColor: colors.shadow || '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 8,
+      elevation: 3,
+    },
+    profileName: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: colors.primaryText,
+    },
+    profileLocation: {
+      fontSize: 14,
+      color: colors.secondaryText,
+      marginTop: 4,
+    },
+    sectionTitle: {
+      fontSize: 20,
+      fontWeight: '600',
+      color: colors.primaryText,
+      marginBottom: 16,
+    },
+    actionsList: {
+      backgroundColor: colors.cardBackground,
+      borderRadius: 12,
+      overflow: 'hidden',
+      shadowColor: colors.shadow || '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 8,
+      elevation: 3,
+    },
   });
 
   const handleLogout = async () => {
@@ -86,12 +199,81 @@ export default function HomeScreen() {
   };
 
 
+  const onRefresh = async () => {
+    setRefreshing(true);
+    // Simulate data refresh
+    setTimeout(() => {
+      setRefreshing(false);
+    }, 1000);
+  };
+
   if (loading || !user || !userProfile) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#E53E3E" />
-        <Text style={styles.loadingText}>Loading BloodBond...</Text>
-      </View>
+      <SafeAreaView style={dynamicStyles.container}>
+        <View style={[dynamicStyles.header, { paddingTop: insets.top }]}>
+          <View style={styles.headerLeft}>
+            <Text style={dynamicStyles.greeting}>Loading...</Text>
+            <Text style={dynamicStyles.userName}>BloodBond</Text>
+          </View>
+          <View style={styles.headerRight}>
+            <View style={styles.notificationButton}>
+              <Ionicons name="notifications-outline" size={24} color={colors.secondaryText} />
+            </View>
+            <View style={styles.logoutButton}>
+              <Ionicons name="log-out-outline" size={24} color={colors.secondaryText} />
+            </View>
+          </View>
+        </View>
+
+        <ScrollView 
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[colors.primary]}
+              tintColor={colors.primary}
+              progressBackgroundColor={colors.cardBackground}
+            />
+          }
+        >
+          <LinearGradient
+            colors={['#E53E3E', '#C53030']}
+            style={styles.heroSection}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
+            <View style={styles.heroContent}>
+              <Ionicons name="heart" size={32} color="white" />
+              <Text style={styles.heroTitle}>BloodBond</Text>
+              <Text style={styles.heroSubtitle}>
+                Connecting lives through the gift of blood
+              </Text>
+            </View>
+          </LinearGradient>
+
+          <View style={{ margin: 20 }}>
+            <SkeletonCard colors={colors} />
+          </View>
+
+          <View style={styles.statsSection}>
+            <Text style={dynamicStyles.sectionTitle}>Your Impact</Text>
+            <View style={styles.statsGrid}>
+              <SkeletonCard colors={colors} />
+              <SkeletonCard colors={colors} />
+              <SkeletonCard colors={colors} />
+              <SkeletonCard colors={colors} />
+            </View>
+          </View>
+
+          <View style={styles.actionsSection}>
+            <Text style={dynamicStyles.sectionTitle}>Quick Actions</Text>
+            <View style={dynamicStyles.actionsList}>
+              <SkeletonCard colors={colors} />
+            </View>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
     );
   }
 
@@ -104,16 +286,16 @@ export default function HomeScreen() {
   };
 
   return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={dynamicStyles.container}>
         {/* Header */}
-        <View style={styles.header}>
+        <View style={dynamicStyles.header}>
           <View style={styles.headerLeft}>
-            <Text style={styles.greeting}>{getGreeting()}</Text>
-            <Text style={styles.userName}>{firstName} 👋</Text>
+            <Text style={dynamicStyles.greeting}>{getGreeting()}</Text>
+            <Text style={dynamicStyles.userName}>{firstName} 👋</Text>
           </View>
           <View style={styles.headerRight}>
             <TouchableOpacity style={styles.notificationButton} onPress={() => router.push('/notifications')}>
-              <Ionicons name="notifications-outline" size={24} color="#666" />
+              <Ionicons name="notifications-outline" size={24} color={colors.secondaryText} />
               {unreadCount > 0 && (
                 <View style={styles.notificationBadge}>
                   <Text style={styles.notificationBadgeText}>
@@ -123,7 +305,7 @@ export default function HomeScreen() {
               )}
             </TouchableOpacity>
             <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-              <Ionicons name="log-out-outline" size={24} color="#666" />
+              <Ionicons name="log-out-outline" size={24} color={colors.secondaryText} />
             </TouchableOpacity>
           </View>
         </View>
@@ -145,59 +327,77 @@ export default function HomeScreen() {
             </View>
           </LinearGradient>
 
-          <View style={styles.profileCard}>
+          <View style={dynamicStyles.profileCard}>
             <View style={styles.profileHeader}>
-              <View style={[styles.bloodTypeBadge, { backgroundColor: '#E53E3E' }]}>
-                <Text style={styles.bloodTypeText}>{userProfile.bloodType}</Text>
-              </View>
+              {userProfile.profilePicture ? (
+                <Image 
+                  source={{ uri: userProfile.profilePicture }} 
+                  style={styles.profilePicture}
+                />
+              ) : (
+                <View style={[styles.profilePicturePlaceholder, { backgroundColor: colors.border }]}>
+                  <Ionicons name="person" size={24} color={colors.secondaryText} />
+                </View>
+              )}
+              
               <View style={styles.profileInfo}>
-                <Text style={styles.profileName}>{userProfile.fullName}</Text>
-                <Text style={styles.profileLocation}>
-                  <Ionicons name="location" size={14} color="#666" /> {userProfile.city}
+                <View style={styles.profileNameRow}>
+                  <Text style={dynamicStyles.profileName}>{userProfile.fullName}</Text>
+                  <View style={[styles.bloodTypeBadge, { backgroundColor: '#E53E3E' }]}>
+                    <Text style={styles.bloodTypeText}>{userProfile.bloodType}</Text>
+                  </View>
+                </View>
+                <Text style={dynamicStyles.profileLocation}>
+                  <Ionicons name="location" size={14} color={colors.secondaryText} /> {userProfile.city}
                 </Text>
               </View>
             </View>
           </View>
 
           <View style={styles.statsSection}>
-            <Text style={styles.sectionTitle}>Your Impact</Text>
+            <Text style={dynamicStyles.sectionTitle}>Your Impact</Text>
             <View style={styles.statsGrid}>
               <StatsCard
                 icon="pulse"
                 title="Total Requests"
                 count={stats.totalRequests}
                 color="#E53E3E"
+                colors={colors}
               />
               <StatsCard
                 icon="time"
                 title="Active Requests"
                 count={stats.activeRequests}
                 color="#F56500"
+                colors={colors}
               />
               <StatsCard
                 icon="chatbubble-ellipses"
                 title="Responses Given"
                 count={stats.responsesGiven}
                 color="#38A169"
+                colors={colors}
               />
               <StatsCard
                 icon="people"
                 title="Lives Touched"
                 count={stats.peopleSaved}
                 color="#3182CE"
+                colors={colors}
               />
             </View>
           </View>
 
           <View style={styles.actionsSection}>
-            <Text style={styles.sectionTitle}>Quick Actions</Text>
-            <View style={styles.actionsList}>
+            <Text style={dynamicStyles.sectionTitle}>Quick Actions</Text>
+            <View style={dynamicStyles.actionsList}>
               <ActionButton
                 icon="add-circle"
                 title="Create Request"
                 subtitle="Request blood donation"
                 onPress={() => router.push('/requests/create')}
                 color="#E53E3E"
+                colors={colors}
               />
               <ActionButton
                 icon="list"
@@ -205,6 +405,7 @@ export default function HomeScreen() {
                 subtitle="Find people who need help"
                 onPress={() => router.push('/requests')}
                 color="#3182CE"
+                colors={colors}
               />
               <ActionButton
                 icon="person"
@@ -212,6 +413,7 @@ export default function HomeScreen() {
                 subtitle="Manage your information"
                 onPress={() => router.push('/(app)/profile/edit')}
                 color="#38A169"
+                colors={colors}
               />
               <ActionButton
                 icon="notifications"
@@ -219,6 +421,7 @@ export default function HomeScreen() {
                 subtitle="Stay updated on responses"
                 onPress={() => router.push('/notifications')}
                 color="#F56500"
+                colors={colors}
               />
             </View>
           </View>
@@ -243,15 +446,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 20,
-    backgroundColor: '#fff',
-  },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: 20,
+      // paddingTop: 10, // Removed, handled by insets.top
+      paddingBottom: 20,
+      // backgroundColor: colors.cardBackground, // Moved to dynamicStyles.header
+    },
   headerLeft: {
     flex: 1,
   },
@@ -331,17 +534,35 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  profilePicture: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+  },
+  profilePicturePlaceholder: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  profileNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
   bloodTypeBadge: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
   },
   bloodTypeText: {
     color: 'white',
     fontWeight: 'bold',
-    fontSize: 16,
+    fontSize: 12,
   },
   profileInfo: {
     marginLeft: 16,

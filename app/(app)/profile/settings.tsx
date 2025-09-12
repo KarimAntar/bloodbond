@@ -14,9 +14,18 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useTheme } from '../../../contexts/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../../../firebase/firebaseConfig';
+import { updatePassword, deleteUser, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
+import { auth } from '../../../firebase/firebaseConfig';
+import { Platform } from 'react-native';
+import * as Notifications from 'expo-notifications';
+import * as Location from 'expo-location';
+import { saveDataExportRequest } from '../../../utils/dataExport';
+import { submitBugReport, getBugReportTemplate } from '../../../utils/bugReporting';
+import { getLegalDocument, formatLegalContent } from '../../../utils/legalContent';
 
 const SettingOption: React.FC<{
   icon: string;
@@ -26,56 +35,133 @@ const SettingOption: React.FC<{
   rightElement?: React.ReactNode;
   color?: string;
   danger?: boolean;
-}> = ({ icon, title, subtitle, onPress, rightElement, color = '#666', danger = false }) => (
-  <TouchableOpacity style={styles.settingOption} onPress={onPress}>
-    <View style={[styles.optionIcon, { backgroundColor: color + '20' }]}>
+  colors: any;
+}> = ({ icon, title, subtitle, onPress, rightElement, color = '#666', danger = false, colors }) => (
+  <TouchableOpacity 
+    style={{
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 20,
+      paddingVertical: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    }} 
+    onPress={onPress}
+  >
+    <View style={[{
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginRight: 16,
+      backgroundColor: color + '20'
+    }]}>
       <Ionicons name={icon as any} size={20} color={danger ? '#DC2626' : color} />
     </View>
-    <View style={styles.optionContent}>
-      <Text style={[styles.optionTitle, danger && styles.dangerText]}>{title}</Text>
-      {subtitle && <Text style={styles.optionSubtitle}>{subtitle}</Text>}
+    <View style={{ flex: 1 }}>
+      <Text style={{
+        fontSize: 16,
+        fontWeight: '500',
+        color: danger ? '#DC2626' : colors.primaryText,
+        marginBottom: 2,
+      }}>{title}</Text>
+      {subtitle && <Text style={{
+        fontSize: 14,
+        color: colors.secondaryText,
+      }}>{subtitle}</Text>}
     </View>
-    {rightElement || <Ionicons name="chevron-forward" size={20} color="#ccc" />}
+    {rightElement || <Ionicons name="chevron-forward" size={20} color={colors.secondaryText} />}
   </TouchableOpacity>
 );
 
 export default function AppSettingsScreen() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [locationEnabled, setLocationEnabled] = useState(true);
-  const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [darkModeEnabled, setDarkModeEnabled] = useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [changePasswordModalVisible, setChangePasswordModalVisible] = useState(false);
+  const [themeModalVisible, setThemeModalVisible] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
   const { user, userProfile, logout } = useAuth();
+  const { theme, setTheme, colors } = useTheme();
   const router = useRouter();
 
   const handleNotificationToggle = async (value: boolean) => {
-    setNotificationsEnabled(value);
-    // Here you would typically save this preference to your backend
-    Alert.alert('Success', `Push notifications ${value ? 'enabled' : 'disabled'}`);
+    try {
+      if (value) {
+        const { status } = await Notifications.requestPermissionsAsync();
+        if (status === 'granted') {
+          setNotificationsEnabled(true);
+          // Save preference to user profile
+          if (user?.uid) {
+            await updateDoc(doc(db, 'users', user.uid), {
+              notificationsEnabled: true
+            });
+          }
+    Alert.alert('Notifications Enabled', 'Push notifications have been enabled for your account.');
+        } else {
+          Alert.alert('Permission Denied', 'Please enable notifications in your device settings');
+          setNotificationsEnabled(false);
+        }
+      } else {
+        setNotificationsEnabled(false);
+        // Save preference to user profile
+        if (user?.uid) {
+          await updateDoc(doc(db, 'users', user.uid), {
+            notificationsEnabled: false
+          });
+        }
+    Alert.alert('Notifications Disabled', 'Push notifications have been disabled for your account.');
+      }
+    } catch (error) {
+      console.error('Error toggling notifications:', error);
+      Alert.alert('Error', 'Failed to update notification settings');
+    }
   };
 
   const handleLocationToggle = async (value: boolean) => {
-    setLocationEnabled(value);
-    // Here you would typically save this preference to your backend
-    Alert.alert('Success', `Location services ${value ? 'enabled' : 'disabled'}`);
+    try {
+      if (value) {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          setLocationEnabled(true);
+          // Save preference to user profile
+          if (user?.uid) {
+            await updateDoc(doc(db, 'users', user.uid), {
+              locationEnabled: true
+            });
+          }
+          Alert.alert('Location Enabled', 'Location services have been enabled for your account.');
+        } else {
+          Alert.alert('Permission Denied', 'Please enable location services in your device settings');
+          setLocationEnabled(false);
+        }
+      } else {
+        setLocationEnabled(false);
+        // Save preference to user profile
+        if (user?.uid) {
+          await updateDoc(doc(db, 'users', user.uid), {
+            locationEnabled: false
+          });
+        }
+        Alert.alert('Location Disabled', 'Location services have been disabled for your account.');
+      }
+    } catch (error) {
+      console.error('Error toggling location:', error);
+      Alert.alert('Error', 'Failed to update location settings');
+    }
   };
 
-  const handleBiometricToggle = async (value: boolean) => {
-    setBiometricEnabled(value);
-    // Here you would typically save this preference to your backend
-    Alert.alert('Success', `Biometric authentication ${value ? 'enabled' : 'disabled'}`);
-  };
 
   const handleDarkModeToggle = async (value: boolean) => {
     setDarkModeEnabled(value);
     // Here you would typically save this preference to your backend
-    Alert.alert('Success', `Dark mode ${value ? 'enabled' : 'disabled'}`);
+    Alert.alert('Theme Updated', `Dark mode has been ${value ? 'enabled' : 'disabled'} for your account.`);
   };
 
   const handleChangePassword = () => {
@@ -100,16 +186,35 @@ export default function AppSettingsScreen() {
 
     setLoading(true);
     try {
-      // Here you would typically call your authentication service to change password
-      // For now, we'll just show a success message
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
+      if (!user || !user.email) {
+        throw new Error('User not authenticated');
+      }
+
+      // Reauthenticate user with current password
+      const credential = EmailAuthProvider.credential(user.email, currentPassword);
+      await reauthenticateWithCredential(user, credential);
+
+      // Update password
+      await updatePassword(user, newPassword);
+
       Alert.alert('Success', 'Password changed successfully');
       setChangePasswordModalVisible(false);
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-    } catch (error) {
-      Alert.alert('Error', 'Failed to change password. Please try again.');
+    } catch (error: any) {
+      console.error('Error changing password:', error);
+      let errorMessage = 'Failed to change password. Please try again.';
+
+      if (error.code === 'auth/wrong-password') {
+        errorMessage = 'Current password is incorrect';
+      } else if (error.code === 'auth/weak-password') {
+        errorMessage = 'New password is too weak';
+      } else if (error.code === 'auth/requires-recent-login') {
+        errorMessage = 'Please log out and log back in to change your password';
+      }
+
+      Alert.alert('Error', errorMessage);
     } finally {
       setLoading(false);
     }
@@ -124,85 +229,268 @@ export default function AppSettingsScreen() {
     setLoading(true);
 
     try {
-      // Delete user data from Firestore
-      if (user?.uid) {
-        await deleteDoc(doc(db, 'users', user.uid));
+      if (!user) {
+        throw new Error('User not authenticated');
       }
 
-      // Here you would typically call your authentication service to delete the account
-      await logout();
+      // Delete user data from Firestore first
+      await deleteDoc(doc(db, 'users', user.uid));
+
+      // Delete user from Firebase Auth
+      await deleteUser(user);
+
       Alert.alert('Account Deleted', 'Your account has been permanently deleted.');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting account:', error);
-      Alert.alert('Error', 'Failed to delete account. Please try again.');
+      let errorMessage = 'Failed to delete account. Please try again.';
+
+      if (error.code === 'auth/requires-recent-login') {
+        errorMessage = 'Please log out and log back in to delete your account';
+      }
+
+      Alert.alert('Error', errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
   const handlePrivacyPolicy = () => {
-    Alert.alert('Privacy Policy', 'Privacy Policy content would be displayed here.');
+    const privacyDoc = getLegalDocument('privacy');
+    Alert.alert(
+      privacyDoc.title,
+      `Version: ${privacyDoc.version}\nLast Updated: ${privacyDoc.lastUpdated}\n\nBloodBond is committed to protecting your privacy. We collect personal information to provide blood donation services, use your data only for matching donors with recipients, never share your information with third parties without consent, and maintain strong security measures.\n\nFor the complete policy, please visit our website or request the full document via email.`,
+      [
+        { text: 'OK', style: 'default' },
+        { text: 'Email Full Policy', onPress: () => {
+          Alert.alert('Full Policy', 'The complete Privacy Policy will be sent to your email address.');
+        }}
+      ]
+    );
   };
 
   const handleTermsOfService = () => {
-    Alert.alert('Terms of Service', 'Terms of Service content would be displayed here.');
+    const termsDoc = getLegalDocument('terms');
+    Alert.alert(
+      termsDoc.title,
+      `Version: ${termsDoc.version}\nLast Updated: ${termsDoc.lastUpdated}\n\nBy using BloodBond, you agree to:\n• Be 18+ and eligible for blood donation\n• Provide accurate medical information\n• Respect all users and maintain confidentiality\n• Use the app responsibly for emergency situations\n• Comply with all applicable laws\n\nFor complete terms, please visit our website or request the full document via email.`,
+      [
+        { text: 'OK', style: 'default' },
+        { text: 'Email Full Terms', onPress: () => {
+          Alert.alert('Full Terms', 'The complete Terms of Service will be sent to your email address.');
+        }}
+      ]
+    );
   };
 
-  const handleDataExport = () => {
-    Alert.alert('Data Export', 'Your data export will be prepared and sent to your email.');
+  const handleDataExport = async () => {
+    try {
+      if (!user?.uid || !user?.email) {
+        Alert.alert('Error', 'User information not found');
+        return;
+      }
+
+      setLoading(true);
+      const result = await saveDataExportRequest(user.uid, user.email);
+      
+      Alert.alert(
+        'Data Export Started',
+        `${result.message}\n\nEstimated size: ${result.estimatedSize}`
+      );
+    } catch (error) {
+      console.error('Error requesting data export:', error);
+      Alert.alert('Error', 'Failed to request data export. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleClearCache = () => {
     Alert.alert(
       'Clear Cache',
-      'This will clear all cached data. Are you sure?',
+      'This will clear all cached data including:\n\n• Temporary files\n• Image cache\n• App preferences\n• Offline data\n\nThis action cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Clear',
+          text: 'Clear Cache',
           style: 'destructive',
-          onPress: () => Alert.alert('Success', 'Cache cleared successfully')
+          onPress: async () => {
+            try {
+              // In a real app, this would clear various caches
+              // For now, we'll simulate the process
+              setLoading(true);
+
+              // Simulate clearing cache
+              await new Promise(resolve => setTimeout(resolve, 2000));
+
+              // Reset local state preferences
+              setNotificationsEnabled(true);
+              setLocationEnabled(true);
+              setDarkModeEnabled(false);
+
+              setLoading(false);
+              Alert.alert('Cache Cleared', 'All cached data and preferences have been reset.');
+            } catch (error) {
+              console.error('Error clearing cache:', error);
+              setLoading(false);
+              Alert.alert('Error', 'Failed to clear cache. Please try again.');
+            }
+          }
         }
       ]
     );
   };
 
+  // Create dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.screenBackground,
+    },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: 20,
+      paddingVertical: 16,
+      backgroundColor: colors.cardBackground,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    title: {
+      fontSize: 20,
+      fontWeight: 'bold',
+      color: colors.primaryText,
+    },
+    sectionTitle: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.primaryText,
+      paddingHorizontal: 20,
+      paddingVertical: 12,
+      backgroundColor: colors.sectionBackground,
+    },
+    optionsContainer: {
+      backgroundColor: colors.cardBackground,
+    },
+    settingOption: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 20,
+      paddingVertical: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    optionTitle: {
+      fontSize: 16,
+      fontWeight: '500',
+      color: colors.primaryText,
+      marginBottom: 2,
+    },
+    optionSubtitle: {
+      fontSize: 14,
+      color: colors.secondaryText,
+    },
+    versionText: {
+      fontSize: 14,
+      color: colors.secondaryText,
+      marginBottom: 4,
+    },
+    versionSubtext: {
+      fontSize: 12,
+      color: colors.subtitleText,
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: colors.overlay,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    modalContent: {
+      backgroundColor: colors.modalBackground,
+      borderRadius: 16,
+      padding: 24,
+      width: '90%',
+      maxWidth: 400,
+    },
+    modalTitle: {
+      fontSize: 20,
+      fontWeight: 'bold',
+      color: colors.primaryText,
+      marginLeft: 12,
+    },
+    modalMessage: {
+      fontSize: 16,
+      color: colors.secondaryText,
+      lineHeight: 24,
+      marginBottom: 16,
+    },
+    inputLabel: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.primaryText,
+      marginBottom: 8,
+    },
+    textInput: {
+      borderWidth: 1,
+      borderColor: colors.inputBorder,
+      borderRadius: 8,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      fontSize: 16,
+      color: colors.primaryText,
+      backgroundColor: colors.cardBackground,
+    },
+    cancelButtonText: {
+      fontSize: 16,
+      color: colors.secondaryText,
+      fontWeight: '600',
+    },
+    themeOption: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 16,
+      paddingHorizontal: 20,
+      borderRadius: 12,
+      marginBottom: 8,
+      backgroundColor: colors.cardBackground,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    themeOptionTitle: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.primaryText,
+      marginBottom: 2,
+    },
+    themeOptionSubtitle: {
+      fontSize: 14,
+      color: colors.secondaryText,
+    },
+  });
+
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
+    <SafeAreaView style={dynamicStyles.container}>
+      <View style={dynamicStyles.header}>
         <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="#1a1a1a" />
+          <Ionicons name="arrow-back" size={24} color={colors.primaryText} />
         </TouchableOpacity>
-        <Text style={styles.title}>App Settings</Text>
+        <Text style={dynamicStyles.title}>App Settings</Text>
         <View style={{ width: 24 }} />
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Privacy & Security */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Privacy & Security</Text>
-          <View style={styles.optionsContainer}>
-            <SettingOption
-              icon="finger-print"
-              title="Biometric Authentication"
-              subtitle="Use fingerprint or face ID"
-              onPress={() => {}}
-              rightElement={
-                <Switch
-                  value={biometricEnabled}
-                  onValueChange={handleBiometricToggle}
-                  trackColor={{ false: '#e1e5e9', true: '#E53E3E' }}
-                  thumbColor={biometricEnabled ? '#fff' : '#f4f3f4'}
-                />
-              }
-              color="#8B5CF6"
-            />
+          <Text style={dynamicStyles.sectionTitle}>Privacy & Security</Text>
+          <View style={dynamicStyles.optionsContainer}>
+            
             <SettingOption
               icon="lock-closed"
               title="Change Password"
               subtitle="Update your account password"
               onPress={handleChangePassword}
               color="#E53E3E"
+              colors={colors}
             />
             <SettingOption
               icon="shield-checkmark"
@@ -210,19 +498,20 @@ export default function AppSettingsScreen() {
               subtitle="Control your data sharing"
               onPress={handlePrivacyPolicy}
               color="#10B981"
+              colors={colors}
             />
           </View>
         </View>
 
         {/* Notifications */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Notifications</Text>
-          <View style={styles.optionsContainer}>
+          <Text style={dynamicStyles.sectionTitle}>Notifications</Text>
+          <View style={dynamicStyles.optionsContainer}>
             <SettingOption
               icon="notifications"
               title="Push Notifications"
               subtitle="Get notified about requests"
-              onPress={() => {}}
+              onPress={() => handleNotificationToggle(!notificationsEnabled)}
               rightElement={
                 <Switch
                   value={notificationsEnabled}
@@ -232,12 +521,13 @@ export default function AppSettingsScreen() {
                 />
               }
               color="#F56500"
+              colors={colors}
             />
             <SettingOption
               icon="location"
               title="Location Services"
               subtitle="Find requests near you"
-              onPress={() => {}}
+              onPress={() => handleLocationToggle(!locationEnabled)}
               rightElement={
                 <Switch
                   value={locationEnabled}
@@ -247,42 +537,37 @@ export default function AppSettingsScreen() {
                 />
               }
               color="#3182CE"
+              colors={colors}
             />
           </View>
         </View>
 
         {/* Appearance */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Appearance</Text>
-          <View style={styles.optionsContainer}>
+          <Text style={dynamicStyles.sectionTitle}>Appearance</Text>
+          <View style={dynamicStyles.optionsContainer}>
             <SettingOption
-              icon="moon"
-              title="Dark Mode"
-              subtitle="Switch to dark theme"
-              onPress={() => {}}
-              rightElement={
-                <Switch
-                  value={darkModeEnabled}
-                  onValueChange={handleDarkModeToggle}
-                  trackColor={{ false: '#e1e5e9', true: '#E53E3E' }}
-                  thumbColor={darkModeEnabled ? '#fff' : '#f4f3f4'}
-                />
-              }
+              icon="color-palette"
+              title="Theme"
+              subtitle={`Current: ${theme.charAt(0).toUpperCase() + theme.slice(1)}`}
+              onPress={() => setThemeModalVisible(true)}
               color="#6B46C1"
+              colors={colors}
             />
           </View>
         </View>
 
         {/* Data & Storage */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Data & Storage</Text>
-          <View style={styles.optionsContainer}>
+          <Text style={dynamicStyles.sectionTitle}>Data & Storage</Text>
+          <View style={dynamicStyles.optionsContainer}>
             <SettingOption
               icon="download"
               title="Export Data"
               subtitle="Download your data"
               onPress={handleDataExport}
               color="#38A169"
+              colors={colors}
             />
             <SettingOption
               icon="trash"
@@ -290,20 +575,22 @@ export default function AppSettingsScreen() {
               subtitle="Free up storage space"
               onPress={handleClearCache}
               color="#F56500"
+              colors={colors}
             />
           </View>
         </View>
 
         {/* Legal */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Legal</Text>
-          <View style={styles.optionsContainer}>
+          <Text style={dynamicStyles.sectionTitle}>Legal</Text>
+          <View style={dynamicStyles.optionsContainer}>
             <SettingOption
               icon="document-text"
               title="Terms of Service"
               subtitle="Read our terms and conditions"
               onPress={handleTermsOfService}
               color="#3182CE"
+              colors={colors}
             />
             <SettingOption
               icon="shield-checkmark"
@@ -311,14 +598,15 @@ export default function AppSettingsScreen() {
               subtitle="Learn how we protect your data"
               onPress={handlePrivacyPolicy}
               color="#10B981"
+              colors={colors}
             />
           </View>
         </View>
 
         {/* Danger Zone */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Danger Zone</Text>
-          <View style={styles.optionsContainer}>
+          <Text style={dynamicStyles.sectionTitle}>Danger Zone</Text>
+          <View style={dynamicStyles.optionsContainer}>
             <SettingOption
               icon="trash"
               title="Delete Account"
@@ -326,13 +614,14 @@ export default function AppSettingsScreen() {
               onPress={handleDeleteAccount}
               color="#DC2626"
               danger={true}
+              colors={colors}
             />
           </View>
         </View>
 
         <View style={styles.versionContainer}>
-          <Text style={styles.versionText}>BloodBond v1.0.0</Text>
-          <Text style={styles.versionSubtext}>Settings last updated: Today</Text>
+          <Text style={dynamicStyles.versionText}>BloodBond v1.0.0</Text>
+          <Text style={dynamicStyles.versionSubtext}>Settings last updated: Today</Text>
         </View>
       </ScrollView>
 
@@ -463,6 +752,104 @@ export default function AppSettingsScreen() {
                     <Text style={styles.deleteConfirmButtonText}>Delete Account</Text>
                   </>
                 )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Theme Selection Modal */}
+      <Modal
+        visible={themeModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setThemeModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Ionicons name="color-palette" size={24} color="#6B46C1" />
+              <Text style={styles.modalTitle}>Choose Theme</Text>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.themeOption, theme === 'light' && styles.themeOptionSelected]}
+              onPress={async () => {
+                await setTheme('light');
+                setThemeModalVisible(false);
+                Alert.alert('Theme Updated', 'Light theme has been applied.');
+              }}
+            >
+              <View style={styles.themeOptionContent}>
+                <Ionicons name="sunny" size={24} color={theme === 'light' ? '#6B46C1' : '#666'} />
+                <View style={styles.themeOptionText}>
+                  <Text style={[styles.themeOptionTitle, theme === 'light' && styles.themeOptionTitleSelected]}>
+                    Light
+                  </Text>
+                  <Text style={[styles.themeOptionSubtitle, theme === 'light' && styles.themeOptionSubtitleSelected]}>
+                    Always use light theme
+                  </Text>
+                </View>
+              </View>
+              {theme === 'light' && (
+                <Ionicons name="checkmark" size={20} color="#6B46C1" />
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.themeOption, theme === 'dark' && styles.themeOptionSelected]}
+              onPress={async () => {
+                await setTheme('dark');
+                setThemeModalVisible(false);
+                Alert.alert('Theme Updated', 'Dark theme has been applied.');
+              }}
+            >
+              <View style={styles.themeOptionContent}>
+                <Ionicons name="moon" size={24} color={theme === 'dark' ? '#6B46C1' : '#666'} />
+                <View style={styles.themeOptionText}>
+                  <Text style={[styles.themeOptionTitle, theme === 'dark' && styles.themeOptionTitleSelected]}>
+                    Dark
+                  </Text>
+                  <Text style={[styles.themeOptionSubtitle, theme === 'dark' && styles.themeOptionSubtitleSelected]}>
+                    Always use dark theme
+                  </Text>
+                </View>
+              </View>
+              {theme === 'dark' && (
+                <Ionicons name="checkmark" size={20} color="#6B46C1" />
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.themeOption, theme === 'system' && styles.themeOptionSelected]}
+              onPress={async () => {
+                await setTheme('system');
+                setThemeModalVisible(false);
+                Alert.alert('Theme Updated', 'System theme has been applied.');
+              }}
+            >
+              <View style={styles.themeOptionContent}>
+                <Ionicons name="phone-portrait" size={24} color={theme === 'system' ? '#6B46C1' : '#666'} />
+                <View style={styles.themeOptionText}>
+                  <Text style={[styles.themeOptionTitle, theme === 'system' && styles.themeOptionTitleSelected]}>
+                    System
+                  </Text>
+                  <Text style={[styles.themeOptionSubtitle, theme === 'system' && styles.themeOptionSubtitleSelected]}>
+                    Follow system theme
+                  </Text>
+                </View>
+              </View>
+              {theme === 'system' && (
+                <Ionicons name="checkmark" size={20} color="#6B46C1" />
+              )}
+            </TouchableOpacity>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => setThemeModalVisible(false)}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -649,5 +1036,45 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 16,
     color: '#1a1a1a',
+  },
+  themeOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    marginBottom: 8,
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1,
+    borderColor: '#e1e5e9',
+  },
+  themeOptionSelected: {
+    backgroundColor: '#6B46C120',
+    borderColor: '#6B46C1',
+  },
+  themeOptionContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  themeOptionText: {
+    marginLeft: 16,
+    flex: 1,
+  },
+  themeOptionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1a1a1a',
+    marginBottom: 2,
+  },
+  themeOptionTitleSelected: {
+    color: '#6B46C1',
+  },
+  themeOptionSubtitle: {
+    fontSize: 14,
+    color: '#666',
+  },
+  themeOptionSubtitleSelected: {
+    color: '#6B46C1',
   },
 });

@@ -1,4 +1,4 @@
-// app/(app)/(tabs)/profile.tsx
+// app/(app)/(tabs)/settings.tsx
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -13,11 +13,17 @@ import {
 } from 'react-native';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useUserStats } from '../../../contexts/UserStatsContext';
+import { useTheme } from '../../../contexts/ThemeContext';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Notifications from 'expo-notifications';
+import * as Location from 'expo-location';
+import { doc, updateDoc } from 'firebase/firestore';
+import { db } from '../../../firebase/firebaseConfig';
+import { SkeletonLoader, SkeletonList } from '../../../components/SkeletonLoader';
 
-// ... (ProfileOption and StatCard components remain the same)
+// Theme-aware components
 const ProfileOption: React.FC<{
   icon: string;
   title: string;
@@ -25,16 +31,43 @@ const ProfileOption: React.FC<{
   onPress: () => void;
   rightElement?: React.ReactNode;
   color?: string;
-}> = ({ icon, title, subtitle, onPress, rightElement, color = '#666' }) => (
-  <TouchableOpacity style={styles.profileOption} onPress={onPress}>
-    <View style={[styles.optionIcon, { backgroundColor: color + '20' }]}>
+  colors: any;
+}> = ({ icon, title, subtitle, onPress, rightElement, color = '#666', colors }) => (
+  <TouchableOpacity 
+    style={[{
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 20,
+      paddingVertical: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    }]} 
+    onPress={onPress}
+  >
+    <View style={[{ 
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginRight: 16,
+      backgroundColor: color + '20'
+    }]}>
       <Ionicons name={icon as any} size={20} color={color} />
     </View>
-    <View style={styles.optionContent}>
-      <Text style={styles.optionTitle}>{title}</Text>
-      {subtitle && <Text style={styles.optionSubtitle}>{subtitle}</Text>}
+    <View style={{ flex: 1 }}>
+      <Text style={{
+        fontSize: 16,
+        fontWeight: '500',
+        color: colors.primaryText,
+        marginBottom: 2,
+      }}>{title}</Text>
+      {subtitle && <Text style={{
+        fontSize: 14,
+        color: colors.secondaryText,
+      }}>{subtitle}</Text>}
     </View>
-    {rightElement || <Ionicons name="chevron-forward" size={20} color="#ccc" />}
+    {rightElement || <Ionicons name="chevron-forward" size={20} color={colors.secondaryText} />}
   </TouchableOpacity>
 );
 
@@ -43,23 +76,132 @@ const StatCard: React.FC<{
   value: string;
   icon: string;
   color: string;
-}> = ({ title, value, icon, color }) => (
-  <View style={styles.statCard}>
-    <View style={[styles.statIcon, { backgroundColor: color + '20' }]}>
+  colors: any;
+}> = ({ title, value, icon, color, colors }) => (
+  <View style={{
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 12,
+  }}>
+    <View style={[{
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginBottom: 8,
+      backgroundColor: color + '20'
+    }]}>
       <Ionicons name={icon as any} size={20} color={color} />
     </View>
-    <Text style={styles.statValue}>{value}</Text>
-    <Text style={styles.statTitle}>{title}</Text>
+    <Text style={{
+      fontSize: 20,
+      fontWeight: 'bold',
+      color: colors.primaryText,
+      marginBottom: 4,
+    }}>{value}</Text>
+    <Text style={{
+      fontSize: 12,
+      color: colors.secondaryText,
+    }}>{title}</Text>
   </View>
 );
 
 
-export default function ProfileTabScreen() {
+export default function SettingsTabScreen() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [locationEnabled, setLocationEnabled] = useState(true);
   const { user, userProfile, logout, loading } = useAuth();
   const { stats } = useUserStats();
+  const { colors } = useTheme();
   const router = useRouter();
+
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.title = 'Settings - BloodBond';
+    }
+    loadSettings();
+  }, []);
+
+  const loadSettings = async () => {
+    try {
+      // Load notification permission status
+      const { status: notificationStatus } = await Notifications.getPermissionsAsync();
+      setNotificationsEnabled(notificationStatus === 'granted');
+
+      // Load location permission status
+      const { status: locationStatus } = await Location.getForegroundPermissionsAsync();
+      setLocationEnabled(locationStatus === 'granted');
+    } catch (error) {
+      console.error('Error loading settings:', error);
+    }
+  };
+
+  const handleNotificationToggle = async (value: boolean) => {
+    try {
+      if (value) {
+        const { status } = await Notifications.requestPermissionsAsync();
+        if (status === 'granted') {
+          setNotificationsEnabled(true);
+          // Save preference to user profile
+          if (user?.uid) {
+            await updateDoc(doc(db, 'users', user.uid), {
+              notificationsEnabled: true
+            });
+          }
+          Alert.alert('Success', 'Push notifications enabled');
+        } else {
+          Alert.alert('Permission Denied', 'Please enable notifications in your device settings');
+          setNotificationsEnabled(false);
+        }
+      } else {
+        setNotificationsEnabled(false);
+        // Save preference to user profile
+        if (user?.uid) {
+          await updateDoc(doc(db, 'users', user.uid), {
+            notificationsEnabled: false
+          });
+        }
+        Alert.alert('Success', 'Push notifications disabled');
+      }
+    } catch (error) {
+      console.error('Error toggling notifications:', error);
+      Alert.alert('Error', 'Failed to update notification settings');
+    }
+  };
+
+  const handleLocationToggle = async (value: boolean) => {
+    try {
+      if (value) {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          setLocationEnabled(true);
+          // Save preference to user profile
+          if (user?.uid) {
+            await updateDoc(doc(db, 'users', user.uid), {
+              locationEnabled: true
+            });
+          }
+          Alert.alert('Success', 'Location services enabled');
+        } else {
+          Alert.alert('Permission Denied', 'Please enable location services in your device settings');
+          setLocationEnabled(false);
+        }
+      } else {
+        setLocationEnabled(false);
+        // Save preference to user profile
+        if (user?.uid) {
+          await updateDoc(doc(db, 'users', user.uid), {
+            locationEnabled: false
+          });
+        }
+        Alert.alert('Success', 'Location services disabled');
+      }
+    } catch (error) {
+      console.error('Error toggling location:', error);
+      Alert.alert('Error', 'Failed to update location settings');
+    }
+  };
   
   const handleLogout = async () => {
     console.log('=== HANDLE LOGOUT CALLED - DIRECT LOGOUT ===');
@@ -105,16 +247,133 @@ export default function ProfileTabScreen() {
   };
 
 
-  if (loading || !user || !userProfile) {
+  // Create dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.screenBackground,
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: colors.screenBackground,
+    },
+    statsContainer: {
+      flexDirection: 'row',
+      paddingHorizontal: 20,
+      paddingVertical: 20,
+      backgroundColor: colors.cardBackground,
+      marginBottom: 8,
+    },
+    statValue: {
+      fontSize: 20,
+      fontWeight: 'bold',
+      color: colors.primaryText,
+      marginBottom: 4,
+    },
+    statTitle: {
+      fontSize: 12,
+      color: colors.secondaryText,
+    },
+    quickActionsTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: colors.primaryText,
+      marginBottom: 16,
+    },
+    sectionTitle: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.primaryText,
+      paddingHorizontal: 20,
+      paddingVertical: 12,
+      backgroundColor: colors.sectionBackground,
+    },
+    optionsContainer: {
+      backgroundColor: colors.cardBackground,
+    },
+    profileOption: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 20,
+      paddingVertical: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    optionTitle: {
+      fontSize: 16,
+      fontWeight: '500',
+      color: colors.primaryText,
+      marginBottom: 2,
+    },
+    optionSubtitle: {
+      fontSize: 14,
+      color: colors.secondaryText,
+    },
+    versionText: {
+      fontSize: 14,
+      color: colors.secondaryText,
+      marginBottom: 4,
+    },
+  });
+
+  if (!user) {
     return (
-      <SafeAreaView style={styles.loadingContainer}>
+      <SafeAreaView style={dynamicStyles.loadingContainer}>
         <ActivityIndicator size="large" color="#E53E3E" />
       </SafeAreaView>
     );
   }
 
+  // Show skeleton loading while profile is loading
+  if (loading || !userProfile) {
+    return (
+      <SafeAreaView style={dynamicStyles.container}>
+        <ScrollView showsVerticalScrollIndicator={false}>
+          {/* Profile Header Skeleton */}
+          <View style={[styles.profileHeader, { backgroundColor: '#E53E3E' }]}>
+            <View style={styles.profileInfo}>
+              <SkeletonLoader width={80} height={80} borderRadius={40} marginBottom={16} />
+              <SkeletonLoader width="60%" height={24} marginBottom={4} />
+              <SkeletonLoader width="40%" height={16} marginBottom={8} />
+              <SkeletonLoader width="30%" height={14} marginBottom={0} />
+            </View>
+          </View>
+
+          {/* Stats Skeleton */}
+          <View style={dynamicStyles.statsContainer}>
+            <View style={{ flex: 1, alignItems: 'center' }}>
+              <SkeletonLoader width={32} height={32} borderRadius={16} marginBottom={8} />
+              <SkeletonLoader width={40} height={20} marginBottom={4} />
+              <SkeletonLoader width={60} height={12} marginBottom={0} />
+            </View>
+            <View style={{ flex: 1, alignItems: 'center' }}>
+              <SkeletonLoader width={32} height={32} borderRadius={16} marginBottom={8} />
+              <SkeletonLoader width={40} height={20} marginBottom={4} />
+              <SkeletonLoader width={60} height={12} marginBottom={0} />
+            </View>
+          </View>
+
+          {/* Quick Actions Skeleton */}
+          <View style={styles.quickActionsContainer}>
+            <SkeletonLoader width="40%" height={18} marginBottom={16} />
+            <View style={styles.quickActionsGrid}>
+              <SkeletonLoader width="30%" height={80} borderRadius={12} marginBottom={0} />
+              <SkeletonLoader width="30%" height={80} borderRadius={12} marginBottom={0} />
+              <SkeletonLoader width="30%" height={80} borderRadius={12} marginBottom={0} />
+            </View>
+          </View>
+
+          {/* Sections Skeleton */}
+          <SkeletonList itemCount={8} colors={colors} />
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={dynamicStyles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
          {/* Profile Header */}
         <LinearGradient
@@ -148,24 +407,26 @@ export default function ProfileTabScreen() {
         </LinearGradient>
 
         {/* Stats */}
-        <View style={styles.statsContainer}>
+        <View style={dynamicStyles.statsContainer}>
           <StatCard
             title="Requests"
             value={stats.requestsCreated.toString()}
             icon="add-circle"
             color="#E53E3E"
+            colors={colors}
           />
           <StatCard
             title="Responses"
             value={stats.responsesSent.toString()}
             icon="paper-plane"
             color="#3182CE"
+            colors={colors}
           />
         </View>
 
         {/* Quick Actions */}
         <View style={styles.quickActionsContainer}>
-          <Text style={styles.quickActionsTitle}>Quick Actions</Text>
+          <Text style={dynamicStyles.quickActionsTitle}>Quick Actions</Text>
           <View style={styles.quickActionsGrid}>
             <TouchableOpacity
               style={[styles.quickActionButton, { backgroundColor: '#E53E3E' }]}
@@ -193,14 +454,15 @@ export default function ProfileTabScreen() {
 
         {/* Profile Actions */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Profile</Text>
-          <View style={styles.optionsContainer}>
+          <Text style={dynamicStyles.sectionTitle}>Profile</Text>
+          <View style={dynamicStyles.optionsContainer}>
             <ProfileOption
               icon="person"
               title="Edit Profile"
               subtitle="Update your information"
               onPress={handleEditProfile}
               color="#E53E3E"
+              colors={colors}
             />
             <ProfileOption
               icon="list"
@@ -208,6 +470,7 @@ export default function ProfileTabScreen() {
               subtitle="View your blood requests"
               onPress={handleMyRequests}
               color="#3182CE"
+              colors={colors}
             />
             <ProfileOption
               icon="paper-plane"
@@ -215,6 +478,7 @@ export default function ProfileTabScreen() {
               subtitle="Track your donation offers"
               onPress={handleMyResponses}
               color="#38A169"
+              colors={colors}
             />
             <ProfileOption
               icon="heart"
@@ -222,6 +486,7 @@ export default function ProfileTabScreen() {
               subtitle="View past donations"
               onPress={handleDonationHistory}
               color="#F56500"
+              colors={colors}
             />
             {userProfile?.role === 'admin' && (
               <ProfileOption
@@ -230,6 +495,7 @@ export default function ProfileTabScreen() {
                 subtitle="Manage users and requests"
                 onPress={() => router.push('../admin')}
                 color="#8B5CF6"
+                colors={colors}
               />
             )}
           </View>
@@ -237,37 +503,39 @@ export default function ProfileTabScreen() {
 
         {/* Settings */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Settings</Text>
-          <View style={styles.optionsContainer}>
+          <Text style={dynamicStyles.sectionTitle}>Settings</Text>
+          <View style={dynamicStyles.optionsContainer}>
             <ProfileOption
               icon="notifications"
               title="Push Notifications"
               subtitle="Get notified about requests"
-              onPress={() => {}}
+              onPress={() => handleNotificationToggle(!notificationsEnabled)}
               rightElement={
                 <Switch
                   value={notificationsEnabled}
-                  onValueChange={setNotificationsEnabled}
+                  onValueChange={handleNotificationToggle}
                   trackColor={{ false: '#e1e5e9', true: '#E53E3E' }}
                   thumbColor={notificationsEnabled ? '#fff' : '#f4f3f4'}
                 />
               }
               color="#F56500"
+              colors={colors}
             />
             <ProfileOption
               icon="location"
               title="Location Services"
               subtitle="Find requests near you"
-              onPress={() => {}}
+              onPress={() => handleLocationToggle(!locationEnabled)}
               rightElement={
                 <Switch
                   value={locationEnabled}
-                  onValueChange={setLocationEnabled}
+                  onValueChange={handleLocationToggle}
                   trackColor={{ false: '#e1e5e9', true: '#E53E3E' }}
                   thumbColor={locationEnabled ? '#fff' : '#f4f3f4'}
                 />
               }
               color="#3182CE"
+              colors={colors}
             />
             <ProfileOption
               icon="call"
@@ -275,6 +543,7 @@ export default function ProfileTabScreen() {
               subtitle="Manage emergency numbers"
               onPress={handleEmergencyContacts}
               color="#E53E3E"
+              colors={colors}
             />
             <ProfileOption
               icon="settings"
@@ -282,20 +551,22 @@ export default function ProfileTabScreen() {
               subtitle="Privacy, security & more"
               onPress={handleSettings}
               color="#666"
+              colors={colors}
             />
           </View>
         </View>
 
         {/* Support */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Support</Text>
-          <View style={styles.optionsContainer}>
+          <Text style={dynamicStyles.sectionTitle}>Support</Text>
+          <View style={dynamicStyles.optionsContainer}>
             <ProfileOption
               icon="help-circle"
               title="Help & FAQ"
               subtitle="Get answers to common questions"
               onPress={() => router.push('/(app)/profile/support')}
               color="#38A169"
+              colors={colors}
             />
             <ProfileOption
               icon="mail"
@@ -303,6 +574,7 @@ export default function ProfileTabScreen() {
               subtitle="Get help from our team"
               onPress={() => router.push('/(app)/profile/support')}
               color="#3182CE"
+              colors={colors}
             />
             <ProfileOption
               icon="information-circle"
@@ -310,24 +582,26 @@ export default function ProfileTabScreen() {
               subtitle="Learn more about our mission"
               onPress={() => router.push('/(app)/profile/support')}
               color="#F56500"
+              colors={colors}
             />
           </View>
         </View>
         
         {/* Logout Button */}
         <View style={styles.section}>
-          <View style={styles.optionsContainer}>
+          <View style={dynamicStyles.optionsContainer}>
             <ProfileOption
               icon="log-out"
               title="Logout"
               onPress={handleLogout}
               color="#DC2626"
+              colors={colors}
             />
           </View>
         </View>
 
         <View style={styles.versionContainer}>
-          <Text style={styles.versionText}>BloodBond v1.0.0</Text>
+          <Text style={dynamicStyles.versionText}>BloodBond v1.0.0</Text>
         </View>
       </ScrollView>
     </SafeAreaView>

@@ -15,6 +15,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { db } from '../../firebase/firebaseConfig';
 import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, Timestamp } from 'firebase/firestore';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
+import { Colors } from '../../constants/Colors';
+import { SkeletonCard } from '../../components/SkeletonLoader';
 
 interface NotificationItem {
   id: string;
@@ -30,7 +33,8 @@ const NotificationCard: React.FC<{
   notification: NotificationItem;
   onPress: () => void;
   onMarkAsRead: () => void;
-}> = ({ notification, onPress, onMarkAsRead }) => {
+  colors: any;
+}> = ({ notification, onPress, onMarkAsRead, colors }) => {
   const getNotificationIcon = () => {
     switch (notification.type) {
       case 'request_response':
@@ -62,9 +66,45 @@ const NotificationCard: React.FC<{
 
   const icon = getNotificationIcon();
 
+  const cardStyles = StyleSheet.create({
+    notificationCard: {
+      backgroundColor: colors.cardBackground,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 8,
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.05,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    unreadCard: {
+      borderLeftWidth: 4,
+      borderLeftColor: colors.primary,
+    },
+    notificationTitle: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.primaryText,
+      flex: 1,
+      marginRight: 8,
+    },
+    notificationTime: {
+      fontSize: 12,
+      color: colors.secondaryText,
+    },
+    notificationMessage: {
+      fontSize: 14,
+      color: colors.secondaryText,
+      lineHeight: 20,
+    },
+  });
+
   return (
     <TouchableOpacity
-      style={[styles.notificationCard, !notification.read && styles.unreadCard]}
+      style={[cardStyles.notificationCard, !notification.read && cardStyles.unreadCard]}
       onPress={onPress}
     >
       <View style={[styles.notificationIcon, { backgroundColor: icon.color + '20' }]}>
@@ -72,17 +112,17 @@ const NotificationCard: React.FC<{
       </View>
       <View style={styles.notificationContent}>
         <View style={styles.notificationHeader}>
-          <Text style={styles.notificationTitle}>{notification.title}</Text>
-          <Text style={styles.notificationTime}>{getTimeAgo()}</Text>
+          <Text style={cardStyles.notificationTitle}>{notification.title}</Text>
+          <Text style={cardStyles.notificationTime}>{getTimeAgo()}</Text>
         </View>
-        <Text style={styles.notificationMessage}>{notification.message}</Text>
+        <Text style={cardStyles.notificationMessage}>{notification.message}</Text>
         {!notification.read && (
           <View style={styles.unreadDot} />
         )}
       </View>
       {!notification.read && (
         <TouchableOpacity style={styles.markAsReadButton} onPress={onMarkAsRead}>
-          <Ionicons name="checkmark-circle" size={20} color="#E53E3E" />
+          <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
         </TouchableOpacity>
       )}
     </TouchableOpacity>
@@ -95,17 +135,42 @@ export default function NotificationsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
   const { user } = useAuth();
+  const { currentTheme } = useTheme();
+  const colors = Colors[currentTheme];
 
   useEffect(() => {
-    if (user) {
-      loadNotifications();
-    } else {
-      setLoading(false);
-    }
-  }, [user]);
+    let unsubscribe: (() => void) | undefined;
+
+    const setupListener = async () => {
+      if (user) {
+        unsubscribe = await loadNotifications();
+      } else {
+        setLoading(false);
+      }
+    };
+
+    setupListener();
+
+    // Failsafe: Stop loading after 10 seconds if still loading
+    const timeout = setTimeout(() => {
+      if (loading) {
+        console.log('Notifications loading timeout - showing empty state');
+        setLoading(false);
+        setRefreshing(false);
+      }
+    }, 10000);
+
+    return () => {
+      clearTimeout(timeout);
+      if (unsubscribe) unsubscribe();
+    };
+  }, [user, loading]);
 
   const loadNotifications = async () => {
-    if (!user) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
 
@@ -117,28 +182,39 @@ export default function NotificationsScreen() {
         orderBy('timestamp', 'desc')
       );
 
-      const unsubscribe = onSnapshot(q, (querySnapshot) => {
-        const notificationsData: NotificationItem[] = [];
-        querySnapshot.forEach((doc) => {
-          const data = doc.data();
-          notificationsData.push({
-            id: doc.id,
-            type: data.type,
-            title: data.title,
-            message: data.message,
-            timestamp: data.timestamp?.toDate() || new Date(),
-            read: data.read || false,
-            actionUrl: data.actionUrl,
+      const unsubscribe = onSnapshot(
+        q, 
+        (querySnapshot) => {
+          const notificationsData: NotificationItem[] = [];
+          querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            notificationsData.push({
+              id: doc.id,
+              type: data.type,
+              title: data.title,
+              message: data.message,
+              timestamp: data.timestamp?.toDate() || new Date(),
+              read: data.read || false,
+              actionUrl: data.actionUrl,
+            });
           });
-        });
-        setNotifications(notificationsData);
-        setLoading(false);
-        setRefreshing(false);
-      });
+          setNotifications(notificationsData);
+          setLoading(false);
+          setRefreshing(false);
+        },
+        (error) => {
+          console.error('Error loading notifications:', error);
+          // Even if there's an error, stop loading and show empty state
+          setNotifications([]);
+          setLoading(false);
+          setRefreshing(false);
+        }
+      );
 
       return unsubscribe;
     } catch (error) {
-      console.error('Error loading notifications:', error);
+      console.error('Error setting up notifications listener:', error);
+      setNotifications([]);
       setLoading(false);
       setRefreshing(false);
     }
@@ -208,19 +284,107 @@ export default function NotificationsScreen() {
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.screenBackground,
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: colors.screenBackground,
+    },
+    notificationCard: {
+      backgroundColor: colors.cardBackground,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 8,
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.05,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    unreadCard: {
+      borderLeftWidth: 4,
+      borderLeftColor: colors.primary,
+    },
+    notificationTitle: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.primaryText,
+      flex: 1,
+      marginRight: 8,
+    },
+    notificationTime: {
+      fontSize: 12,
+      color: colors.secondaryText,
+    },
+    notificationMessage: {
+      fontSize: 14,
+      color: colors.secondaryText,
+      lineHeight: 20,
+    },
+    emptyContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingVertical: 64,
+      paddingHorizontal: 20,
+    },
+    emptyTitle: {
+      fontSize: 20,
+      fontWeight: '600',
+      color: colors.primaryText,
+      marginTop: 16,
+      marginBottom: 8,
+    },
+    emptyText: {
+      fontSize: 16,
+      color: colors.secondaryText,
+      textAlign: 'center',
+      lineHeight: 24,
+    },
+    markAsReadButton: {
+      padding: 4,
+      marginLeft: 8,
+    },
+  });
+
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#E53E3E" />
-        <Text style={styles.loadingText}>Loading notifications...</Text>
-      </View>
+      <SafeAreaView style={dynamicStyles.container}>
+        <LinearGradient
+          colors={[colors.primary, colors.primary + 'DD']}
+          style={styles.header}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          <TouchableOpacity style={styles.closeButton} onPress={() => router.back()}>
+            <Ionicons name="close" size={24} color="white" />
+          </TouchableOpacity>
+          <View style={styles.headerContent}>
+            <Text style={styles.title}>Notifications</Text>
+            <Text style={styles.subtitle}>Loading...</Text>
+          </View>
+        </LinearGradient>
+
+        <View style={styles.notificationsList}>
+          {[...Array(4)].map((_, index) => (
+            <SkeletonCard key={index} colors={colors} />
+          ))}
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={dynamicStyles.container}>
       <LinearGradient
-        colors={['#E53E3E', '#C53030']}
+        colors={[colors.primary, colors.primary + 'DD']}
         style={styles.header}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
@@ -255,10 +419,10 @@ export default function NotificationsScreen() {
         }
       >
         {notifications.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Ionicons name="notifications-off" size={64} color="#ccc" />
-            <Text style={styles.emptyTitle}>No notifications yet</Text>
-            <Text style={styles.emptyText}>
+          <View style={dynamicStyles.emptyContainer}>
+            <Ionicons name="notifications-off" size={64} color={colors.secondaryText} />
+            <Text style={dynamicStyles.emptyTitle}>No notifications yet</Text>
+            <Text style={dynamicStyles.emptyText}>
               You'll receive notifications about blood requests and responses here.
             </Text>
           </View>
@@ -270,6 +434,7 @@ export default function NotificationsScreen() {
                 notification={notification}
                 onPress={() => handleNotificationPress(notification)}
                 onMarkAsRead={() => handleMarkAsRead(notification.id)}
+                colors={colors}
               />
             ))}
           </View>
@@ -421,5 +586,10 @@ const styles = StyleSheet.create({
   closeButton: {
     padding: 8,
     marginRight: 12,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: 'white',
+    opacity: 0.8,
   },
 });

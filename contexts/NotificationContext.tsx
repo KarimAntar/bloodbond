@@ -25,9 +25,14 @@ interface NotificationProviderProps {
 export const NotificationProvider: React.FC<NotificationProviderProps> = ({ children }) => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
-  const { user } = useAuth();
+  const { user, initializing } = useAuth();
 
   useEffect(() => {
+    // Don't set up listeners while authentication is still initializing
+    if (initializing) {
+      return;
+    }
+
     if (!user) {
       setUnreadCount(0);
       setIsLoading(false);
@@ -47,6 +52,17 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
       const unsubscribe = onSnapshot(q, (querySnapshot) => {
         setUnreadCount(querySnapshot.size);
         setIsLoading(false);
+      }, (error) => {
+        console.error('Notification listener error:', error);
+        setIsLoading(false);
+        // Handle permission errors gracefully
+        if (error.code === 'permission-denied') {
+          console.log('Notification permissions denied, setting count to 0');
+          setUnreadCount(0);
+        } else {
+          // For other errors, also set count to 0 to prevent crashes
+          setUnreadCount(0);
+        }
       });
 
       return unsubscribe;
@@ -54,7 +70,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
       console.error('Error setting up notification listener:', error);
       setIsLoading(false);
     }
-  }, [user]);
+  }, [user, initializing]);
 
   const value = {
     unreadCount,

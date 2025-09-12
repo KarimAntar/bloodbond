@@ -4,6 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, usePathname } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNotifications } from '../contexts/NotificationContext';
+import { useTheme } from '../contexts/ThemeContext';
+import { Colors } from '../constants/Colors';
 
 const { width } = Dimensions.get('window');
 const TAB_BAR_HEIGHT = 80;
@@ -14,21 +16,25 @@ interface TabBarButtonProps {
   label: string;
   isActive: boolean;
   onPress: () => void;
+  colors: any;
 }
 
-const TabBarButton: React.FC<TabBarButtonProps> = ({ route, icon, label, isActive, onPress }) => (
+const TabBarButton: React.FC<TabBarButtonProps> = ({ route, icon, label, isActive, onPress, colors }) => (
   <TouchableOpacity
-    style={[styles.tabButton, isActive && styles.activeTabButton]}
+    style={styles.tabButton}
     onPress={onPress}
   >
-    <View style={[styles.iconContainer, isActive && styles.activeIconContainer]}>
+    <View style={styles.iconContainer}>
       <Ionicons
         name={icon as any}
         size={24}
-        color={isActive ? '#E53E3E' : '#666'}
+        color={isActive ? colors.primary : colors.secondaryText}
       />
     </View>
-    <Text style={[styles.tabLabel, isActive && styles.activeTabLabel]}>
+    <Text style={[
+      { color: colors.secondaryText, fontSize: 12, fontWeight: '500' },
+      isActive && { color: colors.primary, fontWeight: '600' }
+    ]}>
       {label}
     </Text>
   </TouchableOpacity>
@@ -36,13 +42,15 @@ const TabBarButton: React.FC<TabBarButtonProps> = ({ route, icon, label, isActiv
 
 const CustomTabBar: React.FC<any> = (props) => {
   const router = useRouter();
+  const { currentTheme } = useTheme();
+  const colors = Colors[currentTheme];
 
   const tabs = [
     { route: '/(app)/(tabs)', icon: 'home-outline', activeIcon: 'home', label: 'Home' },
     { route: '/(app)/(tabs)/requests', icon: 'list-outline', activeIcon: 'list', label: 'Requests' },
     { route: '/(app)/(tabs)/create', icon: 'water', activeIcon: 'water', label: 'Donate' }, // Blood icon
     { route: '/(app)/(tabs)/activity', icon: 'pulse-outline', activeIcon: 'pulse', label: 'Activity' },
-    { route: '/(app)/(tabs)/profile', icon: 'person-outline', activeIcon: 'person', label: 'Profile' },
+    { route: '/(app)/(tabs)/settings', icon: 'settings-outline', activeIcon: 'settings', label: 'Settings' },
   ];
 
   const handleTabPress = (route: string) => {
@@ -51,9 +59,28 @@ const CustomTabBar: React.FC<any> = (props) => {
 
   const currentTab = props.state.index;
 
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      backgroundColor: colors.cardBackground,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    tabBar: {
+      flexDirection: 'row',
+      height: TAB_BAR_HEIGHT,
+      alignItems: 'center',
+      paddingHorizontal: 20,
+      paddingBottom: 20,
+    },
+  });
+
   return (
-    <View style={styles.container}>
-      <View style={styles.tabBar}>
+    <View style={dynamicStyles.container}>
+      <View style={dynamicStyles.tabBar}>
         {/* Left tabs */}
         <View style={styles.leftTabs}>
           {tabs.slice(0, 2).map((tab, index) => (
@@ -64,6 +91,7 @@ const CustomTabBar: React.FC<any> = (props) => {
               label={tab.label}
               isActive={currentTab === index}
               onPress={() => handleTabPress(tab.route)}
+              colors={colors}
             />
           ))}
         </View>
@@ -74,7 +102,7 @@ const CustomTabBar: React.FC<any> = (props) => {
           onPress={() => handleTabPress(tabs[2].route)}
         >
           <LinearGradient
-            colors={['#E53E3E', '#C53030']}
+            colors={[colors.primary, colors.primary]}
             style={styles.centerButtonGradient}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
@@ -93,6 +121,7 @@ const CustomTabBar: React.FC<any> = (props) => {
               label={tab.label}
               isActive={currentTab === index + 3}
               onPress={() => handleTabPress(tab.route)}
+              colors={colors}
             />
           ))}
         </View>
@@ -102,22 +131,6 @@ const CustomTabBar: React.FC<any> = (props) => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'white',
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
-  },
-  tabBar: {
-    flexDirection: 'row',
-    height: TAB_BAR_HEIGHT,
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-  },
   leftTabs: {
     flex: 1,
     flexDirection: 'row',
@@ -135,9 +148,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 12,
   },
-  activeTabButton: {
-    backgroundColor: '#E53E3E15',
-  },
   iconContainer: {
     width: 40,
     height: 40,
@@ -145,18 +155,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 4,
-  },
-  activeIconContainer: {
-    backgroundColor: '#E53E3E15',
-  },
-  tabLabel: {
-    fontSize: 12,
-    color: '#666',
-    fontWeight: '500',
-  },
-  activeTabLabel: {
-    color: '#E53E3E',
-    fontWeight: '600',
   },
   centerButton: {
     marginHorizontal: 20,

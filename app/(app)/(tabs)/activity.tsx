@@ -12,9 +12,12 @@ import {
 } from 'react-native';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useUserStats } from '../../../contexts/UserStatsContext';
+import { useTheme } from '../../../contexts/ThemeContext';
+import { Colors } from '../../../constants/Colors';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { SkeletonCard } from '../../../components/SkeletonLoader';
 import { collection, query, where, orderBy, getDocs, limit } from 'firebase/firestore';
 import { db } from '../../../firebase/firebaseConfig';
 
@@ -32,7 +35,8 @@ interface ActivityItem {
 const ActivityCard: React.FC<{ 
   activity: ActivityItem; 
   onPress?: () => void;
-}> = ({ activity, onPress }) => {
+  colors: any;
+}> = ({ activity, onPress, colors }) => {
   const getActivityIcon = () => {
     switch (activity.type) {
       case 'request_created':
@@ -122,7 +126,15 @@ export default function ActivityTabScreen() {
 
   const { user } = useAuth();
   const { stats } = useUserStats();
+  const { currentTheme } = useTheme();
+  const colors = Colors[currentTheme];
   const router = useRouter();
+
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.title = 'Activity - BloodBond';
+    }
+  }, []);
 
   const fetchUserActivity = async () => {
     if (!user) return;
@@ -195,30 +207,170 @@ export default function ActivityTabScreen() {
     fetchUserActivity();
   };
 
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.screenBackground,
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: colors.screenBackground,
+    },
+    sectionTitle: {
+      fontSize: 20,
+      fontWeight: 'bold',
+      color: colors.primaryText,
+      marginBottom: 16,
+    },
+    statsCard: {
+      backgroundColor: colors.cardBackground,
+      borderRadius: 12,
+      padding: 16,
+      width: '48%',
+      marginBottom: 12,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.05,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    statsValue: {
+      fontSize: 24,
+      fontWeight: 'bold',
+      color: colors.primaryText,
+      marginBottom: 4,
+    },
+    statsTitle: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.primaryText,
+      marginBottom: 2,
+    },
+    statsSubtitle: {
+      fontSize: 12,
+      color: colors.secondaryText,
+    },
+    activitiesList: {
+      backgroundColor: colors.cardBackground,
+      borderRadius: 12,
+      overflow: 'hidden',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.05,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    activityCard: {
+      flexDirection: 'row',
+      padding: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    activityTitle: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.primaryText,
+      flex: 1,
+      marginRight: 8,
+    },
+    activityTime: {
+      fontSize: 12,
+      color: colors.secondaryText,
+    },
+    activityDescription: {
+      fontSize: 14,
+      color: colors.secondaryText,
+      lineHeight: 20,
+      marginBottom: 8,
+    },
+    emptyActivity: {
+      backgroundColor: colors.cardBackground,
+      borderRadius: 12,
+      padding: 32,
+      alignItems: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.05,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    emptyTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: colors.primaryText,
+      marginTop: 12,
+      marginBottom: 8,
+    },
+    emptyDescription: {
+      fontSize: 14,
+      color: colors.secondaryText,
+      textAlign: 'center',
+      lineHeight: 20,
+      marginBottom: 20,
+    },
+    getStartedButton: {
+      backgroundColor: colors.primary,
+      paddingHorizontal: 20,
+      paddingVertical: 10,
+      borderRadius: 8,
+    },
+  });
+
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#E53E3E" />
-        <Text style={styles.loadingText}>Loading your activity...</Text>
-      </View>
+      <SafeAreaView style={dynamicStyles.container}>
+        <LinearGradient
+          colors={[colors.primary, colors.primary + 'DD']}
+          style={styles.header}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          <View style={styles.headerContent}>
+            <Text style={styles.title}>Your Activity</Text>
+            <Text style={styles.subtitle}>Loading your impact...</Text>
+          </View>
+        </LinearGradient>
+
+        <View style={styles.statsSection}>
+          <Text style={dynamicStyles.sectionTitle}>Your Activity</Text>
+          <View style={styles.statsGrid}>
+            <SkeletonCard colors={colors} />
+            <SkeletonCard colors={colors} />
+          </View>
+        </View>
+
+        <View style={styles.activitySection}>
+          <View style={styles.sectionHeader}>
+            <Text style={dynamicStyles.sectionTitle}>Recent Activity</Text>
+          </View>
+          <View style={dynamicStyles.activitiesList}>
+            {[...Array(3)].map((_, index) => (
+              <SkeletonCard key={index} colors={colors} />
+            ))}
+          </View>
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={dynamicStyles.container}>
       <ScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={['#E53E3E']}
-            tintColor="#E53E3E"
+            colors={[colors.primary]}
+            tintColor={colors.primary}
+            progressBackgroundColor={colors.cardBackground}
           />
         }
       >
         <LinearGradient
-          colors={['#E53E3E', '#C53030']}
+          colors={[colors.primary, colors.primary + 'DD']}
           style={styles.header}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
@@ -230,38 +382,91 @@ export default function ActivityTabScreen() {
         </LinearGradient>
 
         <View style={styles.statsSection}>
-          <Text style={styles.sectionTitle}>Your Activity</Text>
+          <Text style={dynamicStyles.sectionTitle}>Your Activity</Text>
           <View style={styles.statsGrid}>
-            <StatsCard icon="add-circle" title="Requests" value={stats.requestsCreated} subtitle="Created" color="#E53E3E"/>
-            <StatsCard icon="paper-plane" title="Responses" value={stats.responsesSent} subtitle="Sent" color="#3182CE"/>
+            <View style={dynamicStyles.statsCard}>
+              <View style={[styles.statsIcon, { backgroundColor: colors.primary + '20' }]}>
+                <Ionicons name="add-circle" size={24} color={colors.primary} />
+              </View>
+              <View style={styles.statsContent}>
+                <Text style={dynamicStyles.statsValue}>{stats.requestsCreated}</Text>
+                <Text style={dynamicStyles.statsTitle}>Requests</Text>
+                <Text style={dynamicStyles.statsSubtitle}>Created</Text>
+              </View>
+            </View>
+
+            <View style={dynamicStyles.statsCard}>
+              <View style={[styles.statsIcon, { backgroundColor: '#3182CE20' }]}>
+                <Ionicons name="paper-plane" size={24} color="#3182CE" />
+              </View>
+              <View style={styles.statsContent}>
+                <Text style={dynamicStyles.statsValue}>{stats.responsesSent}</Text>
+                <Text style={dynamicStyles.statsTitle}>Responses</Text>
+                <Text style={dynamicStyles.statsSubtitle}>Sent</Text>
+              </View>
+            </View>
           </View>
         </View>
 
         <View style={styles.activitySection}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Recent Activity</Text>
+            <Text style={dynamicStyles.sectionTitle}>Recent Activity</Text>
           </View>
           {activities.length === 0 ? (
-            <View style={styles.emptyActivity}>
-              <Ionicons name="pulse-outline" size={48} color="#ccc" />
-              <Text style={styles.emptyTitle}>No Activity Yet</Text>
-              <Text style={styles.emptyDescription}>
+            <View style={dynamicStyles.emptyActivity}>
+              <Ionicons name="pulse-outline" size={48} color={colors.secondaryText + '60'} />
+              <Text style={dynamicStyles.emptyTitle}>No Activity Yet</Text>
+              <Text style={dynamicStyles.emptyDescription}>
                 Start by creating a blood request or responding to existing ones.
               </Text>
               <TouchableOpacity
-                style={styles.getStartedButton}
+                style={dynamicStyles.getStartedButton}
                 onPress={() => router.push('/(app)/(tabs)/create')}
               >
                 <Text style={styles.getStartedButtonText}>Get Started</Text>
               </TouchableOpacity>
             </View>
           ) : (
-            <View style={styles.activitiesList}>
+            <View style={dynamicStyles.activitiesList}>
               {activities.map((activity) => (
-                <ActivityCard
-                  key={activity.id}
-                  activity={activity}
-                />
+                <View key={activity.id} style={dynamicStyles.activityCard}>
+                  <View style={[styles.activityIcon, { backgroundColor: activity.type === 'request_created' ? colors.primary + '20' : '#3182CE20' }]}>
+                    <Ionicons 
+                      name={activity.type === 'request_created' ? 'add-circle' : 'paper-plane'} 
+                      size={20} 
+                      color={activity.type === 'request_created' ? colors.primary : '#3182CE'} 
+                    />
+                  </View>
+                  <View style={styles.activityContent}>
+                    <View style={styles.activityHeader}>
+                      <Text style={dynamicStyles.activityTitle}>{activity.title}</Text>
+                      <Text style={dynamicStyles.activityTime}>
+                        {activity.timestamp ? (() => {
+                          const now = new Date();
+                          const activityTime = activity.timestamp.toDate();
+                          const diffInHours = Math.floor((now.getTime() - activityTime.getTime()) / (1000 * 60 * 60));
+                          if (diffInHours < 1) return 'Just now';
+                          if (diffInHours < 24) return `${diffInHours}h ago`;
+                          const diffInDays = Math.floor(diffInHours / 24);
+                          return diffInDays < 7 ? `${diffInDays}d ago` : `${Math.floor(diffInDays / 7)}w ago`;
+                        })() : 'Recently'}
+                      </Text>
+                    </View>
+                    <Text style={dynamicStyles.activityDescription}>{activity.description}</Text>
+                    {activity.bloodType && (
+                      <View style={styles.activityMeta}>
+                        <View style={[styles.bloodTypeBadge, { backgroundColor: colors.primary }]}>
+                          <Text style={styles.bloodTypeText}>{activity.bloodType}</Text>
+                        </View>
+                        {activity.urgent && (
+                          <View style={styles.urgentBadge}>
+                            <Text style={styles.urgentText}>URGENT</Text>
+                          </View>
+                        )}
+                      </View>
+                    )}
+                  </View>
+                </View>
               ))}
             </View>
           )}

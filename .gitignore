@@ -5,7 +5,7 @@ node_modules/
 
 # Expo
 .expo/
-dist/
+# dist/  # Temporarily commented out for Vercel deployment
 web-build/
 expo-env.d.ts
 

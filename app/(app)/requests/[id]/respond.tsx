@@ -19,6 +19,7 @@ import { addDoc, collection, Timestamp, doc, getDoc } from 'firebase/firestore';
 import { useAuth } from '../../../../contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { performAntiSpamVerification, initializeRecaptcha } from '../../../../utils/captcha';
 
 interface BloodRequest {
   id: string;
@@ -44,6 +45,7 @@ export default function RespondScreen() {
   const [fetchingRequest, setFetchingRequest] = useState(true);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [success, setSuccess] = useState(false);
+  const [verificationLoading, setVerificationLoading] = useState(false);
 
   useEffect(() => {
     const fetchRequest = async () => {
@@ -66,6 +68,11 @@ export default function RespondScreen() {
         name: userProfile.fullName || '',
         contactInfo: userProfile.phone || '',
       }));
+    }
+
+    // Initialize reCAPTCHA on web
+    if (Platform.OS === 'web') {
+      initializeRecaptcha().catch(console.error);
     }
 
     fetchRequest();
@@ -100,22 +107,49 @@ export default function RespondScreen() {
   const handleSubmit = async () => {
     if (!validateForm()) return;
 
+    if (!user?.uid) {
+      Alert.alert('Error', 'You must be logged in to respond to requests');
+      return;
+    }
+
     setLoading(true);
+    setVerificationLoading(true);
 
     try {
+      // Perform anti-spam verification
+      const verification = await performAntiSpamVerification(
+        user.uid,
+        'response',
+        'respond_to_blood_request'
+      );
+
+      setVerificationLoading(false);
+
+      if (!verification.success) {
+        Alert.alert(
+          'Response Blocked',
+          verification.error || 'Unable to verify response. Please try again later.',
+          [{ text: 'OK' }]
+        );
+        setLoading(false);
+        return;
+      }
       await addDoc(collection(db, 'responses'), {
         requestId: requestId,
-        userId: user?.uid,
+        userId: user.uid,
         responderName: formData.name.trim(),
         message: formData.message.trim(),
         contact: formData.contactInfo.trim(),
-        createdAt: Timestamp.now(),
         bloodType: userProfile?.bloodType || null,
+        // Anti-spam verification data
+        captchaToken: verification.captchaToken,
+        verifiedAt: Timestamp.now(),
+        createdAt: Timestamp.now(),
       });
 
       // Log this action to the user's activity feed
       await addDoc(collection(db, 'activity'), {
-          userId: user?.uid,
+          userId: user.uid,
           type: 'response_sent',
           title: 'Response Sent',
           description: `You responded to a request for ${request?.bloodType || 'unknown'} blood.`,
@@ -124,17 +158,35 @@ export default function RespondScreen() {
       });
 
       // Show success message and navigate back
-      setTimeout(() => {
-        router.back();
-      }, 1000); // Small delay to show the success state
+      Alert.alert(
+        'Response Sent! 🩸',
+        'Your response has been sent successfully. The requester will be able to see your offer to help.',
+        [
+          {
+            text: 'OK',
+            onPress: () => router.back()
+          }
+        ]
+      );
     } catch (error) {
       console.error('Error submitting response:', error);
-      Alert.alert(
-        'Error',
-        'Failed to submit your response. Please try again.'
-      );
+      
+      // Handle specific spam/verification errors
+      if (error instanceof Error && error.message.includes('spam')) {
+        Alert.alert(
+          'Response Blocked',
+          'Your response has been blocked due to spam protection. Please try again later or contact support if you believe this is an error.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert(
+          'Error',
+          'Failed to submit your response. Please check your internet connection and try again.'
+        );
+      }
     } finally {
       setLoading(false);
+      setVerificationLoading(false);
     }
   };
 
@@ -305,13 +357,31 @@ export default function RespondScreen() {
               </Text>
             </View>
 
+            {/* Security Notice */}
+            <View style={styles.securityBox}>
+              <Ionicons name="shield-checkmark" size={20} color="#10B981" />
+              <Text style={styles.securityText}>
+                This form is protected by anti-spam verification to ensure genuine responses only.
+              </Text>
+            </View>
+
+            {/* Verification Status */}
+            {verificationLoading && (
+              <View style={styles.verificationBox}>
+                <ActivityIndicator size="small" color="#F59E0B" />
+                <Text style={styles.verificationText}>
+                  Verifying response authenticity...
+                </Text>
+              </View>
+            )}
+
             {/* Submit Button */}
             <TouchableOpacity
-              style={[styles.submitButton, loading && styles.buttonDisabled]}
+              style={[styles.submitButton, (loading || verificationLoading) && styles.buttonDisabled]}
               onPress={handleSubmit}
-              disabled={loading}
+              disabled={loading || verificationLoading}
             >
-              {loading ? (
+              {loading || verificationLoading ? (
                 <ActivityIndicator size="small" color="white" />
               ) : (
                 <>
@@ -325,7 +395,7 @@ export default function RespondScreen() {
             <TouchableOpacity
               style={styles.cancelButton}
               onPress={() => router.back()}
-              disabled={loading}
+              disabled={loading || verificationLoading}
             >
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
@@ -597,6 +667,35 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     color: '#666',
     fontSize: 16,
+    fontWeight: '500',
+  },
+  securityBox: {
+    flexDirection: 'row',
+    backgroundColor: '#ECFDF5',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    alignItems: 'flex-start',
+  },
+  securityText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#065F46',
+    marginLeft: 12,
+    lineHeight: 20,
+  },
+  verificationBox: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFBEB',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  verificationText: {
+    fontSize: 14,
+    color: '#92400E',
+    marginLeft: 12,
     fontWeight: '500',
   },
 });
