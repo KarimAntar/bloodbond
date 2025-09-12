@@ -2,9 +2,10 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 
 const firebaseConfig = {
-    apiKey: "AIzaSyA8Cd-czxRaLw-Lv-o7T34kAOgahGwCSVc",
+    apiKey: "AIzaSyC7Ld4NcW9ZxMYPlwp1Ck7cpOYinTKD58s",
     authDomain: "bloodbond-892f7.firebaseapp.com",
     projectId: "bloodbond-892f7",
     storageBucket: "bloodbond-892f7.firebasestorage.app",
@@ -13,26 +14,19 @@ const firebaseConfig = {
     measurementId: "G-GZH3MCEQD3"
   };
 
-// Initialize Firebase app only if not already initialized
+// Google Sign-In client IDs for different platforms
+export const googleClientIdIOS = "589684037045-b2vbga5vivhppo02i5sftv4vvkceu3on.apps.googleusercontent.com";
+export const googleClientIdWeb = "589684037045-4s0uf5t7gr5vqtg7s7u1vudthicuf6an.apps.googleusercontent.com";
+
+// Initialize Firebase app
 let app;
-if (!getApps().length) {
-  console.log('Initializing Firebase app...');
+if (getApps().length === 0) {
   app = initializeApp(firebaseConfig);
-  console.log('Firebase app initialized successfully');
 } else {
-  console.log('Firebase app already exists, getting existing app');
   app = getApp();
 }
 
-// Initialize Firebase Auth
-console.log('Initializing Firebase Auth...');
-const auth = getAuth(app);
-console.log('Firebase Auth initialized successfully');
-
-export { auth };
-
-console.log('Initializing Firestore...');
-const db = getFirestore(app);
-console.log('Firestore initialized successfully');
-
-export { db };
+// Initialize Firebase services
+export const auth = getAuth(app);
+export const db = getFirestore(app);
+export const storage = getStorage(app);

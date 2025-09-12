@@ -11,13 +11,15 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../contexts/AuthContext';
-import { sendEmailVerification } from 'firebase/auth';
-import { auth } from '../../firebase/firebaseConfig';
+import { sendEmailVerification, sendPasswordResetEmail } from 'firebase/auth';
+import { auth, db } from '../../firebase/firebaseConfig';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { doc, getDoc } from 'firebase/firestore';
 
 // ... (Toast component remains the same)
 const Toast = ({ message, type, visible, onHide }: {
@@ -67,10 +69,8 @@ export default function LoginScreen() {
   const [toast, setToast] = useState<{ visible: boolean; message: string; type: 'success' | 'error' | 'info' | 'warning'}>({
     visible: false, message: '', type: 'info',
   });
-  
   const router = useRouter();
-  const { login, loading } = useAuth(); // Use the loading state from the context
-
+  const { login, loginWithGoogle, loading, user } = useAuth();
   // ... (showToast, hideToast, useEffect for timer, validateForm, handleInputChange remain the same)
   const showToast = (message: string, type: 'success' | 'error' | 'info' | 'warning') => {
     setToast({ visible: true, message, type });
@@ -81,13 +81,15 @@ export default function LoginScreen() {
   };
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    let interval: ReturnType<typeof setInterval> | undefined;
     if (verificationTimer > 0) {
       interval = setInterval(() => {
         setVerificationTimer(prev => prev - 1);
       }, 1000);
     }
-    return () => clearInterval(interval);
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [verificationTimer]);
 
   useEffect(() => {
@@ -177,7 +179,7 @@ export default function LoginScreen() {
   const handleCheckVerification = async () => {
     if (!auth.currentUser) return;
     showToast('Checking verification status...', 'info');
-    
+
     try {
       await auth.currentUser.reload();
       if (auth.currentUser.emailVerified) {
@@ -192,10 +194,40 @@ export default function LoginScreen() {
     }
   };
 
+  const handleForgotPassword = async () => {
+    if (!formData.email.trim()) {
+      showToast('Please enter your email address first', 'error');
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+      showToast('Please enter a valid email address', 'error');
+      return;
+    }
+
+    showToast('Sending password reset email...', 'info');
+
+    try {
+      await sendPasswordResetEmail(auth, formData.email.trim());
+      showToast('Password reset email sent! Please check your inbox', 'success');
+    } catch (error: any) {
+      console.error('Forgot password error:', error);
+      let message = 'Failed to send password reset email';
+      if (error.code === 'auth/user-not-found') {
+        message = 'No account found with this email address';
+      } else if (error.code === 'auth/invalid-email') {
+        message = 'Invalid email address';
+      } else if (error.code === 'auth/too-many-requests') {
+        message = 'Too many requests. Please wait before trying again';
+      }
+      showToast(message, 'error');
+    }
+  };
+
   if (needsVerification) {
-    return (
-     <SafeAreaView style={styles.container}>
-        <Toast {...toast} onHide={hideToast} />
+  return (
+    <SafeAreaView style={styles.container}>
+      <Toast {...toast} onHide={hideToast} />
         
         <View style={styles.verificationContainer}>
           <View style={styles.verificationHeader}>
@@ -274,12 +306,14 @@ export default function LoginScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <Toast {...toast} onHide={hideToast} />
-      
+
+
+
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboardView}
       >
-        <ScrollView 
+        <ScrollView
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
@@ -360,8 +394,51 @@ export default function LoginScreen() {
               )}
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.forgotPassword}>
+            <TouchableOpacity
+              style={styles.forgotPassword}
+              onPress={handleForgotPassword}
+              disabled={loading}
+            >
               <Text style={styles.forgotPasswordText}>Forgot your password?</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.loginButton, { backgroundColor: '#4285F4', marginTop: 12 }, loading && styles.buttonDisabled]}
+              onPress={async () => {
+                try {
+                  showToast('Signing in with Google...', 'info');
+                  const user = await loginWithGoogle();
+                  if (user) {
+                    showToast('Signed in with Google!', 'success');
+                    router.replace('/(app)/(tabs)');
+                  }
+                } catch (error: any) {
+                  console.error('Google sign-in error:', error);
+                  let message = 'Google sign-in failed';
+                  if (error.code === 'auth/popup-blocked') {
+                    message = 'Popup was blocked. Please allow popups for this site.';
+                  } else if (error.code === 'auth/popup-closed-by-user') {
+                    message = 'Sign-in was cancelled.';
+                  } else if (error.code === 'auth/cancelled-popup-request') {
+                    message = 'Another sign-in is in progress.';
+                  } else if (error.code === 'auth/operation-not-supported-in-this-environment') {
+                    message = 'Google sign-in is not supported in this environment. Please use email/password login.';
+                  }
+                  showToast(message, 'error');
+                }
+              }}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator size="small" color="white" />
+              ) : (
+                <>
+                  <Ionicons name="logo-google" size={20} color="white" />
+                  <Text style={[styles.loginButtonText, { marginRight: 0 }]}>
+                    Sign in with Google
+                  </Text>
+                </>
+              )}
             </TouchableOpacity>
           </View>
 
@@ -657,4 +734,6 @@ const styles = StyleSheet.create({
     color: '#E53E3E',
     marginLeft: 4,
   },
+
+
 });

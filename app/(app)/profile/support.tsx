@@ -169,12 +169,12 @@ export default function SupportScreen() {
   const handleReportBug = () => {
     Alert.alert(
       'Report a Bug',
-      'Please describe the issue you encountered:',
+      'Help us improve BloodBond by reporting issues you encounter. Your feedback is valuable and helps us create a better experience for all users.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Report',
-          onPress: () => Alert.alert('Thank you', 'Your bug report has been submitted. We\'ll investigate and fix it soon!')
+          text: 'Report Bug',
+          onPress: () => router.push('/(app)/profile/bug-report')
         }
       ]
     );

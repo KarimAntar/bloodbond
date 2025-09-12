@@ -1,32 +1,44 @@
-// contexts/AuthContext.tsx - Simple Version
+// contexts/AuthContext.tsx - Firebase v10+ compatibility
 import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
-import { View, ActivityIndicator, Text, StyleSheet } from 'react-native';
-import { auth, db } from '../firebase/firebaseConfig';
-import { 
-  User as FirebaseUser, 
-  onAuthStateChanged,
+import {
   signInWithEmailAndPassword,
-  signOut
+  signInWithPopup,
+  onAuthStateChanged,
+  signOut,
+  GoogleAuthProvider,
+  signInWithRedirect,
+  getRedirectResult,
+  signInWithCredential,
+  signInWithPhoneNumber,
+  RecaptchaVerifier,
+  ConfirmationResult
 } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { collection, doc, getDoc } from 'firebase/firestore';
+import { auth, db, googleClientIdIOS, googleClientIdWeb } from '../firebase/firebaseConfig';
+import { LoadingScreen } from '../components/LoadingScreen';
 
 interface UserProfile {
   fullName: string;
   bloodType: string;
+  governorate: string;
   city: string;
   profileComplete: boolean;
   email: string;
   createdAt: any;
   phone?: string;
   role: string;
+  profilePicture?: string;
 }
 
 type AuthContextType = {
-  user: FirebaseUser | null;
+  user: any;
   userProfile: UserProfile | null;
   loading: boolean;
   initializing: boolean;
-  login: (email: string, password: string) => Promise<FirebaseUser>;
+  login: (email: string, password: string) => Promise<any>;
+  loginWithGoogle: () => Promise<any>;
+  loginWithPhone: (phoneNumber: string) => Promise<ConfirmationResult>;
+  confirmPhoneCode: (confirmationResult: ConfirmationResult, code: string) => Promise<any>;
   logout: () => Promise<void>;
   refreshUserProfile: () => Promise<void>;
 };
@@ -38,26 +50,63 @@ interface AuthProviderProps {
 }
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [user, setUser] = useState<any>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [initializing, setInitializing] = useState<boolean>(true);
+  const [profileCache] = useState<Map<string, UserProfile>>(new Map());
 
   const fetchUserProfile = async (userId: string): Promise<UserProfile | null> => {
+    // Check cache first for faster loading
+    if (profileCache.has(userId)) {
+      console.log('User profile found in cache:', userId);
+      return profileCache.get(userId)!;
+    }
+
+    // Ensure user is authenticated before accessing Firestore
+    if (!user || !user.uid) {
+      console.log('User not authenticated, cannot fetch profile');
+      return null;
+    }
+
     try {
       console.log('Fetching user profile for:', userId);
       const userDocRef = doc(db, 'users', userId);
       const userDocSnap = await getDoc(userDocRef);
-      
+
       if (userDocSnap.exists()) {
         const profile = userDocSnap.data() as UserProfile;
         console.log('User profile found:', profile);
+        // Cache the profile for future use
+        profileCache.set(userId, profile);
         return profile;
       }
-      console.log('No user profile found');
-      return null;
-    } catch (error) {
+
+      // Profile doesn't exist, create a basic one for Google sign-in users
+      console.log('No user profile found, creating basic profile for Google user');
+      const basicProfile: UserProfile = {
+        fullName: '', // Will be filled in profile setup
+        bloodType: '',
+        governorate: '',
+        city: '',
+        profileComplete: false, // Mark as incomplete so user gets redirected to setup
+        email: '', // Will be updated when profile is completed
+        createdAt: new Date(),
+        role: 'user',
+      };
+
+      // Cache the basic profile
+      profileCache.set(userId, basicProfile);
+      return basicProfile;
+    } catch (error: any) {
       console.error('Error fetching user profile:', error);
+
+      // Handle permission denied specifically
+      if (error.code === 'permission-denied') {
+        console.error('Firestore permission denied. User may not be fully authenticated.');
+        return null;
+      }
+
       return null;
     }
   };
@@ -72,30 +121,33 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Handle authentication state changes
   useEffect(() => {
     console.log('Setting up auth state listener');
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser: any) => {
       console.log('=== AUTH STATE CHANGED ===');
       console.log('Current user:', currentUser ? 'EXISTS' : 'NULL');
-      console.log('User details:', {
-        email: currentUser?.email,
-        verified: currentUser?.emailVerified,
-        uid: currentUser?.uid
-      });
 
       setUser(currentUser);
 
       if (currentUser) {
         console.log('User is logged in, fetching profile...');
-        setLoading(true);
+        // Only show loading for initial profile fetch if not in cache
+        if (!profileCache.has(currentUser.uid)) {
+          setLoading(true);
+        }
+
         const profile = await fetchUserProfile(currentUser.uid);
         setUserProfile(profile);
         setLoading(false);
-        console.log('Profile loaded, loading set to false');
+        console.log('Profile loaded');
       } else {
-        console.log('User is logged out, clearing profile and setting loading to false');
+        console.log('User is logged out, clearing profile');
         setUserProfile(null);
         setLoading(false);
+        // Clear cache on logout
+        profileCache.clear();
       }
 
+      // Set initializing to false after first auth check
       if (initializing) {
         console.log('Auth initialization complete');
         setInitializing(false);
@@ -106,19 +158,48 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       console.log('Cleaning up auth listener');
       unsubscribe();
     };
-  }, [initializing]);
+  }, []); // FIXED: Empty dependency array to prevent re-creation loop
 
-  const login = async (email: string, password: string): Promise<FirebaseUser> => {
+  // Handle redirect result from Google OAuth
+  useEffect(() => {
+    const handleRedirectResult = async () => {
+      try {
+        const result = await getRedirectResult(auth);
+        if (result) {
+          console.log('Redirect result received:', result.user);
+          // User will be handled by onAuthStateChanged listener
+        }
+      } catch (error) {
+        console.error('Error handling redirect result:', error);
+      }
+    };
+
+    handleRedirectResult();
+  }, []);
+
+  // Add a small delay to ensure auth state is fully initialized before other components try to use Firestore
+  useEffect(() => {
+    if (!initializing && user) {
+      console.log('Auth fully initialized, user authenticated');
+    }
+  }, [initializing, user]);
+
+  const login = async (email: string, password: string): Promise<any> => {
     try {
       console.log('Attempting login for:', email);
+      setLoading(true);
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       console.log('Login successful');
+      setLoading(false);
       return userCredential.user;
     } catch (error) {
       console.error('Login error:', error);
+      setLoading(false);
       throw error;
     }
   };
+
+
 
   const logout = async (): Promise<void> => {
     try {
@@ -138,22 +219,89 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       throw error; // Re-throw the error so the UI can handle it
     }
   };
+
+  const loginWithPhone = async (phoneNumber: string): Promise<ConfirmationResult> => {
+    try {
+      console.log('Attempting phone login for:', phoneNumber);
+      setLoading(true);
+
+      // Create reCAPTCHA verifier for web
+      const recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+        size: 'invisible',
+        callback: (response: any) => {
+          console.log('reCAPTCHA solved');
+        },
+        'expired-callback': () => {
+          console.log('reCAPTCHA expired');
+        }
+      });
+
+      const confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, recaptchaVerifier);
+      console.log('Phone verification code sent');
+      setLoading(false);
+      return confirmationResult;
+    } catch (error) {
+      console.error('Phone login error:', error);
+      setLoading(false);
+      throw error;
+    }
+  };
+
+  const confirmPhoneCode = async (confirmationResult: ConfirmationResult, code: string): Promise<any> => {
+    try {
+      console.log('Confirming phone verification code');
+      setLoading(true);
+      const result = await confirmationResult.confirm(code);
+      console.log('Phone verification successful');
+      setLoading(false);
+      return result.user;
+    } catch (error) {
+      console.error('Phone code confirmation error:', error);
+      setLoading(false);
+      throw error;
+    }
+  };
   
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      userProfile, 
-      loading, 
+    <AuthContext.Provider value={{
+      user,
+      userProfile,
+      loading,
       initializing,
-      login, 
-      logout, 
-      refreshUserProfile 
+      login,
+      loginWithGoogle: async () => {
+        setLoading(true);
+        try {
+          // Check if we're on web or mobile
+          if (typeof window !== 'undefined' && window.document && window.location.protocol.startsWith('http')) {
+            // Web: use popup
+            console.log('Using Google sign-in popup for web');
+            const provider = new GoogleAuthProvider();
+            const result = await signInWithPopup(auth, provider);
+            setLoading(false);
+            return result.user;
+          } else {
+            // Mobile (iOS/Android): use Firebase signInWithRedirect
+            console.log('Using Firebase signInWithRedirect for Google sign-in on mobile');
+            const provider = new GoogleAuthProvider();
+            await signInWithRedirect(auth, provider);
+            // Note: signInWithRedirect doesn't return a user immediately
+            // The user will be available through onAuthStateChanged after redirect
+            setLoading(false);
+            return null; // User will be set by onAuthStateChanged listener
+          }
+        } catch (error) {
+          setLoading(false);
+          throw error;
+        }
+      },
+      loginWithPhone,
+      confirmPhoneCode,
+      logout,
+      refreshUserProfile
     }}>
       {initializing ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#E53E3E" />
-          <Text style={styles.loadingText}>Checking authentication...</Text>
-        </View>
+        <LoadingScreen message="Initializing BloodBond..." />
       ) : (
         children
       )}
@@ -168,17 +316,3 @@ export const useAuth = () => {
   }
   return context;
 };
-
-const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f8f9fa',
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#666',
-  },
-});

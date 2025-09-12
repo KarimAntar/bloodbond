@@ -1,68 +1,72 @@
 // app/_layout.tsx
 import { Stack, useRouter, useSegments } from 'expo-router';
+import * as AuthSession from 'expo-auth-session';
 import { AuthProvider, useAuth } from '../contexts/AuthContext';
 import { NotificationProvider } from '../contexts/NotificationContext';
 import { UserStatsProvider } from '../contexts/UserStatsContext';
-import { useEffect } from 'react';
-import { ActivityIndicator, View, StyleSheet } from 'react-native';
+import { ThemeProvider } from '../contexts/ThemeContext';
+import { useEffect, useState } from 'react';
+import { LoadingScreen } from '../components/LoadingScreen';
+import { initializePerformanceOptimizations } from '../utils/performance';
+import { initializeNotifications } from '../firebase/pushNotifications';
+import { startProximityNotificationListener } from '../utils/proximityNotifications';
 
 const InitialLayout = () => {
-  const { user, initializing } = useAuth();
+  const { user, userProfile, initializing } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  const [proximityListener, setProximityListener] = useState<(() => void) | null>(null);
 
   useEffect(() => {
-    console.log('=== ROOT LAYOUT NAVIGATION CHECK ===');
-    console.log('Initializing:', initializing);
-    console.log('User exists:', !!user);
-    console.log('User email verified:', user?.emailVerified);
-    console.log('Current segments:', segments);
-
     // Wait until the auth state is no longer initializing.
     if (initializing) {
-      console.log('Still initializing, skipping navigation logic');
       return;
     }
 
-    const inAppGroup = segments[0] === '(app)';
-    console.log('In app group:', inAppGroup);
-
-    if (user) {
-      console.log('User is authenticated');
-      if (!user.emailVerified) {
-        console.log('User email not verified');
-        // BUT, their email is not verified.
-        // If they are trying to access a protected part of the app,
-        // send them back to the login screen, which will prompt for verification.
-        if (inAppGroup) {
-          console.log('Redirecting to login for email verification');
-          router.replace('/(auth)/login');
-        }
-      } else if (!inAppGroup) {
-        console.log('User verified but not in app group, redirecting to app');
-        // User is authenticated AND verified.
-        // If they are on a page in the (auth) group (e.g., login), send them into the app.
-        router.replace('/(app)/(tabs)');
-      } else {
-        console.log('User is authenticated and verified, staying in app');
-      }
-    } else if (inAppGroup) {
-      console.log('User not authenticated but in app group, redirecting to login');
-      // User is not authenticated.
-      // If they are trying to access a protected part of the app, redirect to login.
-      router.replace('/(auth)/login');
-    } else {
-      console.log('User not authenticated and not in app group, staying on auth screens');
+    // Start proximity notification listener only when user is authenticated
+    if (user && !proximityListener) {
+      console.log('Starting proximity notification listener for authenticated user');
+      const unsubscribe = startProximityNotificationListener();
+      setProximityListener(() => unsubscribe);
+    } else if (!user && proximityListener) {
+      // Clean up listener when user logs out
+      console.log('Stopping proximity notification listener');
+      proximityListener();
+      setProximityListener(null);
     }
-  }, [user, initializing, segments, router]);
 
-  // Show a loading screen while we determine the correct route
+    const inAppGroup = segments[0] === '(app)';
+    const inAuthGroup = segments[0] === '(auth)';
+
+    // Only handle authentication redirects, don't interfere with normal navigation
+    if (user) {
+      // User is authenticated
+      const currentPath = segments.join('/');
+      const isOnProfilePage = currentPath.includes('profile');
+
+      if (userProfile && userProfile.profileComplete === false && inAppGroup && !isOnProfilePage) {
+        // User profile exists but not complete, redirect to profile setup (but not if already on profile page)
+        console.log('User profile not complete, redirecting to profile edit...');
+        router.replace('/(app)/profile/edit');
+      } else if (!userProfile && inAppGroup && !isOnProfilePage) {
+        // User profile doesn't exist (Google sign-in), redirect to profile setup
+        console.log('User profile missing, redirecting to profile edit...');
+        router.replace('/(app)/profile/edit');
+      } else if (userProfile && userProfile.profileComplete === true && !inAppGroup && !inAuthGroup) {
+        // User profile complete and not on auth screens, redirect to main app
+        router.replace('/(app)/(tabs)');
+      }
+      // If user is verified and in app group, or unverified and on auth screens, do nothing
+    } else if (inAppGroup) {
+      // User not authenticated but trying to access app
+      router.replace('/(auth)/login');
+    }
+    // If user not authenticated and on auth screens, do nothing
+  }, [user, userProfile, initializing, segments, proximityListener]);
+
+  // Show a loading screen only while initializing
   if (initializing) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#E53E3E" />
-      </View>
-    );
+    return <LoadingScreen message="Setting up BloodBond..." />;
   }
 
   return (
@@ -74,21 +78,26 @@ const InitialLayout = () => {
 };
 
 export default function RootLayout() {
+  useEffect(() => {
+    // Initialize performance optimizations on app start
+    initializePerformanceOptimizations();
+
+    // Initialize push notifications
+    initializeNotifications();
+
+    // Note: Proximity notification listener will be started in InitialLayout
+    // after authentication is confirmed
+  }, []);
+
   return (
     <AuthProvider>
-      <NotificationProvider>
-        <UserStatsProvider>
-          <InitialLayout />
-        </UserStatsProvider>
-      </NotificationProvider>
+      <ThemeProvider>
+        <NotificationProvider>
+          <UserStatsProvider>
+            <InitialLayout />
+          </UserStatsProvider>
+        </NotificationProvider>
+      </ThemeProvider>
     </AuthProvider>
   );
 }
-
-const styles = StyleSheet.create({
-    loadingContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-    }
-})

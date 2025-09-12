@@ -38,9 +38,14 @@ export const UserStatsProvider: React.FC<UserStatsProviderProps> = ({ children }
     livesImpacted: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
-  const { user } = useAuth();
+  const { user, initializing } = useAuth();
 
   const fetchUserStats = async () => {
+    // Don't fetch stats while authentication is still initializing
+    if (initializing) {
+      return;
+    }
+
     if (!user) {
       setStats({
         requestsCreated: 0,
@@ -95,7 +100,7 @@ export const UserStatsProvider: React.FC<UserStatsProviderProps> = ({ children }
 
   useEffect(() => {
     fetchUserStats();
-  }, [user]);
+  }, [user, initializing]);
 
   const value = {
     stats,

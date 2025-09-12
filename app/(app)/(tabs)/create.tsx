@@ -1,5 +1,5 @@
 // app/(app)/(tabs)/create.tsx
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
@@ -63,6 +63,12 @@ const InfoCard: React.FC<{
 export default function CreateTabScreen() {
   const { user } = useAuth();
   const router = useRouter();
+
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.title = 'Donate - BloodBond';
+    }
+  }, []);
 
   const handleCreateRequest = () => {
     if (!user) {
