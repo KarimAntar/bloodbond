@@ -121,47 +121,72 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  // Handle authentication state changes
-  useEffect(() => {
-    console.log('Setting up auth state listener');
+/* Handle authentication state changes
+   - Don't block the UI on profile fetch: mark initializing false immediately (fast path)
+   - Fetch profile in background so the splash doesn't hang while network calls complete
+   - Keep the logout/clearing behavior synchronous
+*/
+useEffect(() => {
+  console.log('Setting up auth state listener');
 
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser: any) => {
-      console.log('=== AUTH STATE CHANGED ===');
-      console.log('Current user:', currentUser ? 'EXISTS' : 'NULL');
+  const unsubscribe = onAuthStateChanged(auth, (currentUser: any) => {
+    console.log('=== AUTH STATE CHANGED ===');
+    console.log('Current user:', currentUser ? 'EXISTS' : 'NULL');
 
-      setUser(currentUser);
+    setUser(currentUser);
 
-      if (currentUser) {
-        console.log('User is logged in, fetching profile...');
-        // Only show loading for initial profile fetch if not in cache
-        if (!profileCache.has(currentUser.uid)) {
-          setLoading(true);
+    // Mark initialization finished immediately so UI can render without waiting for Firestore
+    if (initializing) {
+      console.log('Auth initialization complete (fast path)');
+      setInitializing(false);
+    }
+
+    if (currentUser) {
+      console.log('User logged in — fetching profile in background');
+      // Only show loading indicator while profile isn't cached
+      if (!profileCache.has(currentUser.uid)) {
+        setLoading(true);
+      }
+
+      // Perform profile fetch in background; do not block initialization/splash
+      (async () => {
+        try {
+          const profile = await fetchUserProfile(currentUser.uid);
+          setUserProfile(profile);
+        } catch (error) {
+          console.error('Background profile fetch error:', error);
+        } finally {
+          setLoading(false);
         }
+        console.log('Profile loaded (background)');
+      })();
+    } else {
+      console.log('User is logged out, clearing profile');
+      setUserProfile(null);
+      setLoading(false);
+      // Clear cache on logout
+      profileCache.clear();
+    }
+  });
 
-        const profile = await fetchUserProfile(currentUser.uid);
-        setUserProfile(profile);
-        setLoading(false);
-        console.log('Profile loaded');
-      } else {
-        console.log('User is logged out, clearing profile');
-        setUserProfile(null);
-        setLoading(false);
-        // Clear cache on logout
-        profileCache.clear();
-      }
+  return () => {
+    console.log('Cleaning up auth listener');
+    unsubscribe();
+  };
+}, []); // FIXED: Empty dependency array to prevent re-creation loop
 
-      // Set initializing to false after first auth check
-      if (initializing) {
-        console.log('Auth initialization complete');
-        setInitializing(false);
-      }
-    });
+// Fallback: ensure we don't stay on the initializing splash indefinitely
+useEffect(() => {
+  if (initializing) {
+    const timer = setTimeout(() => {
+      // If still initializing after 10s, force it to false to avoid long hangs
+      console.warn('Initialization timeout reached, forcing initializing = false');
+      setInitializing(false);
+    }, 10000); // 10 seconds
 
-    return () => {
-      console.log('Cleaning up auth listener');
-      unsubscribe();
-    };
-  }, []); // FIXED: Empty dependency array to prevent re-creation loop
+    return () => clearTimeout(timer);
+  }
+}, [initializing]);
 
   // Handle redirect result from Google OAuth
   useEffect(() => {
