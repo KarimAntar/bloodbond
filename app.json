@@ -42,6 +42,9 @@
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
+    "notification": {
+      "vapidPublicKey": "sYjmwW3dKVCtu2pxhJFYxVSgeQUCP8Ga5fyEY6357L4"
+    },
     "plugins": [
       "expo-router",
       [
