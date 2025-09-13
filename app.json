@@ -43,7 +43,7 @@
       "favicon": "./assets/images/favicon.png"
     },
     "notification": {
-      "vapidPublicKey": "sYjmwW3dKVCtu2pxhJFYxVSgeQUCP8Ga5fyEY6357L4"
+      "vapidPublicKey": "BLE_rcaEjnsdb46DiH8fbTBvVBfRWjKZK7ZUxDTJoNopAML1wtkn1KQ-Arm9lChaQasur2kTHztlpCsWHeeUDQ0"
     },
     "plugins": [
       "expo-router",
