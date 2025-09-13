@@ -23,6 +23,7 @@ import { Colors } from '../../../constants/Colors';
 import { SkeletonCard } from '../../../components/SkeletonLoader';
 import { collection, getDocs, query, orderBy, where, deleteDoc, doc } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
+import PullToRefresh from '../../../components/PullToRefresh';
 
 interface BloodRequest {
   id: string;
@@ -44,98 +45,140 @@ const RequestCard: React.FC<{
   onPress: () => void;
   onRespond: () => void;
   onShare: () => void;
+  onEdit?: () => void;
   onDelete?: () => void;
-  showDeleteButton?: boolean;
+  onViewResponses?: () => void;
+  canEdit?: boolean;
   colors: any;
-}> = ({ request, onPress, onRespond, onShare, onDelete, showDeleteButton, colors }) => {
+  router: any;
+}> = ({ request, onPress, onRespond, onShare, onEdit, onDelete, onViewResponses, canEdit, colors, router }) => {
+  const [menuVisible, setMenuVisible] = React.useState(false);
+
   const timeAgo = React.useMemo(() => {
     if (!request.createdAt) return 'Recently';
-    
+
     const now = new Date();
     const requestTime = request.createdAt.toDate();
     const diffInHours = Math.floor((now.getTime() - requestTime.getTime()) / (1000 * 60 * 60));
-    
+
     if (diffInHours < 1) return 'Just now';
     if (diffInHours < 24) return `${diffInHours}h ago`;
-    
+
     const diffInDays = Math.floor(diffInHours / 24);
     return `${diffInDays}d ago`;
   }, [request.createdAt]);
 
+  const handleMenuPress = () => {
+    setMenuVisible(!menuVisible);
+  };
+
+  const handleEdit = () => {
+    setMenuVisible(false);
+    if (onEdit) onEdit();
+  };
+
+  const handleDelete = () => {
+    setMenuVisible(false);
+    if (onDelete) onDelete();
+  };
+
   return (
-    <TouchableOpacity 
-      style={[styles.requestCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]} 
-      onPress={onPress}
-    >
-      <View style={styles.cardHeader}>
-        <View style={styles.leftHeader}>
-          <View style={[styles.bloodTypeBadge, { backgroundColor: getBloodTypeColor(request.bloodType) }]}>
-            <Text style={styles.bloodTypeText}>{request.bloodType}</Text>
-          </View>
-          <View style={styles.requestInfo}>
-            <Text style={[styles.patientName, { color: colors.primaryText }]}>{request.fullName}</Text>
-            <View style={styles.locationRow}>
-              <Ionicons name="location" size={14} color={colors.secondaryText} />
-              <Text style={[styles.locationText, { color: colors.secondaryText }]}>
-                {request.governorate ? `${request.governorate}, ${request.city}` : request.city}
-              </Text>
+    <View style={[styles.requestCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+      <TouchableOpacity onPress={onPress} style={styles.cardContent}>
+        <View style={styles.cardHeader}>
+          <View style={styles.leftHeader}>
+            <View style={[styles.bloodTypeBadge, { backgroundColor: getBloodTypeColor(request.bloodType) }]}>
+              <Text style={styles.bloodTypeText}>{request.bloodType}</Text>
+            </View>
+            <View style={styles.requestInfo}>
+              <Text style={[styles.patientName, { color: colors.primaryText }]}>{request.fullName}</Text>
+              <View style={styles.locationRow}>
+                <Ionicons name="location" size={14} color={colors.secondaryText} />
+                <Text style={[styles.locationText, { color: colors.secondaryText }]}>
+                  {request.governorate ? `${request.governorate}, ${request.city}` : request.city}
+                </Text>
+              </View>
             </View>
           </View>
-        </View>
-        <View style={styles.rightHeader}>
-          {request.urgent && (
-            <View style={styles.urgentBadge}>
-              <Ionicons name="warning" size={12} color="#fff" />
-              <Text style={styles.urgentText}>URGENT</Text>
-            </View>
-          )}
-          <Text style={[styles.timeText, { color: colors.secondaryText }]}>{timeAgo}</Text>
-        </View>
-      </View>
-
-      <View style={styles.hospitalRow}>
-        <Ionicons name="medical" size={16} color={colors.primary} />
-        <Text style={[styles.hospitalText, { color: colors.primaryText }]}>{request.hospital}</Text>
-      </View>
-
-      {request.notes && (
-        <Text style={[styles.notesText, { color: colors.secondaryText }]} numberOfLines={2}>
-          {request.notes}
-        </Text>
-      )}
-
-      <View style={[styles.cardFooter, { borderTopColor: colors.border }]}>
-        <View style={styles.footerLeft}>
-          <TouchableOpacity 
-            style={[styles.respondButton, { backgroundColor: colors.primary + '15' }]} 
-            onPress={onRespond}
-          >
-            <Ionicons name="hand-left" size={16} color={colors.primary} />
-            <Text style={[styles.respondButtonText, { color: colors.primary }]}>Respond</Text>
-          </TouchableOpacity>
-
-          {request.responseCount !== undefined && (
-            <View style={[styles.responseCount, { backgroundColor: colors.screenBackground }]}>
-              <Ionicons name="people" size={14} color={colors.secondaryText} />
-              <Text style={[styles.responseCountText, { color: colors.secondaryText }]}>
-                {request.responseCount || 0} {(request.responseCount || 0) === 1 ? 'response' : 'responses'}
-              </Text>
-            </View>
-          )}
+          <View style={styles.rightHeader}>
+            {request.urgent && (
+              <View style={styles.urgentBadge}>
+                <Ionicons name="warning" size={12} color="#fff" />
+                <Text style={styles.urgentText}>URGENT</Text>
+              </View>
+            )}
+            <Text style={[styles.timeText, { color: colors.secondaryText }]}>{timeAgo}</Text>
+          </View>
         </View>
 
-        <View style={styles.footerRight}>
-          {showDeleteButton && onDelete && (
-            <TouchableOpacity style={[styles.deleteButton, { backgroundColor: colors.danger + '15' }]} onPress={onDelete}>
-              <Ionicons name="trash-outline" size={16} color={colors.danger} />
+        <View style={styles.hospitalRow}>
+          <Ionicons name="medical" size={16} color={colors.primary} />
+          <Text style={[styles.hospitalText, { color: colors.primaryText }]}>{request.hospital}</Text>
+        </View>
+
+        {request.notes && (
+          <Text style={[styles.notesText, { color: colors.secondaryText }]} numberOfLines={2}>
+            {request.notes}
+          </Text>
+        )}
+
+        <View style={[styles.cardFooter, { borderTopColor: colors.border }]}>
+          <View style={styles.footerLeft}>
+            <TouchableOpacity
+              style={[styles.respondButton, { backgroundColor: colors.primary + '15' }]}
+              onPress={onRespond}
+            >
+              <Ionicons name="hand-left" size={16} color={colors.primary} />
+              <Text style={[styles.respondButtonText, { color: colors.primary }]}>Respond</Text>
             </TouchableOpacity>
-          )}
-          <TouchableOpacity style={styles.shareButton} onPress={onShare}>
-            <Ionicons name="share-outline" size={16} color={colors.secondaryText} />
-          </TouchableOpacity>
+
+            {request.responseCount !== undefined && (
+              <TouchableOpacity
+                style={[styles.responseCount, { backgroundColor: colors.screenBackground }]}
+                onPress={() => router.push(`/requests/${request.id}/responses`)}
+              >
+                <Ionicons name="people" size={14} color={colors.secondaryText} />
+                <Text style={[styles.responseCountText, { color: colors.secondaryText }]}>
+                  {request.responseCount || 0} {(request.responseCount || 0) === 1 ? 'response' : 'responses'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <View style={styles.footerRight}>
+            <TouchableOpacity style={styles.shareButton} onPress={onShare}>
+              <Ionicons name="share-outline" size={16} color={colors.secondaryText} />
+            </TouchableOpacity>
+            {canEdit && (
+              <TouchableOpacity style={styles.menuButton} onPress={handleMenuPress}>
+                <Ionicons name="ellipsis-vertical" size={16} color={colors.secondaryText} />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
-      </View>
-    </TouchableOpacity>
+      </TouchableOpacity>
+
+      {/* 3-dot menu */}
+      {menuVisible && canEdit && (
+        <>
+          <TouchableOpacity style={styles.menuOverlay} onPress={() => setMenuVisible(false)} activeOpacity={1} />
+          <View style={[styles.menuContainer, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+            {onEdit && (
+              <TouchableOpacity style={[styles.menuItem, { borderBottomColor: colors.border }]} onPress={handleEdit}>
+                <Ionicons name="create-outline" size={16} color={colors.primary} />
+                <Text style={[styles.menuItemText, { color: colors.primaryText }]}>Edit</Text>
+              </TouchableOpacity>
+            )}
+            {onDelete && (
+              <TouchableOpacity style={styles.menuItem} onPress={handleDelete}>
+                <Ionicons name="trash-outline" size={16} color={colors.danger} />
+                <Text style={[styles.menuItemText, { color: colors.danger }]}>Delete</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </>
+      )}
+    </View>
   );
 };
 
@@ -210,9 +253,12 @@ export default function RequestsTabScreen() {
         ...doc.data()
       } as BloodRequest));
 
-      // Fetch response counts for each request
+      // Filter out expired requests (only show active requests)
+      const activeRequests = fetchedRequests.filter(request => !(request as any).expired);
+
+      // Fetch response counts for each active request
       const requestsWithCounts = await Promise.all(
-        fetchedRequests.map(async (request) => {
+        activeRequests.map(async (request) => {
           try {
             const responsesQuery = query(
               collection(db, 'responses'),
@@ -581,20 +627,8 @@ export default function RequestsTabScreen() {
 
   return (
     <SafeAreaView style={dynamicStyles.container}>
-      <ScrollView
-        style={styles.scrollContainer}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[colors.primary]}
-            tintColor={colors.primary}
-            progressBackgroundColor={colors.cardBackground}
-            progressViewOffset={50}
-          />
-        }
-        showsVerticalScrollIndicator={false}
-      >
+      <PullToRefresh refreshing={refreshing} onRefresh={onRefresh}>
+        <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={dynamicStyles.header}>
           <View style={styles.headerContent}>
@@ -705,22 +739,31 @@ export default function RequestsTabScreen() {
                 </Text>
               </View>
             ) : (
-              filteredRequests.map((item) => (
-                <RequestCard
-                  key={item.id}
-                  request={item}
-                  onPress={() => router.push(`/requests/${item.id}`)}
-                  onRespond={() => handleRespond(item)}
-                  onShare={() => handleShare(item)}
-                  onDelete={() => handleDeleteRequest(item)}
-                  showDeleteButton={canDeleteRequests}
-                  colors={colors}
-                />
-              ))
+              filteredRequests.map((item) => {
+                const canEdit = item.userId === user?.uid || canDeleteRequests;
+                return (
+                  <RequestCard
+                    key={item.id}
+                    request={item}
+                    onPress={() => router.push(`/requests/${item.id}`)}
+                    onRespond={() => handleRespond(item)}
+                    onShare={() => handleShare(item)}
+                    onEdit={() => {
+                      console.log('Edit button pressed for request:', item.id);
+                      router.push(`/requests/${item.id}/edit`);
+                    }}
+                    onDelete={() => handleDeleteRequest(item)}
+                    canEdit={canEdit}
+                    colors={colors}
+                    router={router}
+                  />
+                );
+              })
             )}
           </View>
         )}
       </ScrollView>
+      </PullToRefresh>
 
       {/* Delete Confirmation Modal */}
       <Modal
@@ -815,11 +858,13 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: '#1a1a1a',
+    textAlign: 'left',
   },
   subtitle: {
     fontSize: 14,
     color: '#666',
     marginTop: 2,
+    textAlign: 'left',
   },
 
   createButton: {
@@ -850,6 +895,7 @@ const styles = StyleSheet.create({
     marginLeft: 12,
     fontSize: 16,
     color: '#1a1a1a',
+    textAlign: 'left',
   },
   filtersContainer: {
     backgroundColor: 'white',
@@ -877,9 +923,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
     color: '#666',
+    textAlign: 'left',
   },
   filterChipTextSelected: {
     color: 'white',
+    textAlign: 'left',
   },
   errorContainer: {
     flex: 1,
@@ -904,6 +952,7 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
+    textAlign: 'left',
   },
   requestsList: {
     padding: 16,
@@ -949,6 +998,7 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 12,
     fontWeight: 'bold',
+    textAlign: 'left',
   },
   requestInfo: {
     flex: 1,
@@ -958,6 +1008,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1a1a1a',
     marginBottom: 4,
+    textAlign: 'left',
+    writingDirection: 'ltr',
   },
   locationRow: {
     flexDirection: 'row',
@@ -967,6 +1019,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginLeft: 4,
+    textAlign: 'left',
   },
   urgentBadge: {
     backgroundColor: '#F56500',
@@ -982,10 +1035,12 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: 'bold',
     marginLeft: 4,
+    textAlign: 'left',
   },
   timeText: {
     fontSize: 12,
     color: '#999',
+    textAlign: 'left',
   },
   hospitalRow: {
     flexDirection: 'row',
@@ -997,12 +1052,14 @@ const styles = StyleSheet.create({
     color: '#1a1a1a',
     marginLeft: 8,
     fontWeight: '500',
+    textAlign: 'left',
   },
   notesText: {
     fontSize: 14,
     color: '#666',
     lineHeight: 20,
     marginBottom: 12,
+    textAlign: 'left',
   },
   cardFooter: {
     flexDirection: 'row',
@@ -1035,6 +1092,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     marginLeft: 4,
+    textAlign: 'left',
   },
   responseCount: {
     flexDirection: 'row',
@@ -1049,6 +1107,7 @@ const styles = StyleSheet.create({
     color: '#666',
     marginLeft: 4,
     fontWeight: '500',
+    textAlign: 'left',
   },
   deleteButton: {
     padding: 8,
@@ -1057,6 +1116,47 @@ const styles = StyleSheet.create({
   },
   shareButton: {
     padding: 8,
+  },
+  cardContent: {
+    flex: 1,
+  },
+  menuButton: {
+    padding: 8,
+  },
+  menuContainer: {
+    position: 'absolute',
+    top: 50,
+    right: 16,
+    backgroundColor: 'white',
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 5,
+    minWidth: 120,
+    zIndex: 1000,
+  },
+  menuOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 999,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  menuItemText: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginLeft: 8,
+    textAlign: 'left',
   },
   emptyContainer: {
     flex: 1,
@@ -1069,6 +1169,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1a1a1a',
     marginTop: 16,
+    textAlign: 'left',
   },
   emptyText: {
     fontSize: 16,
@@ -1100,12 +1201,14 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1a1a1a',
     marginLeft: 12,
+    textAlign: 'left',
   },
   modalMessage: {
     fontSize: 16,
     color: '#666',
     lineHeight: 24,
     marginBottom: 24,
+    textAlign: 'left',
   },
   modalButtons: {
     flexDirection: 'row',
@@ -1131,6 +1234,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     fontWeight: '600',
+    textAlign: 'left',
   },
   deleteConfirmButton: {
     backgroundColor: '#E53E3E',
@@ -1139,5 +1243,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: 'white',
     fontWeight: '600',
+    textAlign: 'left',
   },
 });

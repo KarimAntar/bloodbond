@@ -18,6 +18,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Colors } from '../../constants/Colors';
 import { SkeletonCard } from '../../components/SkeletonLoader';
+import PullToRefresh from '../../components/PullToRefresh';
 
 interface NotificationItem {
   id: string;
@@ -407,39 +408,31 @@ export default function NotificationsScreen() {
         )}
       </LinearGradient>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={['#E53E3E']}
-            tintColor="#E53E3E"
-          />
-        }
-      >
-        {notifications.length === 0 ? (
-          <View style={dynamicStyles.emptyContainer}>
-            <Ionicons name="notifications-off" size={64} color={colors.secondaryText} />
-            <Text style={dynamicStyles.emptyTitle}>No notifications yet</Text>
-            <Text style={dynamicStyles.emptyText}>
-              You'll receive notifications about blood requests and responses here.
-            </Text>
-          </View>
-        ) : (
-          <View style={styles.notificationsList}>
-            {notifications.map((notification) => (
-              <NotificationCard
-                key={notification.id}
-                notification={notification}
-                onPress={() => handleNotificationPress(notification)}
-                onMarkAsRead={() => handleMarkAsRead(notification.id)}
-                colors={colors}
-              />
-            ))}
-          </View>
-        )}
-      </ScrollView>
+      <PullToRefresh refreshing={refreshing} onRefresh={onRefresh}>
+        <ScrollView showsVerticalScrollIndicator={false}>
+          {notifications.length === 0 ? (
+            <View style={dynamicStyles.emptyContainer}>
+              <Ionicons name="notifications-off" size={64} color={colors.secondaryText} />
+              <Text style={dynamicStyles.emptyTitle}>No notifications yet</Text>
+              <Text style={dynamicStyles.emptyText}>
+                You'll receive notifications about blood requests and responses here.
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.notificationsList}>
+              {notifications.map((notification) => (
+                <NotificationCard
+                  key={notification.id}
+                  notification={notification}
+                  onPress={() => handleNotificationPress(notification)}
+                  onMarkAsRead={() => handleMarkAsRead(notification.id)}
+                  colors={colors}
+                />
+              ))}
+            </View>
+          )}
+        </ScrollView>
+      </PullToRefresh>
     </SafeAreaView>
   );
 }

@@ -5,9 +5,9 @@ import React from 'react';
 export default function RequestsLayout() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="index" />
       <Stack.Screen name="create" />
       <Stack.Screen name="[id]" />
+      <Stack.Screen name="[id]/edit" />
     </Stack>
   );
 }

@@ -1,5 +1,5 @@
 // app/(app)/(tabs)/settings.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -117,22 +117,51 @@ export default function SettingsTabScreen() {
   const { stats } = useUserStats();
   const { colors } = useTheme();
   const router = useRouter();
+  const lastRefreshRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (typeof document !== 'undefined') {
       document.title = 'Settings - BloodBond';
     }
     loadSettings();
-  }, []);
 
-  // Fetch fresh user profile data every time the settings page comes into focus
+    const attemptRefresh = async () => {
+      try {
+        if (!user?.uid) return;
+        const now = Date.now();
+        // throttle refreshes to once per 60s to avoid loops
+        if (lastRefreshRef.current && now - lastRefreshRef.current < 60000) return;
+        if (!userProfile || !userProfile.role) {
+          lastRefreshRef.current = now;
+          await refreshUserProfile();
+        }
+      } catch (err) {
+        console.error('Error refreshing user profile on settings mount:', err);
+      }
+    };
+
+    attemptRefresh();
+  // Re-run when auth user or profile changes
+  }, [user?.uid, userProfile, refreshUserProfile]);
+
+  // Fetch fresh user profile data when the settings page comes into focus,
+  // but avoid refreshing repeatedly to prevent refresh/redirect loops.
   useFocusEffect(
     React.useCallback(() => {
       const fetchFreshProfileData = async () => {
         if (!user?.uid) return;
 
+        // If we already have a profile with a role, no need to refresh.
+        if (userProfile && userProfile.role) {
+          return;
+        }
+
+        const now = Date.now();
+        if (lastRefreshRef.current && now - lastRefreshRef.current < 60000) return;
+
         try {
           console.log('Refreshing user profile data for settings page...');
+          lastRefreshRef.current = now;
           await refreshUserProfile();
           console.log('User profile refreshed successfully');
         } catch (error) {
@@ -141,7 +170,7 @@ export default function SettingsTabScreen() {
       };
 
       fetchFreshProfileData();
-    }, [user?.uid, refreshUserProfile])
+    }, [user?.uid, userProfile, refreshUserProfile])
   );
 
   const loadSettings = async () => {
@@ -523,12 +552,12 @@ export default function SettingsTabScreen() {
               color="#F56500"
               colors={colors}
             />
-            {userProfile?.role === 'admin' && (
+            {userProfile?.role?.trim()?.toLowerCase() === 'admin' && (
               <ProfileOption
                 icon="shield"
                 title="Admin Dashboard"
                 subtitle="Manage users and requests"
-                onPress={() => router.push('../admin')}
+                onPress={() => router.push('/(app)/admin')}
                 color="#8B5CF6"
                 colors={colors}
               />

@@ -1,6 +1,7 @@
 // app/requests/[id]/responses/index.tsx
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, SafeAreaView, Modal, Alert, RefreshControl } from 'react-native';
+import PullToRefresh from '../../../../../components/PullToRefresh';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { db } from '../../../../../firebase/firebaseConfig';
 import { collection, getDocs, doc, getDoc, query, orderBy, where, deleteDoc } from 'firebase/firestore';
@@ -12,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 interface Response {
   id: string;
+  userId: string;
   responderName: string;
   message: string;
   bloodType?: string;
@@ -21,10 +23,13 @@ interface Response {
 const ResponseCard: React.FC<{
   response: Response;
   onPress: () => void;
+  onEdit?: () => void;
   onDelete?: () => void;
-  showDeleteButton?: boolean;
+  canEdit?: boolean;
   colors: any;
-}> = ({ response, onPress, onDelete, showDeleteButton, colors }) => {
+}> = ({ response, onPress, onEdit, onDelete, canEdit, colors }) => {
+  const [menuVisible, setMenuVisible] = React.useState(false);
+
   const timeAgo = React.useMemo(() => {
     if (!response.createdAt) return 'Recently';
 
@@ -39,52 +44,85 @@ const ResponseCard: React.FC<{
     return `${diffInDays}d ago`;
   }, [response.createdAt]);
 
+  const handleMenuPress = () => {
+    setMenuVisible(!menuVisible);
+  };
+
+  const handleEdit = () => {
+    setMenuVisible(false);
+    if (onEdit) onEdit();
+  };
+
+  const handleDelete = () => {
+    setMenuVisible(false);
+    if (onDelete) onDelete();
+  };
+
   return (
-    <TouchableOpacity 
-      style={[styles.responseCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]} 
-      onPress={onPress}
-    >
-      <View style={styles.responseHeader}>
-        <View style={styles.leftHeader}>
-          <View style={styles.avatarContainer}>
-            <View style={[styles.avatar, { backgroundColor: colors.primary + '20' }]}>
-              <Ionicons name="person" size={16} color={colors.primary} />
+    <View style={[styles.responseCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+      <TouchableOpacity onPress={onPress} style={styles.cardContent}>
+        <View style={styles.responseHeader}>
+          <View style={styles.leftHeader}>
+            <View style={styles.avatarContainer}>
+              <View style={[styles.avatar, { backgroundColor: colors.primary + '20' }]}>
+                <Ionicons name="person" size={16} color={colors.primary} />
+              </View>
+              <View style={styles.nameContainer}>
+                <Text style={[styles.responseName, { color: colors.primaryText }]}>
+                  {response.responderName}
+                </Text>
+                <Text style={[styles.timeText, { color: colors.secondaryText }]}>{timeAgo}</Text>
+              </View>
             </View>
-            <View style={styles.nameContainer}>
-              <Text style={[styles.responseName, { color: colors.primaryText }]}>
-                {response.responderName}
-              </Text>
-              <Text style={[styles.timeText, { color: colors.secondaryText }]}>{timeAgo}</Text>
-            </View>
+            {response.bloodType && (
+              <View style={[styles.badge, { backgroundColor: colors.primary }]}>
+                <Text style={styles.badgeText}>{response.bloodType}</Text>
+              </View>
+            )}
           </View>
-          {response.bloodType && (
-            <View style={[styles.badge, { backgroundColor: colors.primary }]}>
-              <Text style={styles.badgeText}>{response.bloodType}</Text>
-            </View>
-          )}
+          <View style={styles.actionButtons}>
+            {canEdit && (
+              <TouchableOpacity style={styles.menuButton} onPress={handleMenuPress}>
+                <Ionicons name="ellipsis-vertical" size={16} color={colors.secondaryText} />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
-        {showDeleteButton && onDelete && (
-          <TouchableOpacity 
-            style={[styles.deleteButton, { backgroundColor: colors.danger + '15' }]} 
-            onPress={onDelete}
+        <Text style={[styles.responseText, { color: colors.secondaryText }]} numberOfLines={3}>
+          {response.message}
+        </Text>
+        <View style={styles.responseFooter}>
+          <TouchableOpacity
+            style={[styles.replyButton, { backgroundColor: colors.primary + '10' }]}
+            onPress={onPress}
           >
-            <Ionicons name="trash-outline" size={16} color={colors.danger} />
+            <Ionicons name="chatbubble-outline" size={14} color={colors.primary} />
+            <Text style={[styles.replyButtonText, { color: colors.primary }]}>View Details</Text>
           </TouchableOpacity>
-        )}
-      </View>
-      <Text style={[styles.responseText, { color: colors.secondaryText }]} numberOfLines={3}>
-        {response.message}
-      </Text>
-      <View style={styles.responseFooter}>
-        <TouchableOpacity 
-          style={[styles.replyButton, { backgroundColor: colors.primary + '10' }]}
-          onPress={onPress}
-        >
-          <Ionicons name="chatbubble-outline" size={14} color={colors.primary} />
-          <Text style={[styles.replyButtonText, { color: colors.primary }]}>View Details</Text>
-        </TouchableOpacity>
-      </View>
-    </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+
+      {/* 3-dot menu */}
+      {menuVisible && canEdit && (
+        <>
+          <TouchableOpacity style={styles.menuOverlay} onPress={() => setMenuVisible(false)} activeOpacity={1} />
+          <View style={[styles.menuContainer, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+            {onEdit && (
+              <TouchableOpacity style={[styles.menuItem, { borderBottomColor: colors.border }]} onPress={handleEdit}>
+                <Ionicons name="create-outline" size={16} color={colors.primary} />
+                <Text style={[styles.menuItemText, { color: colors.primaryText }]}>Edit</Text>
+              </TouchableOpacity>
+            )}
+            {onDelete && (
+              <TouchableOpacity style={styles.menuItem} onPress={handleDelete}>
+                <Ionicons name="trash-outline" size={16} color={colors.danger} />
+                <Text style={[styles.menuItemText, { color: colors.danger }]}>Delete</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </>
+      )}
+    </View>
   );
 }
 
@@ -161,6 +199,11 @@ export default function RequestResponsesScreen() {
   };
 
   const canDeleteResponses = userProfile?.role === 'admin' || userProfile?.role === 'moderator';
+
+  const canEditResponse = (response: Response) => {
+    // Users can edit their own responses, admins and moderators can edit all responses
+    return response.userId === user?.uid || userProfile?.role === 'admin' || userProfile?.role === 'moderator';
+  };
 
   const dynamicStyles = StyleSheet.create({
     container: {
@@ -292,39 +335,33 @@ export default function RequestResponsesScreen() {
         </TouchableOpacity>
       </View>
 
-      <FlatList
-        data={responses}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <ResponseCard
-            response={item}
-            onPress={() => router.push(`/requests/${id}/responses/${item.id}`)}
-            onDelete={() => handleDeleteResponse(item)}
-            showDeleteButton={canDeleteResponses}
-            colors={colors}
-          />
-        )}
-        contentContainerStyle={dynamicStyles.listContainer}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[colors.primary]}
-            tintColor={colors.primary}
-            progressBackgroundColor={colors.cardBackground}
-          />
-        }
-        ListEmptyComponent={() => (
-          <View style={dynamicStyles.emptyContainer}>
-            <Ionicons name="chatbubbles-outline" size={64} color={colors.secondaryText + '60'} />
-            <Text style={dynamicStyles.emptyTitle}>No Responses Yet</Text>
-            <Text style={dynamicStyles.emptyText}>
-              This blood request hasn't received any responses yet. Check back later for responses from potential donors.
-            </Text>
-          </View>
-        )}
-      />
+      <PullToRefresh refreshing={refreshing} onRefresh={onRefresh}>
+        <FlatList
+          data={responses}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <ResponseCard
+              response={item}
+              onPress={() => router.push(`/requests/${id}/responses/${item.id}`)}
+              onEdit={() => router.push(`/requests/${id}/responses/${item.id}/edit`)}
+              onDelete={() => handleDeleteResponse(item)}
+              canEdit={canEditResponse(item)}
+              colors={colors}
+            />
+          )}
+          contentContainerStyle={dynamicStyles.listContainer}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={() => (
+            <View style={dynamicStyles.emptyContainer}>
+              <Ionicons name="chatbubbles-outline" size={64} color={colors.secondaryText + '60'} />
+              <Text style={dynamicStyles.emptyTitle}>No Responses Yet</Text>
+              <Text style={dynamicStyles.emptyText}>
+                This blood request hasn't received any responses yet. Check back later for responses from potential donors.
+              </Text>
+            </View>
+          )}
+        />
+      </PullToRefresh>
 
       {/* Delete Response Modal */}
       <Modal
@@ -424,6 +461,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 2,
+    textAlign: 'left',
   },
   badge: {
     borderRadius: 12,
@@ -440,6 +478,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
     marginBottom: 12,
+    textAlign: 'left',
   },
   timeText: {
     fontSize: 12,
@@ -464,6 +503,14 @@ const styles = StyleSheet.create({
   replyButtonText: {
     fontSize: 13,
     fontWeight: '600',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  editButton: {
+    padding: 8,
+    borderRadius: 8,
   },
   deleteButton: {
     padding: 8,
@@ -503,5 +550,45 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: 'white',
     fontWeight: '600',
+  },
+  cardContent: {
+    flex: 1,
+  },
+  menuButton: {
+    padding: 8,
+  },
+  menuContainer: {
+    position: 'absolute',
+    top: 50,
+    right: 16,
+    backgroundColor: 'white',
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 5,
+    minWidth: 120,
+    zIndex: 1000,
+  },
+  menuOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 999,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  menuItemText: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginLeft: 8,
   },
 });

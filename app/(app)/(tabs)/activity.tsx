@@ -17,6 +17,7 @@ import { Colors } from '../../../constants/Colors';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import PullToRefresh from '../../../components/PullToRefresh';
 import { SkeletonCard } from '../../../components/SkeletonLoader';
 import { collection, query, where, orderBy, getDocs, limit } from 'firebase/firestore';
 import { db } from '../../../firebase/firebaseConfig';
@@ -357,24 +358,16 @@ export default function ActivityTabScreen() {
 
   return (
     <SafeAreaView style={dynamicStyles.container}>
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[colors.primary]}
-            tintColor={colors.primary}
-            progressBackgroundColor={colors.cardBackground}
-          />
-        }
-      >
-        <LinearGradient
-          colors={[colors.primary, colors.primary + 'DD']}
-          style={styles.header}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
+      <PullToRefresh refreshing={refreshing} onRefresh={onRefresh}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
         >
+          <LinearGradient
+            colors={[colors.primary, colors.primary + 'DD']}
+            style={styles.header}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
           <View style={styles.headerContent}>
             <Text style={styles.title}>Your Activity</Text>
             <Text style={styles.subtitle}>Track your blood donation impact</Text>
@@ -384,27 +377,39 @@ export default function ActivityTabScreen() {
         <View style={styles.statsSection}>
           <Text style={dynamicStyles.sectionTitle}>Your Activity</Text>
           <View style={styles.statsGrid}>
-            <View style={dynamicStyles.statsCard}>
+            <TouchableOpacity
+              style={dynamicStyles.statsCard}
+              onPress={() => router.push('/profile/my-requests')}
+            >
               <View style={[styles.statsIcon, { backgroundColor: colors.primary + '20' }]}>
                 <Ionicons name="add-circle" size={24} color={colors.primary} />
               </View>
               <View style={styles.statsContent}>
                 <Text style={dynamicStyles.statsValue}>{stats.requestsCreated}</Text>
-                <Text style={dynamicStyles.statsTitle}>Requests</Text>
-                <Text style={dynamicStyles.statsSubtitle}>Created</Text>
+                <Text style={dynamicStyles.statsTitle}>My Requests</Text>
+                <Text style={dynamicStyles.statsSubtitle}>View All</Text>
               </View>
-            </View>
+              <View style={styles.statsArrow}>
+                <Ionicons name="chevron-forward" size={16} color={colors.secondaryText} />
+              </View>
+            </TouchableOpacity>
 
-            <View style={dynamicStyles.statsCard}>
+            <TouchableOpacity
+              style={dynamicStyles.statsCard}
+              onPress={() => router.push('/profile/my-responses')}
+            >
               <View style={[styles.statsIcon, { backgroundColor: '#3182CE20' }]}>
                 <Ionicons name="paper-plane" size={24} color="#3182CE" />
               </View>
               <View style={styles.statsContent}>
                 <Text style={dynamicStyles.statsValue}>{stats.responsesSent}</Text>
-                <Text style={dynamicStyles.statsTitle}>Responses</Text>
-                <Text style={dynamicStyles.statsSubtitle}>Sent</Text>
+                <Text style={dynamicStyles.statsTitle}>My Responses</Text>
+                <Text style={dynamicStyles.statsSubtitle}>View All</Text>
               </View>
-            </View>
+              <View style={styles.statsArrow}>
+                <Ionicons name="chevron-forward" size={16} color={colors.secondaryText} />
+              </View>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -472,6 +477,7 @@ export default function ActivityTabScreen() {
           )}
         </View>
       </ScrollView>
+      </PullToRefresh>
     </SafeAreaView>
   );
 }
@@ -575,6 +581,11 @@ const styles = StyleSheet.create({
   statsSubtitle: {
     fontSize: 12,
     color: '#666',
+  },
+  statsArrow: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingLeft: 8,
   },
   activitySection: {
     paddingHorizontal: 20,

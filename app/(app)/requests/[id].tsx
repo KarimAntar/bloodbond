@@ -375,7 +375,11 @@ export default function RequestDetailScreen() {
             </View>
 
             {responses.slice(0, 2).map((response) => (
-              <View key={response.id} style={[styles.responsePreview, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+              <TouchableOpacity
+                key={response.id}
+                style={[styles.responsePreview, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
+                onPress={() => router.push(`/requests/${id}/responses/${response.id}`)}
+              >
                 <View style={styles.responseAvatar}>
                   <Text style={styles.responseAvatarText}>
                     {response.responderName.charAt(0)}
@@ -390,7 +394,10 @@ export default function RequestDetailScreen() {
                     {getTimeAgo(response.createdAt)}
                   </Text>
                 </View>
-              </View>
+                <View style={styles.responseArrow}>
+                  <Ionicons name="chevron-forward" size={16} color={colors.secondaryText} />
+                </View>
+              </TouchableOpacity>
             ))}
           </View>
         )}
@@ -527,9 +534,11 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: 'white',
-    textAlign: 'center',
+    textAlign: 'left',
     marginBottom: 8,
+    writingDirection: 'ltr',
   },
+
   timeAgo: {
     fontSize: 16,
     color: 'rgba(255,255,255,0.8)',
@@ -542,6 +551,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1a1a1a',
     marginBottom: 16,
+    textAlign: 'left',
   },
   infoGrid: {
     flexDirection: 'row',
@@ -582,6 +592,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#1a1a1a',
+    textAlign: 'left',
+    writingDirection: 'ltr',
   },
   notesSection: {
     paddingHorizontal: 20,
@@ -604,6 +616,8 @@ const styles = StyleSheet.create({
     color: '#1a1a1a',
     lineHeight: 24,
     marginLeft: 12,
+    textAlign: 'left',
+    writingDirection: 'ltr',
   },
   actionsSection: {
     paddingHorizontal: 20,
@@ -682,16 +696,25 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1a1a1a',
     marginBottom: 4,
+    textAlign: 'left',
+    writingDirection: 'ltr',
   },
   responseMessage: {
     fontSize: 14,
     color: '#666',
     lineHeight: 20,
     marginBottom: 4,
+    textAlign: 'left',
+    writingDirection: 'ltr',
   },
   responseTime: {
     fontSize: 12,
     color: '#999',
+  },
+  responseArrow: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingLeft: 8,
   },
   safetySection: {
     paddingHorizontal: 20,

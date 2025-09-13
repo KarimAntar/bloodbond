@@ -55,7 +55,7 @@ interface BloodRequest {
 }
 
 export default function AdminDashboard() {
-  const { user, userProfile } = useAuth();
+  const { user, userProfile, initializing } = useAuth();
   const { currentTheme } = useTheme();
   const colors = Colors[currentTheme];
   const router = useRouter();
@@ -77,12 +77,20 @@ export default function AdminDashboard() {
   const [requestToDelete, setRequestToDelete] = useState<BloodRequest | null>(null);
 
   useEffect(() => {
-    if (!userProfile || userProfile.role !== 'admin') {
+    // Wait until auth initialization completes to avoid redirect loops
+    if (initializing) return;
+
+    // If profile isn't loaded yet, wait (avoid redirect while profile fetch is in-progress)
+    if (!userProfile) return;
+
+    // If there's no authenticated user or profile role is not admin, redirect away
+    if (!user || userProfile.role?.trim()?.toLowerCase() !== 'admin') {
       router.replace('/(app)/(tabs)');
       return;
     }
+
     loadData();
-  }, [userProfile]);
+  }, [initializing, user, userProfile]);
 
   const loadData = async () => {
     setLoading(true);
@@ -564,7 +572,16 @@ export default function AdminDashboard() {
     },
   });
 
-  if (!userProfile || userProfile.role !== 'admin') {
+  if (initializing || !userProfile) {
+    return (
+      <View style={dynamicStyles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={dynamicStyles.loadingText}>Initializing...</Text>
+      </View>
+    );
+  }
+
+  if (userProfile.role?.trim()?.toLowerCase() !== 'admin') {
     return (
       <View style={dynamicStyles.loadingContainer}>
         <ActivityIndicator size="large" color={colors.primary} />

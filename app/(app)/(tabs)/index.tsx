@@ -20,7 +20,10 @@ import { useTheme } from '../../../contexts/ThemeContext';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import PullToRefresh from '../../../components/PullToRefresh';
 import { SkeletonCard } from '../../../components/SkeletonLoader';
+import { db } from '../../../firebase/firebaseConfig';
+import { collection, getDocs, query, orderBy, where, doc, updateDoc } from 'firebase/firestore';
 
 const { width } = Dimensions.get('window');
 
@@ -108,7 +111,81 @@ export default function HomeScreen() {
     if (typeof document !== 'undefined') {
       document.title = 'Home - BloodBond';
     }
+    fetchStats();
   }, []);
+
+  const fetchStats = async () => {
+    try {
+      const now = new Date();
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+      // Fetch all requests
+      const requestsQuery = query(collection(db, 'requests'), orderBy('createdAt', 'desc'));
+      const requestsSnapshot = await getDocs(requestsQuery);
+      const allRequests = requestsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      const totalRequests = allRequests.length;
+
+      // Check and update expired requests
+      const updatePromises = allRequests
+        .filter(r => {
+          const createdAt = (r as any).createdAt?.toDate();
+          const isExpired = createdAt && createdAt <= sevenDaysAgo && !(r as any).expired;
+          return isExpired;
+        })
+        .map(async (request) => {
+          try {
+            const requestRef = doc(db, 'requests', request.id);
+            await updateDoc(requestRef, {
+              expired: true,
+              expiredAt: now
+            });
+          } catch (error) {
+            console.error('Error updating expired request:', error);
+          }
+        });
+
+      // Wait for all updates to complete
+      await Promise.all(updatePromises);
+
+      // Active requests: non-expired requests
+      const activeRequests = allRequests.filter(r => !(r as any).expired).length;
+
+      // Fetch all responses
+      const responsesQuery = query(collection(db, 'responses'), orderBy('createdAt', 'desc'));
+      const responsesSnapshot = await getDocs(responsesQuery);
+      const responsesGiven = responsesSnapshot.size;
+
+      // Build response count map by requestId
+      const responseMap = new Map();
+      responsesSnapshot.docs.forEach(doc => {
+        const data = doc.data();
+        if (data.requestId) {
+          const count = responseMap.get(data.requestId) || 0;
+          responseMap.set(data.requestId, count + 1);
+        }
+      });
+
+      // Successful donations: expired requests with at least 1 response
+      const successfulDonations = allRequests.filter(r => {
+        const isExpired = (r as any).expired;
+        return isExpired && responseMap.get(r.id) > 0;
+      }).length;
+
+      setStats({
+        totalRequests,
+        activeRequests,
+        responsesGiven,
+        peopleSaved: successfulDonations
+      });
+    } catch (error) {
+      console.error('Error fetching stats:', error);
+      // Keep default values on error
+    }
+  };
 
   // Create dynamic styles based on theme
   const dynamicStyles = StyleSheet.create({
@@ -201,10 +278,8 @@ export default function HomeScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    // Simulate data refresh
-    setTimeout(() => {
-      setRefreshing(false);
-    }, 1000);
+    await fetchStats();
+    setRefreshing(false);
   };
 
   if (loading || !user || !userProfile) {
@@ -225,18 +300,8 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        <ScrollView 
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={[colors.primary]}
-              tintColor={colors.primary}
-              progressBackgroundColor={colors.cardBackground}
-            />
-          }
-        >
+        <PullToRefresh refreshing={refreshing} onRefresh={onRefresh}>
+          <ScrollView showsVerticalScrollIndicator={false}>
           <LinearGradient
             colors={['#E53E3E', '#C53030']}
             style={styles.heroSection}
@@ -273,6 +338,7 @@ export default function HomeScreen() {
             </View>
           </View>
         </ScrollView>
+      </PullToRefresh>
       </SafeAreaView>
     );
   }

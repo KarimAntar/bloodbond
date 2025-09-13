@@ -8,6 +8,7 @@ import { useTheme } from '../../../../../../contexts/ThemeContext';
 import { Colors } from '../../../../../../constants/Colors';
 import { useAuth } from '../../../../../../contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
+import CustomModal from '../../../../../../components/CustomModal';
 
 interface Response {
   id: string;
@@ -39,10 +40,11 @@ export default function ResponseDetails() {
   const [request, setRequest] = useState<Request | null>(null);
   const [loading, setLoading] = useState(true);
   const [isRequestPoster, setIsRequestPoster] = useState(false);
+  const [donateModalVisible, setDonateModalVisible] = useState(false);
   const router = useRouter();
   const { id, responseId } = useLocalSearchParams();
   const { currentTheme } = useTheme();
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const colors = Colors[currentTheme];
 
   useEffect(() => {
@@ -127,47 +129,67 @@ export default function ResponseDetails() {
     return date.toLocaleDateString();
   };
 
-  const handleMarkAsDonated = async () => {
-    if (!response || !request || !user) return;
+  const handleMarkAsDonated = () => {
+    if (!response || !request || !user) {
+      console.log('Missing required data:', { response: !!response, request: !!request, user: !!user });
+      return;
+    }
 
-    Alert.alert(
-      'Mark as Donated',
-      `Are you sure you want to mark ${response.responderName}'s response as donated? This will add this donation to their donation history.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Confirm',
-          onPress: async () => {
-            try {
-              // Update response to mark as donated
-              await updateDoc(doc(db, 'responses', response.id), {
-                donated: true,
-              });
+    console.log('Mark as donated clicked:', {
+      responseId: response.id,
+      requestId: request.id,
+      userId: user.uid,
+      isRequestPoster,
+      responseUserId: response.userId
+    });
 
-              // Create donation record
-              await addDoc(collection(db, 'donations'), {
-                donorId: response.userId || user.uid, // Assuming response has userId, fallback to current user
-                requestId: request.id,
-                responseId: response.id,
-                date: new Date(),
-                location: request.hospital,
-                bloodType: response.bloodType || request.bloodType,
-                status: 'Completed',
-                createdAt: new Date(),
-              });
+    setDonateModalVisible(true);
+  };
 
-              // Update local state
-              setResponse({ ...response, donated: true });
+  const confirmMarkAsDonated = async () => {
+    try {
+      console.log('Updating response document...');
+      // Update response to mark as donated
+      await updateDoc(doc(db, 'responses', response!.id), {
+        donated: true,
+        donatedAt: new Date(),
+        donatedBy: user!.uid,
+      });
 
-              Alert.alert('Success', 'Response marked as donated and added to donor\'s history!');
-            } catch (error) {
-              console.error('Error marking as donated:', error);
-              Alert.alert('Error', 'Failed to mark as donated. Please try again.');
-            }
-          },
-        },
-      ]
-    );
+      console.log('Creating donation record...');
+      // Create donation record
+      const donationData = {
+        donorId: response!.userId || user!.uid,
+        donorName: response!.responderName,
+        requestId: request!.id,
+        responseId: response!.id,
+        date: new Date(),
+        location: request!.hospital,
+        bloodType: response!.bloodType || request!.bloodType,
+        status: 'Completed',
+        createdAt: new Date(),
+        markedBy: user!.uid,
+        requestTitle: `${request!.fullName} - ${request!.bloodType}`,
+      };
+
+      await addDoc(collection(db, 'donations'), donationData);
+      console.log('Donation record created:', donationData);
+
+      // Update local state
+      setResponse({ ...response!, donated: true });
+      setDonateModalVisible(false);
+
+      // Show success modal
+      setTimeout(() => {
+        Alert.alert('Success', 'Response marked as donated and added to donor\'s history!');
+      }, 500);
+    } catch (error) {
+      console.error('Error marking as donated:', error);
+      setDonateModalVisible(false);
+      setTimeout(() => {
+        Alert.alert('Error', 'Failed to mark as donated. Please try again.');
+      }, 500);
+    }
   };
 
   const dynamicStyles = StyleSheet.create({
@@ -189,6 +211,14 @@ export default function ResponseDetails() {
       fontSize: 20,
       fontWeight: 'bold',
       color: colors.primaryText,
+    },
+    editButton: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: colors.primary + '15',
+      justifyContent: 'center',
+      alignItems: 'center',
     },
     loadingContainer: {
       flex: 1,
@@ -277,6 +307,8 @@ export default function ResponseDetails() {
       fontWeight: 'bold',
       color: colors.primaryText,
       marginBottom: 4,
+      writingDirection: 'ltr',
+      textAlign: 'left',
     },
     responseTime: {
       fontSize: 14,
@@ -315,6 +347,7 @@ export default function ResponseDetails() {
       fontSize: 16,
       color: colors.primaryText,
       lineHeight: 24,
+      writingDirection: 'ltr',
     },
     contactContainer: {
       flexDirection: 'row',
@@ -404,13 +437,13 @@ export default function ResponseDetails() {
   if (!response) {
     return (
       <SafeAreaView style={dynamicStyles.container}>
-        <View style={dynamicStyles.header}>
-          <TouchableOpacity onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={24} color={colors.primaryText} />
-          </TouchableOpacity>
-          <Text style={dynamicStyles.title}>Response Details</Text>
-          <View style={{ width: 24 }} />
-        </View>
+      <View style={dynamicStyles.header}>
+        <TouchableOpacity onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={24} color={colors.primaryText} />
+        </TouchableOpacity>
+        <Text style={dynamicStyles.title}>Response Details</Text>
+        <View style={{ width: 24 }} />
+      </View>
         <View style={dynamicStyles.errorContainer}>
           <Ionicons name="alert-circle-outline" size={64} color={colors.danger} style={dynamicStyles.errorIcon} />
           <Text style={dynamicStyles.errorTitle}>Response Not Found</Text>
@@ -519,6 +552,22 @@ export default function ResponseDetails() {
           )}
         </View>
       </ScrollView>
+
+      {/* Custom Modal for Mark as Donated Confirmation */}
+      <CustomModal
+        visible={donateModalVisible}
+        onClose={() => setDonateModalVisible(false)}
+        title="Mark as Donated"
+        message={`Are you sure you want to mark ${response?.responderName}'s response as donated? This will add this donation to their donation history.`}
+        icon="heart"
+        iconColor="#38A169"
+        confirmText="Mark as Donated"
+        cancelText="Cancel"
+        onConfirm={confirmMarkAsDonated}
+        onCancel={() => setDonateModalVisible(false)}
+        type="success"
+        theme={currentTheme}
+      />
     </SafeAreaView>
   );
 }

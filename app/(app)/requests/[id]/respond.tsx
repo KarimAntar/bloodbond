@@ -46,13 +46,22 @@ export default function RespondScreen() {
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [success, setSuccess] = useState(false);
   const [verificationLoading, setVerificationLoading] = useState(false);
+  const [expired, setExpired] = useState(false);
 
   useEffect(() => {
     const fetchRequest = async () => {
       try {
         const requestDoc = await getDoc(doc(db, 'requests', requestId as string));
         if (requestDoc.exists()) {
-          setRequest({ id: requestDoc.id, ...requestDoc.data() } as BloodRequest);
+          const data = requestDoc.data();
+          // Check if request is expired
+          if (data.expired) {
+            setExpired(true);
+            Alert.alert('Expired Request', 'This request has expired and can no longer receive responses.');
+            setFetchingRequest(false);
+            return;
+          }
+          setRequest({ id: requestDoc.id, ...data } as BloodRequest);
         }
       } catch (error) {
         console.error('Error fetching request:', error);
@@ -199,14 +208,15 @@ export default function RespondScreen() {
     );
   }
 
-  if (!request) {
+  if (expired) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle" size={64} color="#E53E3E" />
-          <Text style={styles.errorTitle}>Request Not Found</Text>
-          <TouchableOpacity 
-            style={styles.errorButton} 
+          <Ionicons name="time-outline" size={64} color="#F56500" />
+          <Text style={styles.errorTitle}>Request Expired</Text>
+          <Text style={styles.errorSubtitle}>This request is no longer accepting responses.</Text>
+          <TouchableOpacity
+            style={styles.errorButton}
             onPress={() => router.back()}
           >
             <Text style={styles.errorButtonText}>Go Back</Text>
@@ -239,27 +249,29 @@ export default function RespondScreen() {
           showsVerticalScrollIndicator={false}
         >
           {/* Request Summary */}
-          <LinearGradient
-            colors={request.urgent ? ['#F56500', '#DD6B20'] : ['#E53E3E', '#C53030']}
-            style={styles.requestSummary}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          >
-            {request.urgent && (
-              <View style={styles.urgentBadge}>
-                <Ionicons name="warning" size={14} color="#fff" />
-                <Text style={styles.urgentText}>URGENT</Text>
+          {request && (
+            <LinearGradient
+              colors={request.urgent ? ['#F56500', '#DD6B20'] : ['#E53E3E', '#C53030']}
+              style={styles.requestSummary}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              {request.urgent && (
+                <View style={styles.urgentBadge}>
+                  <Ionicons name="warning" size={14} color="#fff" />
+                  <Text style={styles.urgentText}>URGENT</Text>
+                </View>
+              )}
+              <View style={styles.bloodTypeContainer}>
+                <Text style={styles.bloodTypeText}>{request.bloodType}</Text>
               </View>
-            )}
-            <View style={styles.bloodTypeContainer}>
-              <Text style={styles.bloodTypeText}>{request.bloodType}</Text>
-            </View>
-            <Text style={styles.patientName}>{request.fullName}</Text>
-            <View style={styles.locationContainer}>
-              <Ionicons name="location" size={14} color="rgba(255,255,255,0.8)" />
-              <Text style={styles.locationText}>{request.city}</Text>
-            </View>
-          </LinearGradient>
+              <Text style={styles.patientName}>{request.fullName}</Text>
+              <View style={styles.locationContainer}>
+                <Ionicons name="location" size={14} color="rgba(255,255,255,0.8)" />
+                <Text style={styles.locationText}>{request.city}</Text>
+              </View>
+            </LinearGradient>
+          )}
 
           {/* Response Form */}
           <View style={styles.formSection}>
@@ -433,6 +445,12 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1a1a1a',
     marginTop: 16,
+    marginBottom: 8,
+  },
+  errorSubtitle: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
     marginBottom: 32,
   },
   errorButton: {
@@ -515,6 +533,7 @@ const styles = StyleSheet.create({
     color: 'white',
     textAlign: 'center',
     marginBottom: 8,
+    writingDirection: 'ltr',
   },
   locationContainer: {
     flexDirection: 'row',

@@ -6,6 +6,7 @@ import { NotificationProvider } from '../contexts/NotificationContext';
 import { UserStatsProvider } from '../contexts/UserStatsContext';
 import { ThemeProvider } from '../contexts/ThemeContext';
 import { useEffect, useState } from 'react';
+import { ModalHost, overrideAlert } from '../utils/modalService';
 import { LoadingScreen } from '../components/LoadingScreen';
 import { initializePerformanceOptimizations } from '../utils/performance';
 import { initializeNotifications } from '../firebase/pushNotifications';
@@ -124,6 +125,9 @@ export default function RootLayout() {
     // Initialize push notifications
     initializeNotifications();
 
+    // Override RN Alert to show app modal instead
+    overrideAlert();
+
     // Note: Proximity notification listener will be started in InitialLayout
     // after authentication is confirmed
   }, []);
@@ -134,6 +138,7 @@ export default function RootLayout() {
         <NotificationProvider>
           <UserStatsProvider>
             <InitialLayout />
+            <ModalHost />
           </UserStatsProvider>
         </NotificationProvider>
       </ThemeProvider>

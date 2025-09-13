@@ -10,9 +10,12 @@ import {
   FlatList,
   RefreshControl,
 } from 'react-native';
+import PullToRefresh from '../../../components/PullToRefresh';
 import { useRouter } from 'expo-router';
 import { db } from '../../../firebase/firebaseConfig';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useTheme } from '../../../contexts/ThemeContext';
+import { Colors } from '../../../constants/Colors';
 import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -21,28 +24,29 @@ interface Response {
   message: string;
   responderName: string;
   createdAt: any;
+  requestId: string;
 }
 
-const ResponseCard: React.FC<{ response: Response; onPress: () => void }> = ({ response, onPress }) => {
+const ResponseCard: React.FC<{ response: Response; onPress: () => void; colors: any }> = ({ response, onPress, colors }) => {
   const timeAgo = React.useMemo(() => {
     if (!response.createdAt) return 'Recently';
-    
+
     const now = new Date();
     const responseTime = response.createdAt.toDate();
     const diffInHours = Math.floor((now.getTime() - responseTime.getTime()) / (1000 * 60 * 60));
-    
+
     if (diffInHours < 1) return 'Just now';
     if (diffInHours < 24) return `${diffInHours}h ago`;
-    
+
     const diffInDays = Math.floor(diffInHours / 24);
     return `${diffInDays}d ago`;
   }, [response.createdAt]);
 
   return (
-    <TouchableOpacity style={styles.responseCard} onPress={onPress}>
-      <Text style={styles.responseName}>{response.responderName}</Text>
-      <Text style={styles.responseText} numberOfLines={2}>{response.message}</Text>
-      <Text style={styles.timeText}>{timeAgo}</Text>
+    <TouchableOpacity style={[styles.responseCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]} onPress={onPress}>
+      <Text style={[styles.responseName, { color: colors.primaryText }]}>{response.responderName}</Text>
+      <Text style={[styles.responseText, { color: colors.secondaryText }]} numberOfLines={2}>{response.message}</Text>
+      <Text style={[styles.timeText, { color: colors.secondaryText }]}>{timeAgo}</Text>
     </TouchableOpacity>
   );
 };
@@ -51,32 +55,27 @@ export default function MyResponsesScreen() {
   const [responses, setResponses] = useState<Response[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  
+
   const { user } = useAuth();
+  const { currentTheme } = useTheme();
+  const colors = Colors[currentTheme];
   const router = useRouter();
 
   const fetchResponses = async () => {
     if (!user) return;
     try {
       const q = query(
-        collection(db, 'requests'), 
-        where('responses', 'array-contains', { userId: user.uid }),
+        collection(db, 'responses'),
+        where('userId', '==', user.uid),
         orderBy('createdAt', 'desc')
       );
-      
+
       const querySnapshot = await getDocs(q);
-      const fetchedResponses: Response[] = [];
-      querySnapshot.forEach(doc => {
-        const requestResponses = doc.data().responses as any[];
-        const userResponse = requestResponses.find(r => r.userId === user.uid);
-        if (userResponse) {
-          fetchedResponses.push({
-            id: doc.id,
-            ...userResponse
-          } as Response)
-        }
-      });
-      
+      const fetchedResponses: Response[] = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Response));
+
       setResponses(fetchedResponses);
     } catch (err) {
       console.error('Error fetching responses:', err);
@@ -101,49 +100,44 @@ export default function MyResponsesScreen() {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#E53E3E" />
-        <Text style={styles.loadingText}>Loading your responses...</Text>
+      <View style={[styles.loadingContainer, { backgroundColor: colors.screenBackground }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={[styles.loadingText, { color: colors.secondaryText }]}>Loading your responses...</Text>
       </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.screenBackground }]}>
+      <View style={[styles.header, { backgroundColor: colors.cardBackground, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="#1a1a1a" />
+          <Ionicons name="arrow-back" size={24} color={colors.primaryText} />
         </TouchableOpacity>
-        <Text style={styles.title}>My Responses</Text>
+        <Text style={[styles.title, { color: colors.primaryText }]}>My Responses</Text>
         <View style={{ width: 24 }} />
       </View>
-      <FlatList
-        data={responses}
-        renderItem={({ item }) => (
-          <ResponseCard
-            response={item}
-            onPress={() => router.push(`/requests/${item.id}`)}
-          />
-        )}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.responsesList}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={['#E53E3E']}
-            tintColor="#E53E3E"
-          />
-        }
-        ListEmptyComponent={() => (
-          <View style={styles.emptyContainer}>
-            <Ionicons name="mail-unread-outline" size={64} color="#ccc" />
-            <Text style={styles.emptyTitle}>No Responses Yet</Text>
-            <Text style={styles.emptyText}>You have not responded to any blood requests.</Text>
-          </View>
-        )}
-        showsVerticalScrollIndicator={false}
-      />
+      <PullToRefresh refreshing={refreshing} onRefresh={onRefresh}>
+        <FlatList
+          data={responses}
+          renderItem={({ item }) => (
+            <ResponseCard
+              response={item}
+              onPress={() => router.push(`/requests/${item.requestId}/responses/${item.id}`)}
+              colors={colors}
+            />
+          )}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.responsesList}
+          ListEmptyComponent={() => (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="mail-unread-outline" size={64} color={colors.secondaryText + '60'} />
+              <Text style={[styles.emptyTitle, { color: colors.primaryText }]}>No Responses Yet</Text>
+              <Text style={[styles.emptyText, { color: colors.secondaryText }]}>You have not responded to any blood requests.</Text>
+            </View>
+          )}
+          showsVerticalScrollIndicator={false}
+        />
+      </PullToRefresh>
     </SafeAreaView>
   );
 }
@@ -198,17 +192,19 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1a1a1a',
     marginBottom: 4,
+    textAlign: 'left',
   },
   responseText: {
     fontSize: 14,
     color: '#666',
     lineHeight: 20,
     marginBottom: 8,
+    textAlign: 'left',
   },
   timeText: {
     fontSize: 12,
     color: '#999',
-    textAlign: 'right',
+    textAlign: 'left',
   },
   emptyContainer: {
     flex: 1,
