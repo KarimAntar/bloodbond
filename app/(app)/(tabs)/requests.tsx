@@ -16,7 +16,6 @@ import {
   ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { db } from '../../../firebase/firebaseConfig';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { Colors } from '../../../constants/Colors';
@@ -242,8 +241,13 @@ export default function RequestsTabScreen() {
   const fetchRequests = async () => {
     try {
       setError(null);
+
+      // lazy-import firebase on web first use to speed initial bundle
+      const firebase = await import('../../../firebase/firebaseConfig');
+      const dbLazy = firebase.db;
+
       const q = query(
-        collection(db, 'requests'),
+        collection(dbLazy, 'requests'),
         orderBy('createdAt', 'desc')
       );
 
@@ -261,7 +265,7 @@ export default function RequestsTabScreen() {
         activeRequests.map(async (request) => {
           try {
             const responsesQuery = query(
-              collection(db, 'responses'),
+              collection(dbLazy, 'responses'),
               where('requestId', '==', request.id)
             );
             const responsesSnapshot = await getDocs(responsesQuery);
@@ -280,6 +284,15 @@ export default function RequestsTabScreen() {
       );
 
       setRequests(requestsWithCounts);
+
+      // cache on web to speed up first load
+      if (typeof window !== 'undefined' && window.localStorage) {
+        try {
+          localStorage.setItem('requests_cache_v1', JSON.stringify(requestsWithCounts));
+        } catch (e) {
+          // ignore quota errors
+        }
+      }
     } catch (err) {
       console.error('Error fetching requests:', err);
       setError('Failed to load requests. Please try again.');
@@ -372,7 +385,8 @@ export default function RequestsTabScreen() {
 
     try {
       console.log('Attempting to delete document:', requestToDelete.id);
-      await deleteDoc(doc(db, 'requests', requestToDelete.id));
+      const firebase = await import('../../../firebase/firebaseConfig');
+      await deleteDoc(doc(firebase.db, 'requests', requestToDelete.id));
       console.log('Document deleted from Firestore');
 
       setRequests(prevRequests => {
@@ -967,11 +981,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    boxShadow: '0px 1px 4px rgba(0,0,0,0.08)',
+
   },
   cardHeader: {
     flexDirection: 'row',
@@ -1129,11 +1140,8 @@ const styles = StyleSheet.create({
     right: 16,
     backgroundColor: 'white',
     borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 5,
+    boxShadow: '0px 4px 12px rgba(0,0,0,0.12)',
+
     minWidth: 120,
     zIndex: 1000,
   },

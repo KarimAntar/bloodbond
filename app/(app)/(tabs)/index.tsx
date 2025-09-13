@@ -45,11 +45,8 @@ const StatsCard: React.FC<StatsCardProps> = ({ icon, title, count, color, colors
     marginBottom: 12,
     borderLeftWidth: 4,
     borderLeftColor: color,
-    shadowColor: colors.shadow || '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    boxShadow: '0px 1px 4px rgba(0,0,0,0.08)',
+
   }]}>
     <View style={styles.statsIconContainer}>
       <Ionicons name={icon as any} size={24} color={color} />
@@ -228,11 +225,8 @@ export default function HomeScreen() {
       backgroundColor: colors.cardBackground,
       borderRadius: 12,
       padding: 20,
-      shadowColor: colors.shadow || '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 8,
-      elevation: 3,
+      boxShadow: '0px 2px 8px rgba(0,0,0,0.1)',
+
     },
     profileName: {
       fontSize: 18,
@@ -254,11 +248,8 @@ export default function HomeScreen() {
       backgroundColor: colors.cardBackground,
       borderRadius: 12,
       overflow: 'hidden',
-      shadowColor: colors.shadow || '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 8,
-      elevation: 3,
+      boxShadow: '0px 2px 8px rgba(0,0,0,0.1)',
+
     },
   });
 
@@ -590,11 +581,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderRadius: 12,
     padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    boxShadow: '0px 2px 8px rgba(0,0,0,0.1)',
+
   },
   profileHeader: {
     flexDirection: 'row',
@@ -665,11 +653,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 12,
     borderLeftWidth: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    boxShadow: '0px 1px 4px rgba(0,0,0,0.08)',
+
   },
   statsIconContainer: {
     marginBottom: 8,
@@ -695,11 +680,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderRadius: 12,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    boxShadow: '0px 2px 8px rgba(0,0,0,0.1)',
+
   },
   actionButton: {
     flexDirection: 'row',

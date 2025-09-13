@@ -798,12 +798,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'white', 
     borderRadius: 16, 
     padding: 24, 
-    shadowColor: '#000', 
-    shadowOffset: { width: 0, height: 2 }, 
-    shadowOpacity: 0.1, 
-    shadowRadius: 8, 
-    elevation: 3 
-  },
+    boxShadow: '0px 2px 8px rgba(0,0,0,0.1)',
+},
   inputGroup: { 
     marginBottom: 20 
   },
@@ -901,11 +897,8 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     zIndex: 1000,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 5,
+    boxShadow: '0px 4px 12px rgba(0,0,0,0.12)',
+
   },
   toastText: {
     flex: 1,
@@ -955,11 +948,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderRadius: 16,
     padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    boxShadow: '0px 2px 8px rgba(0,0,0,0.1)',
+
   },
   instructionBox: {
     backgroundColor: '#F8FAFC',

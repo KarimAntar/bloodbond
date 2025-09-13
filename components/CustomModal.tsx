@@ -144,11 +144,8 @@ const styles = StyleSheet.create({
     padding: 24,
     width: '100%',
     maxWidth: 400,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 5,
+    boxShadow: '0px 4px 12px rgba(0,0,0,0.12)',
+
   },
   header: {
     alignItems: 'center',

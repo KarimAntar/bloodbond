@@ -300,11 +300,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 12,
     marginHorizontal: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    boxShadow: '0px 2px 8px rgba(0,0,0,0.1)',
+
   },
   quickActionText: {
     fontSize: 14,
@@ -327,11 +324,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    boxShadow: '0px 1px 4px rgba(0,0,0,0.08)',
+
   },
   cardHeader: {
     flexDirection: 'row',
@@ -395,11 +389,8 @@ const styles = StyleSheet.create({
     margin: 16,
     padding: 16,
     borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    boxShadow: '0px 1px 4px rgba(0,0,0,0.08)',
+
   },
   infoTitle: {
     fontSize: 18,

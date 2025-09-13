@@ -423,11 +423,8 @@ const styles = StyleSheet.create({
     padding: 20,
     marginBottom: 16,
     borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
+    boxShadow: '0px 2px 8px rgba(0,0,0,0.1)',
+
   },
   responseHeader: {
     flexDirection: 'row',
@@ -563,11 +560,8 @@ const styles = StyleSheet.create({
     right: 16,
     backgroundColor: 'white',
     borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 5,
+    boxShadow: '0px 4px 12px rgba(0,0,0,0.12)',
+
     minWidth: 120,
     zIndex: 1000,
   },

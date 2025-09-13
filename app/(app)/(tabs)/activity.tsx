@@ -231,11 +231,8 @@ export default function ActivityTabScreen() {
       padding: 16,
       width: '48%',
       marginBottom: 12,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.05,
-      shadowRadius: 4,
-      elevation: 2,
+      boxShadow: '0px 1px 4px rgba(0,0,0,0.08)',
+
     },
     statsValue: {
       fontSize: 24,
@@ -257,11 +254,8 @@ export default function ActivityTabScreen() {
       backgroundColor: colors.cardBackground,
       borderRadius: 12,
       overflow: 'hidden',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.05,
-      shadowRadius: 4,
-      elevation: 2,
+      boxShadow: '0px 1px 4px rgba(0,0,0,0.08)',
+
     },
     activityCard: {
       flexDirection: 'row',
@@ -291,11 +285,8 @@ export default function ActivityTabScreen() {
       borderRadius: 12,
       padding: 32,
       alignItems: 'center',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.05,
-      shadowRadius: 4,
-      elevation: 2,
+      boxShadow: '0px 1px 4px rgba(0,0,0,0.08)',
+
     },
     emptyTitle: {
       fontSize: 18,
@@ -549,11 +540,8 @@ const styles = StyleSheet.create({
     padding: 16,
     width: '48%',
     marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    boxShadow: '0px 1px 4px rgba(0,0,0,0.08)',
+
   },
   statsIcon: {
     width: 40,
@@ -595,11 +583,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderRadius: 12,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    boxShadow: '0px 1px 4px rgba(0,0,0,0.08)',
+
   },
   activityCard: {
     flexDirection: 'row',
@@ -673,11 +658,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 32,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    boxShadow: '0px 1px 4px rgba(0,0,0,0.08)',
+
   },
   emptyTitle: {
     fontSize: 18,

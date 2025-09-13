@@ -147,11 +147,8 @@ export default function CreateTabScreen() {
       marginBottom: 12,
       borderRadius: 16,
       overflow: 'hidden',
-      shadowColor: colors.shadow || '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 8,
-      elevation: 3,
+      boxShadow: '0px 2px 8px rgba(0,0,0,0.1)',
+
     },
     actionGradient: {
       padding: 20,
@@ -187,11 +184,8 @@ export default function CreateTabScreen() {
       padding: 16,
       borderRadius: 12,
       marginBottom: 12,
-      shadowColor: colors.shadow || '#000',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.05,
-      shadowRadius: 4,
-      elevation: 2,
+      boxShadow: '0px 1px 4px rgba(0,0,0,0.08)',
+
     },
     infoIcon: {
       width: 48,
@@ -219,11 +213,8 @@ export default function CreateTabScreen() {
       backgroundColor: colors.cardBackground,
       borderRadius: 12,
       padding: 20,
-      shadowColor: colors.shadow || '#000',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.05,
-      shadowRadius: 4,
-      elevation: 2,
+      boxShadow: '0px 1px 4px rgba(0,0,0,0.08)',
+
     },
     emergencyHeader: {
       flexDirection: 'row',
@@ -256,11 +247,8 @@ export default function CreateTabScreen() {
       backgroundColor: colors.cardBackground,
       borderRadius: 12,
       padding: 20,
-      shadowColor: colors.shadow || '#000',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.05,
-      shadowRadius: 4,
-      elevation: 2,
+      boxShadow: '0px 1px 4px rgba(0,0,0,0.08)',
+
     },
     statItem: {
       flex: 1,

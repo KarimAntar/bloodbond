@@ -13,7 +13,6 @@ import {
   Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { db } from '../../../firebase/firebaseConfig';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { Colors } from '../../../constants/Colors';
@@ -152,8 +151,12 @@ export default function MyRequestsScreen() {
   const fetchRequests = async () => {
     if (!user) return;
     try {
+      // lazy-import firebase to reduce initial bundle cost on web
+      const firebase = await import('../../../firebase/firebaseConfig');
+      const dbLazy = firebase.db;
+
       const q = query(
-        collection(db, 'requests'),
+        collection(dbLazy, 'requests'),
         where('userId', '==', user.uid),
         orderBy('createdAt', 'desc')
       );
@@ -165,6 +168,16 @@ export default function MyRequestsScreen() {
       } as BloodRequest));
       
       setRequests(fetchedRequests);
+
+      // write cache for faster subsequent loads on web
+      if (typeof window !== 'undefined' && window.localStorage) {
+        try {
+          const cacheKey = `my_requests_cache_v1_${user.uid}`;
+          localStorage.setItem(cacheKey, JSON.stringify(fetchedRequests));
+        } catch (e) {
+          // ignore quota errors
+        }
+      }
     } catch (err) {
       console.error('Error fetching requests:', err);
     }
@@ -172,13 +185,33 @@ export default function MyRequestsScreen() {
 
   useEffect(() => {
     const loadRequests = async () => {
+      if (!user) {
+        setRequests([]);
+        setLoading(false);
+        return;
+      }
+
+      // show cached data immediately on web if available
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const cacheKey = `my_requests_cache_v1_${user.uid}`;
+        const cached = localStorage.getItem(cacheKey);
+        if (cached) {
+          try {
+            setRequests(JSON.parse(cached));
+            setLoading(false);
+          } catch (e) {
+            // ignore parse errors and continue to fetch fresh data
+          }
+        }
+      }
+
       setLoading(true);
       await fetchRequests();
       setLoading(false);
     };
 
     loadRequests();
-  }, []);
+  }, [user]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -197,7 +230,9 @@ export default function MyRequestsScreen() {
     setDeleteModalVisible(false);
 
     try {
-      await deleteDoc(doc(db, 'requests', requestToDelete.id));
+      // lazy-import firebase to avoid referencing global db on web initial load
+      const firebase = await import('../../../firebase/firebaseConfig');
+      await deleteDoc(doc(firebase.db, 'requests', requestToDelete.id));
       setRequests(requests.filter(r => r.id !== requestToDelete.id));
       Alert.alert('Success', 'Request deleted successfully');
       setRequestToDelete(null);
@@ -337,11 +372,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    boxShadow: '0px 1px 4px rgba(0,0,0,0.08)',
+
   },
   cardHeader: {
     flexDirection: 'row',
@@ -532,11 +564,8 @@ const styles = StyleSheet.create({
     right: 16,
     backgroundColor: 'white',
     borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 5,
+    boxShadow: '0px 4px 12px rgba(0,0,0,0.12)',
+
     minWidth: 120,
     zIndex: 1000,
   },

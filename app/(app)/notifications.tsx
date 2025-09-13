@@ -75,11 +75,8 @@ const NotificationCard: React.FC<{
       marginBottom: 8,
       flexDirection: 'row',
       alignItems: 'flex-start',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.05,
-      shadowRadius: 4,
-      elevation: 2,
+      boxShadow: '0px 1px 4px rgba(0,0,0,0.08)',
+
     },
     unreadCard: {
       borderLeftWidth: 4,
@@ -303,11 +300,8 @@ export default function NotificationsScreen() {
       marginBottom: 8,
       flexDirection: 'row',
       alignItems: 'flex-start',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.05,
-      shadowRadius: 4,
-      elevation: 2,
+      boxShadow: '0px 1px 4px rgba(0,0,0,0.08)',
+
     },
     unreadCard: {
       borderLeftWidth: 4,
@@ -519,11 +513,8 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     flexDirection: 'row',
     alignItems: 'flex-start',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    boxShadow: '0px 1px 4px rgba(0,0,0,0.08)',
+
   },
   unreadCard: {
     borderLeftWidth: 4,

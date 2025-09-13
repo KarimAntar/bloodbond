@@ -229,11 +229,8 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#E53E3E',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    boxShadow: '0px 8px 24px rgba(0,0,0,0.16)',
+
   },
 });
 

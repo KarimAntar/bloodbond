@@ -352,11 +352,8 @@ export default function AdminDashboard() {
       marginBottom: 12,
       flexDirection: 'row',
       alignItems: 'center',
-      shadowColor: colors.shadow || '#000',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.05,
-      shadowRadius: 4,
-      elevation: 2,
+      boxShadow: '0px 1px 4px rgba(0,0,0,0.08)',
+
     },
     userInfo: {
       flex: 1,
@@ -383,11 +380,8 @@ export default function AdminDashboard() {
       marginBottom: 12,
       flexDirection: 'row',
       alignItems: 'flex-start',
-      shadowColor: colors.shadow || '#000',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.05,
-      shadowRadius: 4,
-      elevation: 2,
+      boxShadow: '0px 1px 4px rgba(0,0,0,0.08)',
+
     },
     requestInfo: {
       flex: 1,
@@ -963,11 +957,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    boxShadow: '0px 1px 4px rgba(0,0,0,0.08)',
+
   },
   userInfo: {
     flex: 1,
@@ -994,11 +985,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     flexDirection: 'row',
     alignItems: 'flex-start',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    boxShadow: '0px 1px 4px rgba(0,0,0,0.08)',
+
   },
   requestInfo: {
     flex: 1,
