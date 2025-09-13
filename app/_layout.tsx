@@ -12,7 +12,7 @@ import { initializePerformanceOptimizations } from '../utils/performance';
 import { initializeNotifications } from '../firebase/pushNotifications';
 import { startProximityNotificationListener } from '../utils/proximityNotifications';
 import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../firebase/firebaseConfig';
+import { db, auth } from '../firebase/firebaseConfig';
 
 const InitialLayout = () => {
   const { user, userProfile, initializing } = useAuth();
@@ -119,6 +119,18 @@ const InitialLayout = () => {
 
 export default function RootLayout() {
   useEffect(() => {
+    // Warm up Firebase Auth SDK early (guarded for browser)
+    if (typeof window !== 'undefined') {
+      try {
+        // Access auth.currentUser synchronously to warm the SDK without network calls
+        // This does not attach listeners or perform network I/O.
+        const _ = auth?.currentUser;
+        console.log('Firebase auth warmed');
+      } catch (e) {
+        console.warn('Error warming Firebase auth', e);
+      }
+    }
+
     // Initialize performance optimizations on app start
     initializePerformanceOptimizations();
 

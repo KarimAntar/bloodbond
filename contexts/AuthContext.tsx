@@ -51,10 +51,37 @@ interface AuthProviderProps {
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<any>(null);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(() => {
+    try {
+      if (typeof window === 'undefined') return null;
+      const raw = localStorage.getItem('bb_user_profile');
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return parsed?.profile ?? null;
+    } catch (e) {
+      console.error('Error reading profile from localStorage', e);
+      return null;
+    }
+  });
   const [loading, setLoading] = useState<boolean>(false);
   const [initializing, setInitializing] = useState<boolean>(true);
-  const [profileCache] = useState<Map<string, UserProfile>>(new Map());
+  const [profileCache] = useState<Map<string, UserProfile>>(() => {
+    const m = new Map<string, UserProfile>();
+    try {
+      if (typeof window !== 'undefined') {
+        const raw = localStorage.getItem('bb_user_profile');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed?.uid && parsed?.profile) {
+            m.set(parsed.uid, parsed.profile);
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Error hydrating profileCache from localStorage', e);
+    }
+    return m;
+  });
 
   const fetchUserProfile = async (userId: string): Promise<UserProfile | null> => {
     // Check cache first for faster loading
@@ -79,6 +106,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         console.log('User profile found:', profile);
         // Cache the profile for future use
         profileCache.set(userId, profile);
+        try {
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('bb_user_profile', JSON.stringify({ uid: userId, profile }));
+          }
+        } catch (e) {
+          console.error('Error saving profile to localStorage', e);
+        }
         return profile;
       }
 
@@ -98,6 +132,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       // Cache the basic profile
       profileCache.set(userId, basicProfile);
+      try {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('bb_user_profile', JSON.stringify({ uid: userId, profile: basicProfile }));
+        }
+      } catch (e) {
+        console.error('Error saving basic profile to localStorage', e);
+      }
       return basicProfile;
     } catch (error: any) {
       console.error('Error fetching user profile:', error);
@@ -143,8 +184,15 @@ useEffect(() => {
 
     if (currentUser) {
       console.log('User logged in — fetching profile in background');
-      // Only show loading indicator while profile isn't cached
-      if (!profileCache.has(currentUser.uid)) {
+
+      // If we have a cached profile for this uid, apply it immediately for fastest UI
+      if (profileCache.has(currentUser.uid)) {
+        const cached = profileCache.get(currentUser.uid)!;
+        console.log('Applying cached profile for user:', currentUser.uid);
+        setUserProfile(cached);
+        setLoading(false);
+      } else {
+        // Only show loading indicator while profile isn't cached
         setLoading(true);
       }
 
@@ -166,6 +214,13 @@ useEffect(() => {
       setLoading(false);
       // Clear cache on logout
       profileCache.clear();
+      try {
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('bb_user_profile');
+        }
+      } catch (e) {
+        console.error('Error removing profile from localStorage', e);
+      }
     }
   });
 
