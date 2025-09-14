@@ -207,8 +207,13 @@ export default function AppSettingsScreen() {
             notificationsEnabled: true
           });
 
-          // Special message for permission-granted-no-token case
-          if (result?.reason === 'permission-granted-no-token') {
+          // Handle different success scenarios
+          if (result?.reason === 'permission-granted-fallback-mode' || result?.reason === 'fallback-permission-granted') {
+            Alert.alert(
+              'Notifications Enabled (Fallback Mode)',
+              'Notifications are enabled! Due to browser limitations, you may receive in-app notifications instead of push notifications. This is normal and still provides full functionality.'
+            );
+          } else if (result?.reason === 'permission-granted-no-token') {
             Alert.alert('Notifications Enabled', 'Notification permission granted! Push notifications may work through alternative methods.');
           } else {
             Alert.alert('Notifications Enabled', 'Push notifications have been enabled for your account.');

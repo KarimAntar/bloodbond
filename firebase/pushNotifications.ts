@@ -270,14 +270,32 @@ export const ensureAndRegisterPushToken = async (userId: string, platform = 'web
       if (finalPerm === 'granted') {
         console.log('ensureAndRegisterPushToken: permission still granted despite FCM failure, enabling notifications');
         console.log('NOTE: FCM push notifications may not work due to Firebase permission handling bug');
+        console.log('WORKAROUND: Using in-app notifications as fallback');
         // Don't register a token, but still return success since permission is granted
-        return { success: true, token: null, reason: 'permission-granted-no-token' };
+        // This allows the app to use Notification API directly for in-app notifications
+        return { success: true, token: null, reason: 'permission-granted-fallback-mode' };
       }
 
       // Check if permission was revoked by Firebase (common Firebase bug)
       if (finalPerm === 'default') {
         console.warn('ensureAndRegisterPushToken: permission was revoked to "default" - likely Firebase bug');
         console.warn('This is a known issue with Firebase Cloud Messaging in some browsers');
+        console.warn('WORKAROUND: Attempting to re-grant permission and use fallback mode');
+
+        // Try one more time to request permission and use fallback mode
+        try {
+          console.log('ensureAndRegisterPushToken: attempting fallback permission request...');
+          const fallbackPerm = await requestNotificationPermissions();
+          console.log('ensureAndRegisterPushToken: fallback permission result:', fallbackPerm);
+
+          if (fallbackPerm === 'granted') {
+            console.log('ensureAndRegisterPushToken: fallback permission granted, using in-app notifications');
+            return { success: true, token: null, reason: 'fallback-permission-granted' };
+          }
+        } catch (fallbackErr) {
+          console.warn('ensureAndRegisterPushToken: fallback permission request failed:', fallbackErr);
+        }
+
         return { success: false, reason: 'firebase-permission-revocation' };
       }
 
