@@ -452,8 +452,10 @@ export const sendPushNotification = async (
   data?: any
 ) => {
   try {
+    console.log('sendPushNotification: Starting push notification send', { userId, title, body });
+
     // Store as notification record for later processing / server delivery
-    await addDoc(collection(db, 'notifications'), {
+    const notificationDoc = {
       userId,
       type: 'admin_push',
       title,
@@ -461,7 +463,10 @@ export const sendPushNotification = async (
       timestamp: Timestamp.now(),
       read: false,
       data: data || {},
-    });
+    };
+
+    await addDoc(collection(db, 'notifications'), notificationDoc);
+    console.log('sendPushNotification: Notification stored in Firestore');
 
     // For testing: try to send directly to user's tokens
     try {
@@ -469,18 +474,26 @@ export const sendPushNotification = async (
       const q = query(userTokensRef, where('userId', '==', userId), where('platform', '==', 'web'), orderBy('createdAt', 'desc'));
       const snapshot = await getDocs(q);
 
+      console.log('sendPushNotification: Found', snapshot.size, 'user tokens');
+
       if (!snapshot.empty) {
         const token = snapshot.docs[0].data().token;
-        console.log('Found user token, attempting direct FCM send');
+        console.log('sendPushNotification: Found user token, attempting direct FCM send');
+        console.log('sendPushNotification: Token preview:', token.substring(0, 20) + '...');
+
         await sendFCMMessage(token, title, body, data);
+        console.log('sendPushNotification: Direct FCM send completed');
+      } else {
+        console.log('sendPushNotification: No user tokens found for direct send');
       }
     } catch (directSendError) {
-      console.warn('Direct FCM send failed, notification stored for cloud function processing:', directSendError);
+      console.warn('sendPushNotification: Direct FCM send failed, notification stored for cloud function processing:', directSendError);
     }
 
+    console.log('sendPushNotification: Push notification send completed successfully');
     return { success: true };
   } catch (error) {
-    console.error('Error sending push notification:', error);
+    console.error('sendPushNotification: Error sending push notification:', error);
     throw error;
   }
 };

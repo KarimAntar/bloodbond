@@ -10,7 +10,8 @@
     "web": "expo start --web",
     "test": "jest --watchAll",
     "lint": "expo lint",
-    "ngrok": "npx ngrok http 8081 --log=stdout"
+    "ngrok": "npx ngrok http 8081 --log=stdout",
+    "copy-service-worker": "node ./scripts/copy-service-worker.js"
   },
   "jest": {
     "preset": "jest-expo"
