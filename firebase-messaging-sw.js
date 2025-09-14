@@ -28,7 +28,7 @@ messaging.onBackgroundMessage(function(payload) {
   const title = 'Bloodbond';
   const options = {
     body: notification.body || '',
-    icon: '/public/icon.png',
+    icon: '/favicon.png',
     data: payload.data || {}
   };
 

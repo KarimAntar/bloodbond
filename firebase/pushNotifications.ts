@@ -718,7 +718,7 @@ export const testNotification = async () => {
     // Create a test notification
     const testNotification = new Notification('BloodBond Test', {
       body: 'This is a test notification to verify your setup is working.',
-      icon: '/assets/images/icon.png',
+      icon: '/favicon.png',
       tag: 'bloodbond-test',
       requireInteraction: false
     });
@@ -874,8 +874,8 @@ const sendFCMMessage = async (token: string, title: string, body: string, data?:
               Urgency: 'high'
             },
             notification: {
-              icon: '/assets/images/icon.png',
-              badge: '/assets/images/icon.png',
+              icon: '/favicon.png',
+              badge: '/favicon.png',
               requireInteraction: true,
             }
           },
@@ -927,7 +927,7 @@ const sendFCMMessage = async (token: string, title: string, body: string, data?:
           notification: {
             title,
             body,
-            icon: '/assets/images/icon.png',
+            icon: '/favicon.png',
             click_action: window.location.origin,
           },
           data: data || {},
@@ -936,8 +936,8 @@ const sendFCMMessage = async (token: string, title: string, body: string, data?:
               Urgency: 'high'
             },
             notification: {
-              icon: '/assets/images/icon.png',
-              badge: '/assets/images/icon.png',
+              icon: '/favicon.png',
+              badge: '/favicon.png',
               requireInteraction: true,
             }
           }
@@ -973,7 +973,7 @@ const sendFCMMessage = async (token: string, title: string, body: string, data?:
         try {
           const notification = new Notification(title, {
             body: body,
-            icon: '/assets/images/icon.png',
+            icon: '/favicon.png',
             data: data || {},
             tag: `bloodbond-${Date.now()}`,
           });
@@ -1049,7 +1049,7 @@ export const sendPushNotification = async (
           try {
             const notification = new Notification(title, {
               body: body,
-              icon: '/assets/images/icon.png',
+              icon: '/favicon.png',
               data: data || {},
               tag: `bloodbond-${Date.now()}`, // Unique tag to prevent duplicates
             });
@@ -1136,7 +1136,7 @@ export const initializeNotifications = async () => {
               // Create browser notification for foreground messages
               new Notification(title ?? 'Notification', {
                 body: body ?? undefined,
-                icon: '/assets/images/icon.png', // Add icon as per Firebase best practices
+                icon: '/favicon.png', // Add icon as per Firebase best practices
                 data: payload?.data ?? {},
               });
             } catch (e) {
