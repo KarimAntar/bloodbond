@@ -204,6 +204,8 @@ export const getPushToken = async () => {
 */
 export const ensureAndRegisterPushToken = async (userId: string, platform = 'web') => {
   try {
+    console.log('ensureAndRegisterPushToken: STARTING for userId:', userId, 'platform:', platform);
+
     if (!userId) {
       console.warn('ensureAndRegisterPushToken: missing userId');
       return { success: false, reason: 'no-user' };
@@ -219,9 +221,11 @@ export const ensureAndRegisterPushToken = async (userId: string, platform = 'web
         console.log('ensureAndRegisterPushToken: permission already granted, skipping request');
       } else {
         // Only request if not already granted
+        console.log('ensureAndRegisterPushToken: requesting permission...');
         const perm = await requestNotificationPermissions();
         console.log('ensureAndRegisterPushToken: permission result =', perm);
         if (perm !== 'granted') {
+          console.log('ensureAndRegisterPushToken: permission request failed, returning');
           return { success: false, reason: 'permission-denied' };
         }
       }
@@ -250,8 +254,11 @@ export const ensureAndRegisterPushToken = async (userId: string, platform = 'web
       }
     }
 
+    console.log('ensureAndRegisterPushToken: calling getPushToken...');
     // Obtain token
     const token = await getPushToken();
+    console.log('ensureAndRegisterPushToken: getPushToken result:', token ? 'SUCCESS' : 'FAILED');
+
     if (!token) {
       console.warn('ensureAndRegisterPushToken: no token obtained');
 
@@ -277,8 +284,10 @@ export const ensureAndRegisterPushToken = async (userId: string, platform = 'web
       return { success: false, reason: 'no-token' };
     }
 
+    console.log('ensureAndRegisterPushToken: registering token in Firestore...');
     // Register token in Firestore
     await registerPushToken(userId, token, platform);
+    console.log('ensureAndRegisterPushToken: token registered successfully!');
     return { success: true, token };
   } catch (error) {
     console.error('ensureAndRegisterPushToken error:', error);
@@ -309,6 +318,7 @@ export const runNotificationDiagnostics = async () => {
       fetchStatus: null,
       fetchOk: null,
       fetchError: null,
+      manualRegistrationAttempt: null,
     };
 
     if ('serviceWorker' in navigator) {
@@ -325,6 +335,24 @@ export const runNotificationDiagnostics = async () => {
           swInfo.fetchOk = resp.ok;
         } catch (fetchErr: any) {
           swInfo.fetchError = String(fetchErr);
+        }
+
+        // Try manual service worker registration
+        try {
+          console.log('runNotificationDiagnostics: Attempting manual SW registration...');
+          const manualReg = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
+          swInfo.manualRegistrationAttempt = {
+            success: true,
+            scope: manualReg.scope,
+            state: manualReg.active?.state || 'unknown'
+          };
+          console.log('runNotificationDiagnostics: Manual SW registration succeeded:', manualReg.scope);
+        } catch (manualErr: any) {
+          swInfo.manualRegistrationAttempt = {
+            success: false,
+            error: String(manualErr)
+          };
+          console.warn('runNotificationDiagnostics: Manual SW registration failed:', manualErr);
         }
       } catch (swErr: any) {
         swInfo.fetchError = String(swErr);
