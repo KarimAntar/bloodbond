@@ -662,16 +662,13 @@ export default function AppSettingsScreen() {
                       [
                         { text: 'OK' },
                         {
-                          text: 'Open Settings',
+                          text: 'Reset in Edge',
                           onPress: () => {
-                            // Try to open browser settings (this might not work in all browsers)
-                            if (navigator.userAgent.includes('Edg')) {
-                              // Edge specific
-                              window.open('edge://settings/content/notifications', '_blank');
-                            } else if (navigator.userAgent.includes('Chrome')) {
-                              // Chrome
-                              window.open('chrome://settings/content/notifications', '_blank');
-                            }
+                            // Edge specific instructions
+                            Alert.alert(
+                              'Reset Notification Permission in Edge',
+                              '1. Click the lock icon (🔒) in the address bar\n2. Click the arrow next to "Notifications"\n3. Select "Allow"\n4. Reload the page and try again'
+                            );
                           }
                         }
                       ]
@@ -708,7 +705,7 @@ export default function AppSettingsScreen() {
                       } else if (permission === 'denied') {
                         Alert.alert(
                           'Permission Denied',
-                          'Notification permission was denied. To enable notifications:\n\n1. Click the lock/site info icon in the address bar\n2. Change notifications to "Allow"\n3. Reload the page and try again'
+                          'Notification permission was denied. To enable notifications:\n\n1. Click the lock icon (🔒) in the address bar\n2. Change notifications to "Allow"\n3. Reload the page and try again'
                         );
                       } else {
                         Alert.alert(
