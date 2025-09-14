@@ -134,96 +134,123 @@ export const getPushToken = async () => {
       // Initialize messaging and try to get token
       const messaging = getMessaging();
 
-      // CRITICAL: Firebase getToken() can revoke permissions - use extreme caution
-      // Check permission before each getToken call
-      const preTokenPerm = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
-      console.log('getPushToken: permission before getToken call:', preTokenPerm);
+      // BROWSER-SPECIFIC WORKAROUND: Firebase permission revocation bug affects Edge/Chrome
+      // Use alternative token retrieval strategies to minimize Firebase bug impact
 
-      if (preTokenPerm !== 'granted') {
-        console.warn('getPushToken: permission revoked before token retrieval, aborting');
-        return null;
-      }
+      const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+      const isEdge = userAgent.includes('Edg') || userAgent.includes('Edge');
+      const isChrome = userAgent.includes('Chrome') && !userAgent.includes('Edg');
 
-      // First try with service worker registration if available
-      if (registration) {
-        // Double-check permission before each attempt
-        const preAttemptPerm1 = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
-        if (preAttemptPerm1 !== 'granted') {
-          console.warn('getPushToken: permission revoked before SW token attempt');
+      console.log('getPushToken: browser detection - Edge:', isEdge, 'Chrome:', isChrome);
+
+      // STRATEGY 1: For Edge/Chrome, use minimal Firebase interaction
+      if (isEdge || isChrome) {
+        console.log('getPushToken: using Edge/Chrome-safe token retrieval strategy');
+
+        // Check permission stability before any Firebase calls
+        const initialPerm = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
+        console.log('getPushToken: initial permission check:', initialPerm);
+
+        if (initialPerm !== 'granted') {
+          console.warn('getPushToken: permission not granted initially');
           return null;
         }
 
+        // Wait a brief moment to let permission stabilize
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Double-check permission after stabilization
+        const stabilizedPerm = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
+        if (stabilizedPerm !== 'granted') {
+          console.warn('getPushToken: permission destabilized during stabilization');
+          return null;
+        }
+
+        // Use a single, carefully controlled getToken call
         try {
-          console.log('getPushToken: attempting getToken with SW registration...');
+          console.log('getPushToken: making single controlled getToken call...');
+
+          // Create fresh messaging instance to minimize state issues
+          const freshMessaging = getMessaging();
+
+          const token = await getToken(freshMessaging, {
+            vapidKey: FCM_VAPID_KEY,
+            serviceWorkerRegistration: registration,
+          });
+
+          // IMMEDIATE permission verification after getToken
+          const postTokenPerm = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
+
+          if (postTokenPerm !== 'granted') {
+            console.warn('getPushToken: Firebase revoked permission - aborting and returning null');
+            // Don't throw, just return null to trigger fallback handling
+            return null;
+          }
+
+          if (token) {
+            console.log('getPushToken: token retrieved successfully with permission intact');
+            return token;
+          } else {
+            console.warn('getPushToken: no token returned despite permission intact');
+            return null;
+          }
+
+        } catch (error: any) {
+          console.warn('getPushToken: controlled getToken failed:', error);
+
+          // Check if permission was revoked during the failed call
+          const errorPerm = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
+          if (errorPerm !== 'granted') {
+            console.warn('getPushToken: permission revoked during error - Firebase bug detected');
+            return null;
+          }
+
+          // If permission is still granted but getToken failed, it might be a different issue
+          console.warn('getPushToken: permission intact but getToken failed - may be service worker issue');
+          return null;
+        }
+
+      } else {
+        // STRATEGY 2: For other browsers, use the enhanced protection
+        console.log('getPushToken: using standard enhanced protection for non-Edge/Chrome browsers');
+
+        const preTokenPerm = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
+        console.log('getPushToken: permission before getToken call:', preTokenPerm);
+
+        if (preTokenPerm !== 'granted') {
+          console.warn('getPushToken: permission revoked before token retrieval, aborting');
+          return null;
+        }
+
+        // Single controlled attempt for non-problematic browsers
+        try {
+          console.log('getPushToken: attempting getToken...');
           const fcmToken = await getToken(messaging, {
             vapidKey: FCM_VAPID_KEY,
             serviceWorkerRegistration: registration,
           });
 
-          // Check if permission survived the getToken call
-          const postAttemptPerm1 = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
-          if (postAttemptPerm1 !== 'granted') {
-            console.warn('getPushToken: Firebase revoked permission during SW token retrieval');
+          // Verify permission survived
+          const postAttemptPerm = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
+          if (postAttemptPerm !== 'granted') {
+            console.warn('getPushToken: Firebase revoked permission during token retrieval');
             return null;
           }
 
-          console.log('getPushToken: getToken with SW registration succeeded:', !!fcmToken);
+          console.log('getPushToken: getToken succeeded:', !!fcmToken);
           return fcmToken || null;
         } catch (tokenErr: any) {
-          console.warn('getPushToken: getToken with SW registration failed:', tokenErr);
+          console.warn('getPushToken: getToken failed:', tokenErr);
 
           // Check if Firebase revoked permission during the failed call
-          const postFailurePerm1 = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
-          if (postFailurePerm1 !== 'granted') {
-            console.warn('getPushToken: Firebase revoked permission during failed SW token call');
+          const postFailurePerm = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
+          if (postFailurePerm !== 'granted') {
+            console.warn('getPushToken: Firebase revoked permission during failed call');
             return null;
           }
-        }
-      }
 
-      // Try without explicit service worker registration
-      const preAttemptPerm2 = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
-      if (preAttemptPerm2 !== 'granted') {
-        console.warn('getPushToken: permission revoked before fallback token attempt');
-        return null;
-      }
-
-      try {
-        console.log('getPushToken: attempting fallback getToken without SW...');
-        const fcmToken = await getToken(messaging, {
-          vapidKey: FCM_VAPID_KEY,
-        });
-
-        // Check if permission survived the getToken call
-        const postAttemptPerm2 = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
-        if (postAttemptPerm2 !== 'granted') {
-          console.warn('getPushToken: Firebase revoked permission during fallback token retrieval');
           return null;
         }
-
-        console.log('getPushToken: getToken without SW registration succeeded:', !!fcmToken);
-        return fcmToken || null;
-      } catch (altErr: any) {
-        console.error('getPushToken: all token retrieval methods failed:', altErr);
-
-        // Check if Firebase revoked permission during the final failed call
-        const postFailurePerm2 = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
-        console.log('getPushToken: permission after final FCM failure:', postFailurePerm2);
-
-        // If permission was revoked during FCM call, this is a Firebase bug
-        if (postFailurePerm2 === 'default' && preRegistrationPerm === 'granted') {
-          console.warn('CRITICAL: Firebase getToken() caused permission revocation - known Firebase bug');
-          console.warn('This happens in some browsers and cannot be fully prevented');
-          console.warn('User will need to manually reset permission in browser settings');
-        }
-
-        // Check if this is a permission issue
-        if (altErr && (altErr.name === 'NotAllowedError' || (typeof altErr.message === 'string' && altErr.message.toLowerCase().includes('permission')))) {
-          console.warn('Permission denied when getting FCM token. This might be due to browser restrictions.');
-        } else {
-          console.warn('getPushToken: token retrieval failed with non-permission error; check console for details.');
-        }
-        return null;
       }
     } else {
       // Native (Expo) fallback: use Expo Notifications to get a token (not FCM)
@@ -319,10 +346,18 @@ export const ensureAndRegisterPushToken = async (userId: string, platform?: stri
       if (finalPerm === 'granted') {
         console.log('ensureAndRegisterPushToken: permission still granted despite FCM failure, enabling notifications');
         console.log('NOTE: FCM push notifications may not work due to Firebase permission handling bug');
-        console.log('WORKAROUND: Using in-app notifications as fallback');
-        // Don't register a token, but still return success since permission is granted
-        // This allows the app to use Notification API directly for in-app notifications
-        return { success: true, token: null, reason: 'permission-granted-fallback-mode' };
+        console.log('WORKAROUND: Using browser Notification API for direct push notifications');
+
+        // Register a special "fallback" token that indicates we should use browser notifications
+        await registerPushToken(userId, 'browser-direct-notification', platform);
+        console.log('ensureAndRegisterPushToken: registered fallback token for browser notifications');
+
+        return {
+          success: true,
+          token: 'browser-direct-notification',
+          reason: 'permission-granted-fallback-mode',
+          fallbackMode: true
+        };
       }
 
       // Check if permission was revoked by Firebase (common Firebase bug)
@@ -566,24 +601,53 @@ export const sendPushNotification = async (
         });
       });
 
-      // Then check web tokens specifically
+      // Check for fallback browser notification token
+      const fallbackTokens = snapshotAll.docs.filter(doc => doc.data().token === 'browser-direct-notification');
+      if (fallbackTokens.length > 0) {
+        console.log('sendPushNotification: Found fallback browser notification token, showing direct browser notification');
+
+        // Show browser notification directly using Notification API
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          try {
+            const notification = new Notification(title, {
+              body: body,
+              icon: '/assets/images/icon.png',
+              data: data || {},
+              tag: `bloodbond-${Date.now()}`, // Unique tag to prevent duplicates
+            });
+
+            // Auto-close after 5 seconds
+            setTimeout(() => {
+              notification.close();
+            }, 5000);
+
+            console.log('sendPushNotification: Browser notification shown successfully');
+          } catch (browserNotifError) {
+            console.warn('sendPushNotification: Failed to show browser notification:', browserNotifError);
+          }
+        } else {
+          console.warn('sendPushNotification: Browser notification permission not granted');
+        }
+      }
+
+      // Then check web tokens specifically for FCM
       const q = query(userTokensRef, where('userId', '==', userId), where('platform', '==', 'web'), orderBy('createdAt', 'desc'));
       const snapshot = await getDocs(q);
 
-      console.log('sendPushNotification: Found', snapshot.size, 'web user tokens');
+      console.log('sendPushNotification: Found', snapshot.size, 'web FCM tokens');
 
       if (!snapshot.empty) {
         const token = snapshot.docs[0].data().token;
-        console.log('sendPushNotification: Found user token, attempting direct FCM send');
+        console.log('sendPushNotification: Found FCM token, attempting direct FCM send');
         console.log('sendPushNotification: Token preview:', token.substring(0, 20) + '...');
 
         await sendFCMMessage(token, title, body, data);
         console.log('sendPushNotification: Direct FCM send completed');
       } else {
-        console.log('sendPushNotification: No web user tokens found for direct send');
+        console.log('sendPushNotification: No web FCM tokens found for direct send');
       }
     } catch (directSendError) {
-      console.warn('sendPushNotification: Direct FCM send failed, notification stored for cloud function processing:', directSendError);
+      console.warn('sendPushNotification: Direct send failed, notification stored for cloud function processing:', directSendError);
     }
 
     console.log('sendPushNotification: Push notification send completed successfully');
