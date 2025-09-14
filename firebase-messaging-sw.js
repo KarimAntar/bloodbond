@@ -25,10 +25,10 @@ messaging.onBackgroundMessage(function(payload) {
   console.log('[firebase-messaging-sw.js] Received background message ', payload);
 
   const notification = payload.notification || {};
-  const title = notification.title || 'BloodBond';
+  const title = 'Bloodbond';
   const options = {
     body: notification.body || '',
-    icon: '/assets/images/icon.png',
+    icon: '/public/icon.png',
     data: payload.data || {}
   };
 
