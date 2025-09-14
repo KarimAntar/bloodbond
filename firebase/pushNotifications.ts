@@ -140,10 +140,12 @@ export const getPushToken = async () => {
       const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
       const isEdge = userAgent.includes('Edg') || userAgent.includes('Edge');
       const isChrome = userAgent.includes('Chrome') && !userAgent.includes('Edg');
+      const isFirefox = userAgent.includes('Firefox');
+      const isSafari = userAgent.includes('Safari') && !userAgent.includes('Chrome');
 
-      console.log('getPushToken: browser detection - Edge:', isEdge, 'Chrome:', isChrome);
+      console.log('getPushToken: browser detection - Edge:', isEdge, 'Chrome:', isChrome, 'Firefox:', isFirefox, 'Safari:', isSafari);
 
-      // STRATEGY 1: For Edge/Chrome, use minimal Firebase interaction
+      // STRATEGY 1: For Edge/Chrome, use minimal Firebase interaction with enhanced protection
       if (isEdge || isChrome) {
         console.log('getPushToken: using Edge/Chrome-safe token retrieval strategy');
 
@@ -166,17 +168,25 @@ export const getPushToken = async () => {
           return null;
         }
 
-        // Use a single, carefully controlled getToken call
+        // Use a single, carefully controlled getToken call with timeout protection
         try {
           console.log('getPushToken: making single controlled getToken call...');
 
           // Create fresh messaging instance to minimize state issues
           const freshMessaging = getMessaging();
 
-          const token = await getToken(freshMessaging, {
+          // Add timeout protection for getToken call
+          const tokenPromise = getToken(freshMessaging, {
             vapidKey: FCM_VAPID_KEY,
             serviceWorkerRegistration: registration,
           });
+
+          // Race against a timeout to prevent hanging
+          const timeoutPromise = new Promise<null>((_, reject) =>
+            setTimeout(() => reject(new Error('getToken timeout')), 10000)
+          );
+
+          const token = await Promise.race([tokenPromise, timeoutPromise]);
 
           // IMMEDIATE permission verification after getToken
           const postTokenPerm = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
@@ -210,9 +220,53 @@ export const getPushToken = async () => {
           return null;
         }
 
+      } else if (isFirefox) {
+        // STRATEGY 2: Firefox-specific handling
+        console.log('getPushToken: using Firefox-specific token retrieval strategy');
+
+        const preTokenPerm = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
+        console.log('getPushToken: permission before getToken call:', preTokenPerm);
+
+        if (preTokenPerm !== 'granted') {
+          console.warn('getPushToken: permission revoked before token retrieval, aborting');
+          return null;
+        }
+
+        // Firefox sometimes needs a delay before getToken
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        try {
+          console.log('getPushToken: attempting getToken for Firefox...');
+          const fcmToken = await getToken(messaging, {
+            vapidKey: FCM_VAPID_KEY,
+            serviceWorkerRegistration: registration,
+          });
+
+          // Verify permission survived
+          const postAttemptPerm = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
+          if (postAttemptPerm !== 'granted') {
+            console.warn('getPushToken: Firebase revoked permission during token retrieval');
+            return null;
+          }
+
+          console.log('getPushToken: getToken succeeded:', !!fcmToken);
+          return fcmToken || null;
+        } catch (tokenErr: any) {
+          console.warn('getPushToken: getToken failed:', tokenErr);
+
+          // Check if Firebase revoked permission during the failed call
+          const postFailurePerm = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
+          if (postFailurePerm !== 'granted') {
+            console.warn('getPushToken: Firebase revoked permission during failed call');
+            return null;
+          }
+
+          return null;
+        }
+
       } else {
-        // STRATEGY 2: For other browsers, use the enhanced protection
-        console.log('getPushToken: using standard enhanced protection for non-Edge/Chrome browsers');
+        // STRATEGY 3: For Safari and other browsers, use the enhanced protection
+        console.log('getPushToken: using standard enhanced protection for Safari/other browsers');
 
         const preTokenPerm = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
         console.log('getPushToken: permission before getToken call:', preTokenPerm);
@@ -367,7 +421,27 @@ export const ensureAndRegisterPushToken = async (userId: string, platform?: stri
         console.warn('WORKAROUND: Since permission was revoked by Firebase, we cannot re-enable it programmatically');
         console.warn('The user will need to manually re-enable notifications in site settings');
 
-        return { success: false, reason: 'firebase-permission-revocation' };
+        // Provide user-friendly guidance
+        const userGuidance = {
+          title: 'Notification Permission Issue',
+          message: 'Due to a known issue with Firebase Cloud Messaging, your notification permission was temporarily revoked. To re-enable notifications:',
+          steps: [
+            '1. Click the lock/info icon in your browser address bar',
+            '2. Find the notification permission setting',
+            '3. Change it from "Block" to "Allow"',
+            '4. Refresh this page and try enabling notifications again'
+          ],
+          alternative: 'Alternatively, you can enable notifications through your browser settings menu.'
+        };
+
+        console.log('USER GUIDANCE:', userGuidance);
+
+        return {
+          success: false,
+          reason: 'firebase-permission-revocation',
+          userGuidance,
+          requiresManualIntervention: true
+        };
       }
 
       return { success: false, reason: 'no-token' };
@@ -462,6 +536,215 @@ export const runNotificationDiagnostics = async () => {
   } catch (error) {
     console.error('runNotificationDiagnostics error:', error);
     return { error };
+  }
+};
+
+/**
+ * Get user-friendly notification status information
+ * Returns an object with status details and recommendations
+ */
+export const getNotificationStatus = async () => {
+  try {
+    if (!isWeb) {
+      return {
+        platform: 'native',
+        status: 'native-platform',
+        message: 'Native platform - notifications handled by Expo'
+      };
+    }
+
+    const permission = (typeof Notification !== 'undefined') ? Notification.permission : 'unsupported';
+    const isSecureContext = (typeof window !== 'undefined') ? (window as any).isSecureContext : false;
+    const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+    const isChrome = userAgent.includes('Chrome') && !userAgent.includes('Edg');
+    const isEdge = userAgent.includes('Edg') || userAgent.includes('Edge');
+    const isFirefox = userAgent.includes('Firefox');
+
+    let status = 'unknown';
+    let message = '';
+    let recommendations: string[] = [];
+    let canEnable = false;
+
+    if (permission === 'unsupported') {
+      status = 'unsupported';
+      message = 'Notifications are not supported in this browser';
+      recommendations = ['Try using a modern browser like Chrome, Firefox, or Edge'];
+    } else if (permission === 'denied') {
+      status = 'blocked';
+      message = 'Notifications are blocked by the browser';
+      recommendations = [
+        'Click the lock/info icon in the address bar',
+        'Change notification permission to "Allow"',
+        'Refresh the page and try again'
+      ];
+    } else if (permission === 'default') {
+      status = 'not-requested';
+      message = 'Notification permission has not been requested yet';
+      canEnable = true;
+      recommendations = ['Click "Enable Notifications" to allow push notifications'];
+    } else if (permission === 'granted') {
+      status = 'granted';
+      message = 'Notifications are enabled';
+
+      // Check for potential Firebase issues
+      if (isChrome || isEdge) {
+        message += ' (Note: Chrome/Edge may have Firebase compatibility issues)';
+        recommendations = [
+          'If notifications don\'t work, try refreshing the page',
+          'Some Firebase features may be limited in Chrome/Edge'
+        ];
+      } else if (isFirefox) {
+        message += ' (Firefox detected - generally good Firebase compatibility)';
+      }
+    }
+
+    // Check service worker status
+    let serviceWorkerStatus = 'unknown';
+    if ('serviceWorker' in navigator) {
+      try {
+        const registration = await navigator.serviceWorker.getRegistration('/');
+        serviceWorkerStatus = registration ? 'registered' : 'not-registered';
+      } catch (e) {
+        serviceWorkerStatus = 'error';
+      }
+    } else {
+      serviceWorkerStatus = 'not-supported';
+    }
+
+    return {
+      platform: 'web',
+      status,
+      message,
+      permission,
+      isSecureContext,
+      serviceWorkerStatus,
+      browser: {
+        isChrome,
+        isEdge,
+        isFirefox,
+        userAgent: userAgent.substring(0, 100) + '...'
+      },
+      recommendations,
+      canEnable,
+      timestamp: new Date().toISOString()
+    };
+  } catch (error) {
+    console.error('getNotificationStatus error:', error);
+    return {
+      platform: 'web',
+      status: 'error',
+      message: 'Unable to determine notification status',
+      error: String(error)
+    };
+  }
+};
+
+/**
+ * Attempt to reset notification permission (useful for testing Firebase bug recovery)
+ * Note: This is experimental and may not work in all browsers
+ */
+export const resetNotificationPermission = async () => {
+  try {
+    if (!isWeb || typeof Notification === 'undefined') {
+      return { success: false, reason: 'not-web-platform' };
+    }
+
+    const currentPermission = Notification.permission;
+    console.log('resetNotificationPermission: current permission =', currentPermission);
+
+    // If already default, nothing to reset
+    if (currentPermission === 'default') {
+      return { success: true, message: 'Permission already in default state' };
+    }
+
+    // Try to reset by unregistering service worker and clearing any cached permissions
+    if ('serviceWorker' in navigator) {
+      try {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        for (const registration of registrations) {
+          if (registration.scope.includes(window.location.origin)) {
+            console.log('resetNotificationPermission: unregistering SW:', registration.scope);
+            await registration.unregister();
+          }
+        }
+      } catch (swError) {
+        console.warn('resetNotificationPermission: error unregistering SW:', swError);
+      }
+    }
+
+    // Clear any local storage related to notifications
+    try {
+      const keys = Object.keys(localStorage);
+      keys.forEach(key => {
+        if (key.includes('notification') || key.includes('firebase') || key.includes('fcm')) {
+          localStorage.removeItem(key);
+          console.log('resetNotificationPermission: cleared localStorage key:', key);
+        }
+      });
+    } catch (storageError) {
+      console.warn('resetNotificationPermission: error clearing localStorage:', storageError);
+    }
+
+    return {
+      success: true,
+      message: 'Reset attempt completed. Refresh the page to see if permission was reset to default.',
+      requiresRefresh: true
+    };
+  } catch (error) {
+    console.error('resetNotificationPermission error:', error);
+    return { success: false, reason: 'error', error: String(error) };
+  }
+};
+
+/**
+ * Test notification functionality with a simple test notification
+ */
+export const testNotification = async () => {
+  try {
+    if (!isWeb) {
+      return { success: false, reason: 'not-web-platform' };
+    }
+
+    const permission = (typeof Notification !== 'undefined') ? Notification.permission : 'unsupported';
+
+    if (permission !== 'granted') {
+      return {
+        success: false,
+        reason: 'permission-not-granted',
+        message: 'Notification permission not granted. Please enable notifications first.'
+      };
+    }
+
+    // Create a test notification
+    const testNotification = new Notification('BloodBond Test', {
+      body: 'This is a test notification to verify your setup is working.',
+      icon: '/assets/images/icon.png',
+      tag: 'bloodbond-test',
+      requireInteraction: false
+    });
+
+    // Auto-close after 3 seconds
+    setTimeout(() => {
+      testNotification.close();
+    }, 3000);
+
+    return {
+      success: true,
+      message: 'Test notification sent successfully',
+      details: {
+        title: 'BloodBond Test',
+        body: 'This is a test notification to verify your setup is working.',
+        autoClose: '3 seconds'
+      }
+    };
+  } catch (error) {
+    console.error('testNotification error:', error);
+    return {
+      success: false,
+      reason: 'error',
+      message: 'Failed to send test notification',
+      error: String(error)
+    };
   }
 };
 
