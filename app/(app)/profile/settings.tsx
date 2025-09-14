@@ -724,9 +724,18 @@ export default function AppSettingsScreen() {
                   }
                 } catch (permError) {
                   console.error('Permission request failed:', permError);
+                  // Normalize unknown error to a safe string message
+                  let permMessage = 'Failed to request notification permission';
+                  if (permError instanceof Error) {
+                    permMessage = permError.message;
+                  } else if (typeof permError === 'string') {
+                    permMessage = permError;
+                  } else if (permError && typeof (permError as any).message === 'string') {
+                    permMessage = (permError as any).message;
+                  }
                   Alert.alert(
                     'Permission Request Failed',
-                    `Failed to request notification permission: ${permError.message}`
+                    `Failed to request notification permission: ${permMessage}`
                   );
                 }
               }}
