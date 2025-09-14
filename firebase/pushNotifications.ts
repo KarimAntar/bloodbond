@@ -280,21 +280,8 @@ export const ensureAndRegisterPushToken = async (userId: string, platform = 'web
       if (finalPerm === 'default') {
         console.warn('ensureAndRegisterPushToken: permission was revoked to "default" - likely Firebase bug');
         console.warn('This is a known issue with Firebase Cloud Messaging in some browsers');
-        console.warn('WORKAROUND: Attempting to re-grant permission and use fallback mode');
-
-        // Try one more time to request permission and use fallback mode
-        try {
-          console.log('ensureAndRegisterPushToken: attempting fallback permission request...');
-          const fallbackPerm = await requestNotificationPermissions();
-          console.log('ensureAndRegisterPushToken: fallback permission result:', fallbackPerm);
-
-          if (fallbackPerm === 'granted') {
-            console.log('ensureAndRegisterPushToken: fallback permission granted, using in-app notifications');
-            return { success: true, token: null, reason: 'fallback-permission-granted' };
-          }
-        } catch (fallbackErr) {
-          console.warn('ensureAndRegisterPushToken: fallback permission request failed:', fallbackErr);
-        }
+        console.warn('WORKAROUND: Since permission was revoked by Firebase, we cannot re-enable it programmatically');
+        console.warn('The user will need to manually re-enable notifications in site settings');
 
         return { success: false, reason: 'firebase-permission-revocation' };
       }

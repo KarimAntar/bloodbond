@@ -226,8 +226,8 @@ export default function AppSettingsScreen() {
             Alert.alert('Permission Revoked', 'Notification permission was revoked during setup. Please try again or check your browser settings.');
           } else if (result?.reason === 'firebase-permission-revocation') {
             Alert.alert(
-              'Firebase Compatibility Issue',
-              'Notifications are enabled but FCM push notifications may not work due to a known Firebase bug that revokes permissions. This is a limitation in some browsers. Notifications will still work for in-app alerts.'
+              'Permission Revoked by Firebase',
+              'Firebase has revoked the notification permission due to a known bug. To re-enable notifications:\n\n1. Click the lock/site info icon in the address bar\n2. Change notifications back to "Allow"\n3. Try enabling notifications again\n\nThis is a limitation of Firebase Cloud Messaging in some browsers.'
             );
           } else {
             Alert.alert('Error', 'Failed to enable notifications. Check console for details.');
