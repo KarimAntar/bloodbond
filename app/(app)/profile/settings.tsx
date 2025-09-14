@@ -656,6 +656,13 @@ export default function AppSettingsScreen() {
 
                   // If denied, show instructions to reset in browser settings
                   if (Notification.permission === 'denied') {
+                    console.log('Permission is denied, showing reset instructions');
+                    console.log('Full permission state:', {
+                      permission: Notification.permission,
+                      userAgent: navigator.userAgent,
+                      protocol: window.location.protocol,
+                      hostname: window.location.hostname
+                    });
                     Alert.alert(
                       'Notifications Blocked',
                       'Notifications are blocked for this site. Please reset the permission in your browser settings first.',
@@ -685,45 +692,42 @@ export default function AppSettingsScreen() {
                     userAgent: navigator.userAgent
                   });
 
-                  try {
-                    const permission = await Notification.requestPermission();
-                    console.log('Permission request result:', permission);
-                    console.log('Permission after request:', Notification.permission);
+                  // Force permission request even if it might be denied
+                  console.log('About to call Notification.requestPermission()');
+                  const permission = await Notification.requestPermission();
+                  console.log('Permission request result:', permission);
+                  console.log('Permission after request:', Notification.permission);
 
-                    if (permission === 'granted') {
-                      console.log('Permission granted, proceeding with token registration');
-                      await handleNotificationToggle(true);
+                  if (permission === 'granted') {
+                    console.log('Permission granted, proceeding with token registration');
+                    await handleNotificationToggle(true);
+                  } else {
+                    console.log('Permission not granted:', permission);
+
+                    // Check if this is a browser restriction
+                    if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+                      Alert.alert(
+                        'HTTPS Required',
+                        'Notifications require a secure connection (HTTPS). This site must be accessed over HTTPS for notifications to work.'
+                      );
+                    } else if (permission === 'denied') {
+                      Alert.alert(
+                        'Permission Denied',
+                        'Notification permission was denied. To enable notifications:\n\n1. Click the lock icon (🔒) in the address bar\n2. Change notifications to "Allow"\n3. Reload the page and try again'
+                      );
                     } else {
-                      console.log('Permission not granted:', permission);
-
-                      // Check if this is a browser restriction
-                      if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
-                        Alert.alert(
-                          'HTTPS Required',
-                          'Notifications require a secure connection (HTTPS). This site must be accessed over HTTPS for notifications to work.'
-                        );
-                      } else if (permission === 'denied') {
-                        Alert.alert(
-                          'Permission Denied',
-                          'Notification permission was denied. To enable notifications:\n\n1. Click the lock icon (🔒) in the address bar\n2. Change notifications to "Allow"\n3. Reload the page and try again'
-                        );
-                      } else {
-                        Alert.alert(
-                          'Permission Dismissed',
-                          'The notification permission prompt was dismissed. Please try clicking "Enable Notifications" again and allow the permission when prompted.'
-                        );
-                      }
+                      Alert.alert(
+                        'Permission Dismissed',
+                        'The notification permission prompt was dismissed. Please try clicking "Enable Notifications" again and allow the permission when prompted.'
+                      );
                     }
-                  } catch (permError) {
-                    console.error('Permission request failed:', permError);
-                    Alert.alert(
-                      'Permission Request Failed',
-                      'Failed to request notification permission. This might be due to browser restrictions or security settings.'
-                    );
                   }
-                } catch (e) {
-                  console.error('Enable Notifications action failed', e);
-                  Alert.alert('Error', 'Failed to request notification permission. Check console for details.');
+                } catch (permError) {
+                  console.error('Permission request failed:', permError);
+                  Alert.alert(
+                    'Permission Request Failed',
+                    `Failed to request notification permission: ${permError.message}`
+                  );
                 }
               }}
               style={{
