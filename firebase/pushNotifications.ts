@@ -134,42 +134,87 @@ export const getPushToken = async () => {
       // Initialize messaging and try to get token
       const messaging = getMessaging();
 
+      // CRITICAL: Firebase getToken() can revoke permissions - use extreme caution
+      // Check permission before each getToken call
+      const preTokenPerm = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
+      console.log('getPushToken: permission before getToken call:', preTokenPerm);
+
+      if (preTokenPerm !== 'granted') {
+        console.warn('getPushToken: permission revoked before token retrieval, aborting');
+        return null;
+      }
+
       // First try with service worker registration if available
       if (registration) {
+        // Double-check permission before each attempt
+        const preAttemptPerm1 = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
+        if (preAttemptPerm1 !== 'granted') {
+          console.warn('getPushToken: permission revoked before SW token attempt');
+          return null;
+        }
+
         try {
+          console.log('getPushToken: attempting getToken with SW registration...');
           const fcmToken = await getToken(messaging, {
             vapidKey: FCM_VAPID_KEY,
             serviceWorkerRegistration: registration,
           });
+
+          // Check if permission survived the getToken call
+          const postAttemptPerm1 = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
+          if (postAttemptPerm1 !== 'granted') {
+            console.warn('getPushToken: Firebase revoked permission during SW token retrieval');
+            return null;
+          }
+
           console.log('getPushToken: getToken with SW registration succeeded:', !!fcmToken);
           return fcmToken || null;
         } catch (tokenErr: any) {
           console.warn('getPushToken: getToken with SW registration failed:', tokenErr);
-          // Fall through to try without SW registration
+
+          // Check if Firebase revoked permission during the failed call
+          const postFailurePerm1 = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
+          if (postFailurePerm1 !== 'granted') {
+            console.warn('getPushToken: Firebase revoked permission during failed SW token call');
+            return null;
+          }
         }
       }
 
       // Try without explicit service worker registration
+      const preAttemptPerm2 = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
+      if (preAttemptPerm2 !== 'granted') {
+        console.warn('getPushToken: permission revoked before fallback token attempt');
+        return null;
+      }
+
       try {
+        console.log('getPushToken: attempting fallback getToken without SW...');
         const fcmToken = await getToken(messaging, {
           vapidKey: FCM_VAPID_KEY,
         });
+
+        // Check if permission survived the getToken call
+        const postAttemptPerm2 = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
+        if (postAttemptPerm2 !== 'granted') {
+          console.warn('getPushToken: Firebase revoked permission during fallback token retrieval');
+          return null;
+        }
+
         console.log('getPushToken: getToken without SW registration succeeded:', !!fcmToken);
         return fcmToken || null;
       } catch (altErr: any) {
         console.error('getPushToken: all token retrieval methods failed:', altErr);
 
-        // IMPORTANT: Firebase's getToken() can cause permission revocation
-        // Check if permission was revoked during FCM token retrieval and restore it
-        const currentPermAfterFailure = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
-        console.log('getPushToken: permission after FCM failure:', currentPermAfterFailure);
+        // Check if Firebase revoked permission during the final failed call
+        const postFailurePerm2 = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
+        console.log('getPushToken: permission after final FCM failure:', postFailurePerm2);
 
         // If permission was revoked during FCM call, this is a Firebase bug
-        // We can't prevent this, but we can document it
-        if (currentPermAfterFailure === 'default' && preRegistrationPerm === 'granted') {
-          console.warn('WARNING: Firebase getToken() caused permission revocation - this is a known Firebase bug');
-          console.warn('The permission was granted but FCM token retrieval failed and revoked the permission');
-          console.warn('This is a limitation of Firebase Cloud Messaging in some browsers');
+        if (postFailurePerm2 === 'default' && preRegistrationPerm === 'granted') {
+          console.warn('CRITICAL: Firebase getToken() caused permission revocation - known Firebase bug');
+          console.warn('This happens in some browsers and cannot be fully prevented');
+          console.warn('User will need to manually reset permission in browser settings');
         }
 
         // Check if this is a permission issue
