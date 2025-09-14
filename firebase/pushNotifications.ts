@@ -202,7 +202,11 @@ export const getPushToken = async () => {
   Use this on user gesture (e.g., Settings -> Enable notifications) so browsers
   prompt for permission in a clear UX flow.
 */
-export const ensureAndRegisterPushToken = async (userId: string, platform = 'web') => {
+export const ensureAndRegisterPushToken = async (userId: string, platform?: string) => {
+  // Determine platform if not provided
+  if (!platform) {
+    platform = isWeb ? 'web' : 'native';
+  }
   try {
     console.log('ensureAndRegisterPushToken: STARTING for userId:', userId, 'platform:', platform);
 
@@ -504,10 +508,24 @@ export const sendPushNotification = async (
     // For testing: try to send directly to user's tokens
     try {
       const userTokensRef = collection(db, 'userTokens');
+      // First check all tokens for the user
+      const qAll = query(userTokensRef, where('userId', '==', userId), orderBy('createdAt', 'desc'));
+      const snapshotAll = await getDocs(qAll);
+      console.log('sendPushNotification: Found', snapshotAll.size, 'total user tokens');
+      snapshotAll.forEach((doc) => {
+        const data = doc.data();
+        console.log('sendPushNotification: Token:', {
+          platform: data.platform,
+          tokenPreview: data.token.substring(0, 20) + '...',
+          active: data.active
+        });
+      });
+
+      // Then check web tokens specifically
       const q = query(userTokensRef, where('userId', '==', userId), where('platform', '==', 'web'), orderBy('createdAt', 'desc'));
       const snapshot = await getDocs(q);
 
-      console.log('sendPushNotification: Found', snapshot.size, 'user tokens');
+      console.log('sendPushNotification: Found', snapshot.size, 'web user tokens');
 
       if (!snapshot.empty) {
         const token = snapshot.docs[0].data().token;
@@ -517,7 +535,7 @@ export const sendPushNotification = async (
         await sendFCMMessage(token, title, body, data);
         console.log('sendPushNotification: Direct FCM send completed');
       } else {
-        console.log('sendPushNotification: No user tokens found for direct send');
+        console.log('sendPushNotification: No web user tokens found for direct send');
       }
     } catch (directSendError) {
       console.warn('sendPushNotification: Direct FCM send failed, notification stored for cloud function processing:', directSendError);
