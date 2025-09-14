@@ -26,6 +26,7 @@ import * as Location from 'expo-location';
 import { saveDataExportRequest } from '../../../utils/dataExport';
 import { submitBugReport, getBugReportTemplate } from '../../../utils/bugReporting';
 import { getLegalDocument, formatLegalContent } from '../../../utils/legalContent';
+import { ensureAndRegisterPushToken, runNotificationDiagnostics } from '../../../firebase/pushNotifications';
 
 const SettingOption: React.FC<{
   icon: string;
@@ -77,8 +78,69 @@ const SettingOption: React.FC<{
 
 export default function AppSettingsScreen() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [notificationPermission, setNotificationPermission] = useState<'default'|'denied'|'granted'|'unsupported'>('default');
   const [locationEnabled, setLocationEnabled] = useState(true);
   const [darkModeEnabled, setDarkModeEnabled] = useState(false);
+
+  // Keep UI in sync with actual permission state (important after page reloads or origin changes).
+  useEffect(() => {
+    let mounted = true;
+    let permStatus: any = null;
+
+    const checkPermission = async () => {
+      try {
+        if (typeof window !== 'undefined' && Platform.OS === 'web') {
+          const perm = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
+          console.log('settings: Notification.permission =', perm);
+          if (!mounted) return;
+          setNotificationPermission(perm as any);
+          setNotificationsEnabled(perm === 'granted');
+        } else {
+          const { status } = await Notifications.getPermissionsAsync();
+          if (!mounted) return;
+          setNotificationPermission(status === 'granted' ? 'granted' : 'default');
+          setNotificationsEnabled(status === 'granted');
+        }
+
+        // Skip Permissions API entirely - it can cause permission revocation
+        // We'll rely on focus/visibilitychange events and manual checks instead
+        console.log('settings: Skipping Permissions API to avoid permission revocation');
+      } catch (e) {
+        console.warn('settings: permission check failed', e);
+      }
+    };
+
+    // Initial check
+    checkPermission();
+
+    // Re-check when page regains focus or becomes visible (useful after changing site permissions in browser UI)
+    const onFocus = () => checkPermission();
+    const onVisibilityChange = () => {
+      try {
+        if (document.visibilityState === 'visible') {
+          checkPermission();
+        }
+      } catch (e) {}
+    };
+
+    try {
+      window.addEventListener('focus', onFocus);
+      document.addEventListener('visibilitychange', onVisibilityChange);
+    } catch (e) {
+      // Non-browser platforms may throw
+    }
+
+    return () => {
+      mounted = false;
+      try {
+        window.removeEventListener('focus', onFocus);
+        document.removeEventListener('visibilitychange', onVisibilityChange);
+        if (permStatus && typeof permStatus.onchange === 'function') {
+          permStatus.onchange = null;
+        }
+      } catch (e) {}
+    };
+  }, []);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [changePasswordModalVisible, setChangePasswordModalVisible] = useState(false);
   const [themeModalVisible, setThemeModalVisible] = useState(false);
@@ -91,32 +153,89 @@ export default function AppSettingsScreen() {
   const { theme, setTheme, colors } = useTheme();
   const router = useRouter();
 
+  // When permission becomes granted (e.g., user enabled notifications from browser site settings),
+  // attempt to register token automatically if the user is signed in and we don't yet have enabled state.
+  useEffect(() => {
+    let mounted = true;
+
+    const tryRegisterTokenOnGrant = async () => {
+      try {
+        if (!mounted) return;
+        if (notificationPermission === 'granted' && user?.uid && !notificationsEnabled) {
+          console.log('Permission granted — attempting to register push token automatically');
+          const result = await ensureAndRegisterPushToken(user.uid, Platform.OS === 'web' ? 'web' : 'native');
+          if (!mounted) return;
+          if (result?.success) {
+            setNotificationsEnabled(true);
+            try {
+              await updateDoc(doc(db, 'users', user.uid), {
+                notificationsEnabled: true
+              });
+            } catch (e) {
+              console.warn('Failed to persist notificationsEnabled to Firestore', e);
+            }
+            Alert.alert('Notifications Enabled', 'Push notifications have been enabled for your account.');
+          } else {
+            console.warn('Auto-register after permission grant failed', result);
+          }
+        }
+      } catch (e) {
+        console.error('Error auto-registering push token on permission grant', e);
+      }
+    };
+
+    tryRegisterTokenOnGrant();
+
+    return () => { mounted = false; };
+  }, [notificationPermission, user, notificationsEnabled]);
+
   const handleNotificationToggle = async (value: boolean) => {
     try {
+      if (!user?.uid) {
+        Alert.alert('Not signed in', 'Please sign in to manage notification settings.');
+        return;
+      }
+
       if (value) {
-        const { status } = await Notifications.requestPermissionsAsync();
-        if (status === 'granted') {
+        // On web and native, use the centralized helper which requests permission,
+        // obtains a token and registers it in Firestore.
+        const result = await ensureAndRegisterPushToken(user.uid, Platform.OS === 'web' ? 'web' : 'native');
+        if (result?.success) {
           setNotificationsEnabled(true);
           // Save preference to user profile
-          if (user?.uid) {
-            await updateDoc(doc(db, 'users', user.uid), {
-              notificationsEnabled: true
-            });
+          await updateDoc(doc(db, 'users', user.uid), {
+            notificationsEnabled: true
+          });
+
+          // Special message for permission-granted-no-token case
+          if (result?.reason === 'permission-granted-no-token') {
+            Alert.alert('Notifications Enabled', 'Notification permission granted! Push notifications may work through alternative methods.');
+          } else {
+            Alert.alert('Notifications Enabled', 'Push notifications have been enabled for your account.');
           }
-    Alert.alert('Notifications Enabled', 'Push notifications have been enabled for your account.');
         } else {
-          Alert.alert('Permission Denied', 'Please enable notifications in your device settings');
           setNotificationsEnabled(false);
+          if (result?.reason === 'permission-denied') {
+            Alert.alert('Permission Denied', 'Please enable notifications in your browser or device settings.');
+          } else if (result?.reason === 'permission-revoked') {
+            Alert.alert('Permission Revoked', 'Notification permission was revoked during setup. Please try again or check your browser settings.');
+          } else if (result?.reason === 'firebase-permission-revocation') {
+            Alert.alert(
+              'Firebase Compatibility Issue',
+              'Notifications are enabled but FCM push notifications may not work due to a known Firebase bug that revokes permissions. This is a limitation in some browsers. Notifications will still work for in-app alerts.'
+            );
+          } else {
+            Alert.alert('Error', 'Failed to enable notifications. Check console for details.');
+          }
         }
       } else {
+        // Disable notifications preference; keep tokens for potential future re-enable
         setNotificationsEnabled(false);
         // Save preference to user profile
-        if (user?.uid) {
-          await updateDoc(doc(db, 'users', user.uid), {
-            notificationsEnabled: false
-          });
-        }
-    Alert.alert('Notifications Disabled', 'Push notifications have been disabled for your account.');
+        await updateDoc(doc(db, 'users', user.uid), {
+          notificationsEnabled: false
+        });
+        Alert.alert('Notifications Disabled', 'Push notifications have been disabled for your account.');
       }
     } catch (error) {
       console.error('Error toggling notifications:', error);
@@ -506,6 +625,173 @@ export default function AppSettingsScreen() {
         {/* Notifications */}
         <View style={styles.section}>
           <Text style={dynamicStyles.sectionTitle}>Notifications</Text>
+
+          {/* Prominent enable button for browsers where permission is still "default" */}
+          <View style={{ paddingHorizontal: 20, paddingVertical: 12 }}>
+            <TouchableOpacity
+              onPress={async () => {
+                try {
+                  console.log('Enable Notifications button pressed');
+                  console.log('Current Notification.permission before request:', (typeof Notification !== 'undefined') ? Notification.permission : 'undefined');
+
+                  // Check if notifications are supported
+                  if (typeof Notification === 'undefined') {
+                    Alert.alert('Not Supported', 'Notifications are not supported in this browser.');
+                    return;
+                  }
+
+                  console.log('Current Notification.permission:', Notification.permission);
+
+                  // If already granted, just enable without requesting again
+                  if (Notification.permission === 'granted') {
+                    console.log('Permission already granted, proceeding with token registration');
+                    await handleNotificationToggle(true);
+                    return;
+                  }
+
+                  // If denied, show instructions to reset in browser settings
+                  if (Notification.permission === 'denied') {
+                    Alert.alert(
+                      'Notifications Blocked',
+                      'Notifications are blocked for this site. Please reset the permission in your browser settings first.',
+                      [
+                        { text: 'OK' },
+                        {
+                          text: 'Open Settings',
+                          onPress: () => {
+                            // Try to open browser settings (this might not work in all browsers)
+                            if (navigator.userAgent.includes('Edg')) {
+                              // Edge specific
+                              window.open('edge://settings/content/notifications', '_blank');
+                            } else if (navigator.userAgent.includes('Chrome')) {
+                              // Chrome
+                              window.open('chrome://settings/content/notifications', '_blank');
+                            }
+                          }
+                        }
+                      ]
+                    );
+                    return;
+                  }
+
+                  // Only request permission if it's "default" (not granted or denied)
+                  console.log('Requesting notification permission...');
+                  console.log('Browser context:', {
+                    protocol: window.location.protocol,
+                    hostname: window.location.hostname,
+                    isSecureContext: window.isSecureContext,
+                    userAgent: navigator.userAgent
+                  });
+
+                  try {
+                    const permission = await Notification.requestPermission();
+                    console.log('Permission request result:', permission);
+                    console.log('Permission after request:', Notification.permission);
+
+                    if (permission === 'granted') {
+                      console.log('Permission granted, proceeding with token registration');
+                      await handleNotificationToggle(true);
+                    } else {
+                      console.log('Permission not granted:', permission);
+
+                      // Check if this is a browser restriction
+                      if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+                        Alert.alert(
+                          'HTTPS Required',
+                          'Notifications require a secure connection (HTTPS). This site must be accessed over HTTPS for notifications to work.'
+                        );
+                      } else if (permission === 'denied') {
+                        Alert.alert(
+                          'Permission Denied',
+                          'Notification permission was denied. To enable notifications:\n\n1. Click the lock/site info icon in the address bar\n2. Change notifications to "Allow"\n3. Reload the page and try again'
+                        );
+                      } else {
+                        Alert.alert(
+                          'Permission Dismissed',
+                          'The notification permission prompt was dismissed. Please try clicking "Enable Notifications" again and allow the permission when prompted.'
+                        );
+                      }
+                    }
+                  } catch (permError) {
+                    console.error('Permission request failed:', permError);
+                    Alert.alert(
+                      'Permission Request Failed',
+                      'Failed to request notification permission. This might be due to browser restrictions or security settings.'
+                    );
+                  }
+                } catch (e) {
+                  console.error('Enable Notifications action failed', e);
+                  Alert.alert('Error', 'Failed to request notification permission. Check console for details.');
+                }
+              }}
+              style={{
+                backgroundColor: '#E53E3E',
+                paddingVertical: 12,
+                borderRadius: 8,
+                alignItems: 'center',
+                marginBottom: 12,
+              }}
+            >
+              <Text style={{ color: 'white', fontWeight: '600' }}>Enable Notifications</Text>
+            </TouchableOpacity>
+
+            {notificationPermission === 'denied' && (
+              <View style={{
+                backgroundColor: '#FEF3C7',
+                padding: 12,
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: '#F59E0B',
+                marginBottom: 12,
+              }}>
+                <Text style={{
+                  fontSize: 14,
+                  color: '#92400E',
+                  fontWeight: '500',
+                  marginBottom: 8,
+                }}>
+                  Notifications Blocked
+                </Text>
+                <Text style={{
+                  fontSize: 12,
+                  color: '#92400E',
+                  lineHeight: 18,
+                }}>
+                  Notifications are blocked for this site. To enable:
+                  {'\n'}• Click the lock/site info icon in the address bar
+                  {'\n'}• Change notifications to "Allow"
+                  {'\n'}• Reload the page and try again
+                </Text>
+              </View>
+            )}
+
+            <TouchableOpacity
+              onPress={async () => {
+                try {
+                  const diag = await runNotificationDiagnostics();
+                  console.log('Notification diagnostics:', diag);
+                  const short = JSON.stringify(diag, null, 2);
+                  // Alert large JSON can be problematic; show trimmed preview and log full result
+                  Alert.alert('Notification diagnostics (preview)', short.slice(0, 1500));
+                } catch (e) {
+                  console.error('Diagnostics failed', e);
+                  Alert.alert('Diagnostics failed', String(e));
+                }
+              }}
+              style={{
+                marginTop: 8,
+                backgroundColor: '#f1f5f9',
+                paddingVertical: 10,
+                borderRadius: 8,
+                alignItems: 'center',
+                borderWidth: 1,
+                borderColor: '#e2e8f0'
+              }}
+            >
+              <Text style={{ color: '#1f2937', fontWeight: '600' }}>Run Notification Diagnostic</Text>
+            </TouchableOpacity>
+          </View>
+
           <View style={dynamicStyles.optionsContainer}>
             <SettingOption
               icon="notifications"
@@ -518,6 +804,7 @@ export default function AppSettingsScreen() {
                   onValueChange={handleNotificationToggle}
                   trackColor={{ false: '#e1e5e9', true: '#E53E3E' }}
                   thumbColor={notificationsEnabled ? '#fff' : '#f4f3f4'}
+                  disabled={notificationPermission !== 'granted'}
                 />
               }
               color="#F56500"

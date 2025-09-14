@@ -9,7 +9,7 @@ import { useEffect, useState } from 'react';
 import { ModalHost, overrideAlert } from '../utils/modalService';
 import { LoadingScreen } from '../components/LoadingScreen';
 import { initializePerformanceOptimizations } from '../utils/performance';
-import { initializeNotifications } from '../firebase/pushNotifications';
+import { initializeNotifications, getPushToken, registerPushToken } from '../firebase/pushNotifications';
 import { startProximityNotificationListener } from '../utils/proximityNotifications';
 import { doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase/firebaseConfig';
@@ -31,6 +31,13 @@ const InitialLayout = () => {
       console.log('Starting proximity notification listener for authenticated user');
       const unsubscribe = startProximityNotificationListener();
       setProximityListener(() => unsubscribe);
+
+      // Register web push token for authenticated users (only if permission granted)
+      // Disabled automatic registration on startup to avoid non-user-gesture permission flows
+      // and crashes seen in some environments when messaging tries to access push subscription
+      // before a service worker registration exists. Token registration is handled from Settings
+      // (user gesture) and via the Permissions API watcher added there.
+      console.log('Automatic push registration skipped on startup; use Settings -> Enable Notifications to register token.');
     } else if (!user && proximityListener) {
       // Clean up listener when user logs out
       console.log('Stopping proximity notification listener');
