@@ -149,10 +149,9 @@ export default async function handler(req: any, res: any) {
           // Accept image passed either inside data.image or as top-level `image` in the request body
           const imageUrl = data?.image || image || '';
 
-          // If we confidently detect a web/platform, send data-only so the service worker controls display.
           // If we detect a native platform, include notification so OS displays it.
-          // For unknown platforms (should be rare) treat as web to avoid duplicate browser notifications.
-          if (isWeb && !isNativePlatform) {
+          // For web, send notification payload if image is present (to include image), otherwise data-only to let service worker control display.
+          if (isWeb && !isNativePlatform && !imageUrl) {
             const webpushConfig: any = {
               headers: { Urgency: 'high' },
             };
