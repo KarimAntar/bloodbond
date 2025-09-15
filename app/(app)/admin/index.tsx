@@ -18,7 +18,7 @@ import { useTheme } from '../../../contexts/ThemeContext';
 import { Colors } from '../../../constants/Colors';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { db, storage } from '../../../firebase/firebaseConfig';
+import { db } from '../../../firebase/firebaseConfig';
 import * as ImagePicker from 'expo-image-picker';
 import {
   collection,
@@ -31,7 +31,6 @@ import {
   serverTimestamp,
   updateDoc,
 } from 'firebase/firestore';
-import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 // Notifications are sent via serverless API: /api/sendNotification
 // (uses FCM service account loaded from FCM_SERVICE_ACCOUNT env var)
 
@@ -181,14 +180,40 @@ export default function AdminDashboard() {
         setLocalImageUri(uri);
 
         try {
+          // Convert image to base64
           const response = await fetch(uri);
           const blob = await response.blob();
+          const base64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+
           const filename = uri.split('/').pop() || `notif_${Date.now()}.jpg`;
-          const storageReference = storageRef(storage, `notifications/${Date.now()}_${filename}`);
-          await uploadBytes(storageReference, blob);
-          const downloadUrl = await getDownloadURL(storageReference);
-          setNotificationImageUrl(downloadUrl);
-          Alert.alert('Image uploaded', 'Image uploaded and attached to notification.');
+
+          // Upload via API
+          const apiOrigin = (typeof process !== 'undefined' && (process.env.SEND_ORIGIN || (process.env as any).EXPO_PUBLIC_SEND_ORIGIN))
+            ? (process.env.SEND_ORIGIN || (process.env as any).EXPO_PUBLIC_SEND_ORIGIN)
+            : 'https://www.bloodbond.app';
+
+          const uploadResponse = await fetch(`${apiOrigin}/api/uploadImage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              imageData: base64,
+              filename,
+            }),
+          });
+
+          const uploadResult = await uploadResponse.json();
+
+          if (uploadResult.success) {
+            setNotificationImageUrl(uploadResult.downloadUrl);
+            Alert.alert('Image uploaded', 'Image uploaded and attached to notification.');
+          } else {
+            throw new Error(uploadResult.error || 'Upload failed');
+          }
         } catch (uploadErr) {
           console.error('Upload error', uploadErr);
           Alert.alert('Upload failed', String((uploadErr as Error)?.message || uploadErr));
