@@ -106,20 +106,31 @@ export default async function handler(req: any, res: any) {
         // Build messages for sendAll/sendMulticast
         const messages: admin.messaging.Message[] = batch.map((tObj) => {
           const token = tObj.token;
-          const platform = (tObj.platform || '').toLowerCase();
+          const platformRaw = tObj.platform || '';
+          const platform = (typeof platformRaw === 'string') ? platformRaw.toLowerCase() : '';
 
-          // For web tokens send data-only messages to avoid duplicate notifications
-          const isWeb = platform === 'web' || platform === 'browser' || platform === 'chrome' || platform === 'edge' || platform === 'firefox' || platform === 'safari';
+          // Consider unknown/empty platforms as web to avoid sending notification payloads
+          // to browser tokens that may display duplicates. Explicitly treat common native
+          // platform identifiers as native.
+          const nativePlatforms = ['android', 'ios', 'expo', 'apns', 'fcm'];
+          const webIndicators = ['web', 'browser', 'chrome', 'edge', 'firefox', 'safari'];
+
+          const isWeb = !platform || webIndicators.includes(platform);
+          const isNativePlatform = nativePlatforms.includes(platform);
 
           const baseData = (data && typeof data === 'object') ? Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])) : {};
 
-          if (isWeb) {
+          // If we confidently detect a web/platform, send data-only so the service worker controls display.
+          // If we detect a native platform, include notification so OS displays it.
+          // For unknown platforms (should be rare) treat as web to avoid duplicate browser notifications.
+          if (isWeb && !isNativePlatform) {
             return {
               token,
               data: { ...baseData, _title: title, _body: body }, // include title/body in data so web client can display if desired
               webpush: {
                 headers: { Urgency: 'high' },
               },
+              // Keep android/apns hints to help delivery but do NOT include notification payload
               android: { priority: 'high' },
               apns: { headers: { 'apns-priority': '10' } },
             } as admin.messaging.Message;
