@@ -138,16 +138,35 @@ export const getPushToken = async () => {
       // Use alternative token retrieval strategies to minimize Firebase bug impact
 
       const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+      const platform = typeof navigator !== 'undefined' ? navigator.platform : '';
+
+      // Improved browser detection
       const isEdge = userAgent.includes('Edg') || userAgent.includes('Edge');
-      const isChrome = userAgent.includes('Chrome') && !userAgent.includes('Edg');
+      const isChrome = userAgent.includes('Chrome') && !userAgent.includes('Edg') && !userAgent.includes('CriOS');
       const isFirefox = userAgent.includes('Firefox');
-      const isSafari = userAgent.includes('Safari') && !userAgent.includes('Chrome') && !userAgent.includes('Edg');
-      const isIOS = /iPad|iPhone|iPod/.test(userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-      const isIOSChrome = isIOS && userAgent.includes('CriOS');
-      const isIOSSafari = isIOS && isSafari;
+      const isSafari = userAgent.includes('Safari') && !userAgent.includes('Chrome') && !userAgent.includes('Edg') && !userAgent.includes('CriOS');
+
+      // Improved iOS detection
+      const isIOS = /iPad|iPhone|iPod/.test(userAgent) ||
+                   (platform === 'MacIntel' && navigator.maxTouchPoints > 1) ||
+                   userAgent.includes('Mac OS X') && 'ontouchend' in document;
+
+      // More accurate iOS browser detection
+      const isIOSChrome = isIOS && (userAgent.includes('CriOS') || userAgent.includes('Chrome'));
+      const isIOSSafari = isIOS && !userAgent.includes('CriOS') && !userAgent.includes('Chrome') && userAgent.includes('Safari');
+
+      // Additional iOS detection for newer versions
+      const isIOSDevice = isIOS || userAgent.includes('iPad') || userAgent.includes('iPhone') || userAgent.includes('iPod');
 
       console.log('getPushToken: browser detection - Edge:', isEdge, 'Chrome:', isChrome, 'Firefox:', isFirefox, 'Safari:', isSafari);
-      console.log('getPushToken: iOS detection - iOS:', isIOS, 'iOS Chrome:', isIOSChrome, 'iOS Safari:', isIOSSafari);
+      console.log('getPushToken: iOS detection - iOS:', isIOS, 'iOS Chrome:', isIOSChrome, 'iOS Safari:', isIOSSafari, 'iOS Device:', isIOSDevice);
+      console.log('getPushToken: user agent details:', {
+        userAgent: userAgent.substring(0, 100) + '...',
+        platform,
+        isIOS,
+        isIOSChrome,
+        isIOSSafari
+      });
 
       // STRATEGY 1: For Edge/Chrome, use minimal Firebase interaction with enhanced protection
       if (isEdge || isChrome) {
@@ -269,70 +288,26 @@ export const getPushToken = async () => {
         }
 
       } else if (isIOSSafari) {
-        // STRATEGY 3: iOS Safari specific handling
-        console.log('getPushToken: using iOS Safari-specific token retrieval strategy');
+        // STRATEGY 3: iOS Safari specific handling - AGGRESSIVE FALLBACK
+        console.log('getPushToken: iOS Safari detected - using aggressive fallback strategy');
 
-        // iOS Safari has stricter requirements for push notifications
+        // iOS Safari has very strict requirements for push notifications
         // Check if we're in a secure context (required for iOS)
         const isSecureContext = (typeof window !== 'undefined') ? (window as any).isSecureContext : false;
         console.log('getPushToken: iOS Safari secure context:', isSecureContext);
 
-        if (!isSecureContext) {
-          console.warn('getPushToken: iOS Safari requires HTTPS for push notifications');
-          return null;
-        }
-
         const preTokenPerm = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
-        console.log('getPushToken: permission before getToken call:', preTokenPerm);
+        console.log('getPushToken: iOS Safari permission check:', preTokenPerm);
 
         if (preTokenPerm !== 'granted') {
-          console.warn('getPushToken: permission revoked before token retrieval, aborting');
+          console.warn('getPushToken: iOS Safari permission not granted');
           return null;
         }
 
-        // iOS Safari needs more time for service worker to be ready
-        await new Promise(resolve => setTimeout(resolve, 1000));
-
-        // Check service worker state
-        if (registration) {
-          console.log('getPushToken: iOS Safari service worker state:', registration.active?.state);
-          if (registration.active?.state !== 'activated') {
-            console.warn('getPushToken: iOS Safari service worker not fully activated');
-            // Wait a bit more for activation
-            await new Promise(resolve => setTimeout(resolve, 2000));
-          }
-        }
-
-        try {
-          console.log('getPushToken: iOS Safari attempting getToken...');
-          const fcmToken = await getToken(messaging, {
-            vapidKey: FCM_VAPID_KEY,
-            serviceWorkerRegistration: registration,
-          });
-
-          // Verify permission survived
-          const postAttemptPerm = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
-          if (postAttemptPerm !== 'granted') {
-            console.warn('getPushToken: Firebase revoked permission during token retrieval');
-            return null;
-          }
-
-          console.log('getPushToken: iOS Safari getToken succeeded:', !!fcmToken);
-          return fcmToken || null;
-        } catch (tokenErr: any) {
-          console.warn('getPushToken: iOS Safari getToken failed:', tokenErr);
-
-          // Check if Firebase revoked permission during the failed call
-          const postFailurePerm = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
-          if (postFailurePerm !== 'granted') {
-            console.warn('getPushToken: Firebase revoked permission during failed call');
-            return null;
-          }
-
-          // For iOS Safari, if FCM fails, we might need to fall back to browser notifications
-          console.log('getPushToken: iOS Safari FCM failed, will use browser notification fallback');
-          return 'ios-safari-fallback';
-        }
+        // For iOS Safari, skip FCM entirely and go straight to browser notifications
+        // iOS Safari FCM support is unreliable and often fails
+        console.log('getPushToken: iOS Safari - skipping FCM, using browser notification fallback');
+        return 'ios-safari-fallback';
 
       } else if (isIOSChrome) {
         // STRATEGY 4: iOS Chrome specific handling
@@ -987,7 +962,7 @@ export const registerPushToken = async (userId: string, token: string, platform 
           updatedAt: Timestamp.now(),
         });
         console.log(`registerPushToken: updated existing token doc by ${updateReason}`, existingDoc.id);
-        return;
+        return; // Successfully updated, exit function
       } catch (updateError) {
         console.warn('registerPushToken: failed to update existing doc, will try to create new', updateError);
         // Continue to create new doc if update fails
@@ -995,7 +970,31 @@ export const registerPushToken = async (userId: string, token: string, platform 
     }
 
     // 4. Create new token document only if no existing doc found or update failed
+    // But first, do one more check to prevent race conditions
     try {
+      // Double-check if a document was created by another process
+      const finalCheckQuery = deviceId
+        ? query(userTokensRef, where('userId', '==', userId), where('deviceId', '==', deviceId))
+        : query(userTokensRef, where('token', '==', token));
+
+      const finalCheckSnap = await getDocs(finalCheckQuery);
+
+      if (!finalCheckSnap.empty) {
+        // Another process created the document, update it instead
+        const existingFinalDoc = finalCheckSnap.docs[0];
+        await updateDoc(doc(db, 'userTokens', existingFinalDoc.id), {
+          userId,
+          token,
+          platform,
+          deviceId: deviceId || null,
+          active: true,
+          updatedAt: Timestamp.now(),
+        });
+        console.log('registerPushToken: updated document created by another process', existingFinalDoc.id);
+        return;
+      }
+
+      // No existing document found, create new one
       await addDoc(userTokensRef, {
         userId,
         token,
@@ -1293,8 +1292,11 @@ export const sendPushNotification = async (
 
     console.log('sendPushNotification: Token analysis - Real tokens:', realTokens.length, 'Fallback tokens:', fallbackTokens.length);
 
-    // Strategy 1: If user has real FCM tokens, use server API
-    if (realTokens.length > 0) {
+    // Determine notification strategy to prevent duplicates
+    let notificationSent = false;
+
+    // Strategy 1: If user has real FCM tokens, use server API ONLY
+    if (realTokens.length > 0 && !notificationSent) {
       try {
         // Prefer explicit SEND_ORIGIN env var (EXPO_PUBLIC_SEND_ORIGIN supported).
         // Never rely on window.location.origin to avoid using a local dev origin (localhost).
@@ -1303,8 +1305,8 @@ export const sendPushNotification = async (
           : null;
         const apiOrigin = envSendOrigin || 'https://bloodbond.app';
 
-        console.log('sendPushNotification: Sending via FCM API to real tokens');
-        await fetch(`${apiOrigin}/api/sendNotification`, {
+        console.log('sendPushNotification: Sending via FCM API to real tokens only');
+        const response = await fetch(`${apiOrigin}/api/sendNotification`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1315,29 +1317,25 @@ export const sendPushNotification = async (
             data: data || {},
           }),
         });
-        console.log('sendPushNotification: FCM API send requested successfully');
-      } catch (apiError) {
-        console.warn('sendPushNotification: FCM API send failed:', apiError);
-        // Fall back to browser notification if API fails
-        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-          try {
-            const notification = new Notification(title, {
-              body: body,
-              icon: '/favicon.png',
-              data: data || {},
-              tag: `bloodbond-${Date.now()}`,
-            });
-            setTimeout(() => notification.close(), 5000);
-            console.log('sendPushNotification: Browser fallback notification shown due to API failure');
-          } catch (browserError) {
-            console.warn('sendPushNotification: Browser fallback also failed:', browserError);
-          }
+
+        if (response.ok) {
+          const result = await response.json();
+          console.log('sendPushNotification: FCM API send successful:', result);
+          notificationSent = true; // Mark as sent to prevent duplicates
+        } else {
+          console.warn('sendPushNotification: FCM API send failed with status:', response.status);
+          const errorText = await response.text();
+          console.warn('sendPushNotification: FCM API error response:', errorText);
         }
+      } catch (apiError) {
+        console.warn('sendPushNotification: FCM API send failed with exception:', apiError);
+        // Don't fall back to browser notification here - let it try other strategies
       }
     }
-    // Strategy 2: If only fallback tokens exist, show browser notification directly
-    else if (fallbackTokens.length > 0) {
-      console.log('sendPushNotification: Only fallback tokens found, showing direct browser notification');
+
+    // Strategy 2: If FCM API failed or no real tokens, try fallback tokens
+    if (!notificationSent && fallbackTokens.length > 0) {
+      console.log('sendPushNotification: Using fallback tokens for browser notification');
       if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
         try {
           const notification = new Notification(title, {
@@ -1348,6 +1346,7 @@ export const sendPushNotification = async (
           });
           setTimeout(() => notification.close(), 5000);
           console.log('sendPushNotification: Browser notification shown for fallback tokens');
+          notificationSent = true; // Mark as sent
         } catch (browserError) {
           console.warn('sendPushNotification: Browser notification failed:', browserError);
         }
@@ -1355,9 +1354,28 @@ export const sendPushNotification = async (
         console.warn('sendPushNotification: Browser notification permission not granted for fallback tokens');
       }
     }
-    // Strategy 3: No tokens at all - just log
-    else {
-      console.log('sendPushNotification: No active tokens found for user - notification stored but cannot be delivered');
+
+    // Strategy 3: If still not sent and we have permission, show browser notification as last resort
+    if (!notificationSent && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      try {
+        console.log('sendPushNotification: Last resort - showing browser notification');
+        const notification = new Notification(title, {
+          body: body,
+          icon: '/favicon.png',
+          data: data || {},
+          tag: `bloodbond-${Date.now()}`,
+        });
+        setTimeout(() => notification.close(), 5000);
+        console.log('sendPushNotification: Browser notification shown as last resort');
+        notificationSent = true;
+      } catch (browserError) {
+        console.warn('sendPushNotification: Last resort browser notification also failed:', browserError);
+      }
+    }
+
+    // Strategy 4: No notification could be sent
+    if (!notificationSent) {
+      console.log('sendPushNotification: No notification method available - notification stored but cannot be delivered');
     }
 
     console.log('sendPushNotification: Push notification send completed successfully');
