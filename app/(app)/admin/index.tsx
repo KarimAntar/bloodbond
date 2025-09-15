@@ -191,7 +191,7 @@ export default function AdminDashboard() {
           Alert.alert('Image uploaded', 'Image uploaded and attached to notification.');
         } catch (uploadErr) {
           console.error('Upload error', uploadErr);
-          Alert.alert('Upload failed', String(uploadErr?.message || uploadErr));
+          Alert.alert('Upload failed', String((uploadErr as Error)?.message || uploadErr));
         }
       }
     } catch (err) {

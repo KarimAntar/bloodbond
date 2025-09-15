@@ -290,7 +290,7 @@ export default async function handler(req: any, res: any) {
       }
 
       // Diagnostic logging
-      console.log('sendNotification:user -> userId=', userId, 'resolvedTokens=', tokenObjs.map(t => ({ token: t.token?.slice(0,8), platform: t.platform, docId: t.docId })));
+      console.log('sendNotification:user -> userId=', userId, 'resolvedTokens=', tokenObjs.map((t: { token?: string; platform?: string; docId: string }) => ({ token: t.token?.slice(0,8), platform: t.platform, docId: t.docId })));
 
       const result = await sendToTokens(tokenObjs);
       res.status(200).json({ success: true, sent: result.successCount, failures: result.failures, failureCount: result.failureCount });
