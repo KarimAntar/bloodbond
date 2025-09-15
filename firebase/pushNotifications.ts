@@ -1421,19 +1421,20 @@ export const initializeNotifications = async () => {
         onMessage(messaging, (payload) => {
           console.log('FCM message received in foreground:', payload);
           try {
-            // Check if this message has a notification payload (native-style) or data-only (web-style)
+            // Check if this message has webpush configuration (indicates it was sent for web platforms)
+            const hasWebpushConfig = (payload as any).webpush && (payload as any).webpush.notification;
             const hasNotificationPayload = payload.notification && (payload.notification.title || payload.notification.body);
             const hasDataPayload = payload.data && (payload.data._title || payload.data._body || payload.data.title || payload.data.body);
 
-            // For web platforms, FCM messages with notification payload are handled by the service worker
+            // For web platforms, FCM messages with webpush configuration are handled by the service worker
             // We should NOT show a duplicate browser notification for the same message
-            // Only show foreground notifications for data-only messages that need client-side display
-            if (hasNotificationPayload && !hasDataPayload) {
-              console.log('initializeNotifications: notification payload present, letting service worker handle display');
+            // Only show foreground notifications for native messages or pure data-only messages
+            if (hasWebpushConfig) {
+              console.log('initializeNotifications: webpush config present, letting service worker handle display');
               return; // Service worker will handle this
             }
 
-            // For data-only messages or messages that need client-side handling
+            // For native platforms or data-only messages that need client-side display
             const title = payload.notification?.title || (payload.data && (payload.data._title || payload.data.title)) || 'BloodBond';
             const body = payload.notification?.body || (payload.data && (payload.data._body || payload.data.body)) || '';
 
