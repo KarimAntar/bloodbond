@@ -1,9 +1,9 @@
 import admin from 'firebase-admin';
 
-const serviceAccountJson = process.env.FCM_SERVICE_ACCOUNT || '';
+const serviceAccountJson = process.env.EXPO_PUBLIC_FCM_SERVICE_ACCOUNT_KEY || '';
 
 if (!serviceAccountJson) {
-  console.error('FCM service account env var (FCM_SERVICE_ACCOUNT) is missing');
+  console.error('FCM service account env var (EXPO_PUBLIC_FCM_SERVICE_ACCOUNT_KEY) is missing');
 }
 
 // Lazily initialize admin SDK
@@ -11,14 +11,14 @@ function initAdmin() {
   if (admin.apps.length) return admin;
 
   if (!serviceAccountJson) {
-    throw new Error('Missing FCM_SERVICE_ACCOUNT environment variable. Cannot initialize firebase-admin.');
+    throw new Error('Missing EXPO_PUBLIC_FCM_SERVICE_ACCOUNT_KEY environment variable. Cannot initialize firebase-admin.');
   }
 
   let serviceAccount: any;
   try {
     serviceAccount = JSON.parse(serviceAccountJson);
   } catch (e) {
-    console.error('Failed to parse FCM_SERVICE_ACCOUNT JSON', e);
+    console.error('Failed to parse EXPO_PUBLIC_FCM_SERVICE_ACCOUNT_KEY JSON', e);
     throw e;
   }
 
@@ -119,17 +119,30 @@ export default async function handler(req: any, res: any) {
           const isNativePlatform = nativePlatforms.includes(platform);
 
           const baseData = (data && typeof data === 'object') ? Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])) : {};
+          const imageUrl = data?.image || '';
 
           // If we confidently detect a web/platform, send data-only so the service worker controls display.
           // If we detect a native platform, include notification so OS displays it.
           // For unknown platforms (should be rare) treat as web to avoid duplicate browser notifications.
           if (isWeb && !isNativePlatform) {
+            const webpushConfig: any = {
+              headers: { Urgency: 'high' },
+            };
+
+            // Add image to webpush notification if available
+            if (imageUrl) {
+              webpushConfig.notification = {
+                title,
+                body,
+                icon: imageUrl, // Use image as icon for web notifications
+                image: imageUrl,
+              };
+            }
+
             return {
               token,
               data: { ...baseData, _title: title, _body: body }, // include title/body in data so web client can display if desired
-              webpush: {
-                headers: { Urgency: 'high' },
-              },
+              webpush: webpushConfig,
               // Keep android/apns hints to help delivery but do NOT include notification payload
               android: { priority: 'high' },
               apns: { headers: { 'apns-priority': '10' } },
@@ -137,12 +150,19 @@ export default async function handler(req: any, res: any) {
           }
 
           // Native: include notification so OS displays the notification
+          const notificationConfig: any = {
+            title,
+            body,
+          };
+
+          // Add image to notification if available
+          if (imageUrl) {
+            notificationConfig.image = imageUrl;
+          }
+
           return {
             token,
-            notification: {
-              title,
-              body,
-            },
+            notification: notificationConfig,
             data: baseData,
             android: {
               priority: 'high',
@@ -236,13 +256,23 @@ export default async function handler(req: any, res: any) {
         return;
       }
 
+      const baseData = (data && typeof data === 'object') ? Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])) : {};
+      const imageUrl = data?.image || '';
+
+      const notificationConfig: any = {
+        title,
+        body,
+      };
+
+      // Add image to notification if available
+      if (imageUrl) {
+        notificationConfig.image = imageUrl;
+      }
+
       const message: admin.messaging.Message = {
         topic: topic,
-        notification: {
-          title,
-          body,
-        },
-        data: (data && typeof data === 'object') ? Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])) : {},
+        notification: notificationConfig,
+        data: baseData,
         android: { priority: 'high' },
         apns: { headers: { 'apns-priority': '10' } },
         webpush: { headers: { Urgency: 'high' } },
@@ -300,10 +330,23 @@ export default async function handler(req: any, res: any) {
     if (type === 'broadcast') {
       // Optionally send to topic if provided
       if (topic) {
+        const baseData = (data && typeof data === 'object') ? Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])) : {};
+        const imageUrl = data?.image || '';
+
+        const notificationConfig: any = {
+          title,
+          body,
+        };
+
+        // Add image to notification if available
+        if (imageUrl) {
+          notificationConfig.image = imageUrl;
+        }
+
         const message: admin.messaging.Message = {
           topic,
-          notification: { title, body },
-          data: (data && typeof data === 'object') ? Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])) : {},
+          notification: notificationConfig,
+          data: baseData,
         };
         const response = await messaging.send(message);
         res.status(200).json({ success: true, messageId: response, method: 'topic' });
