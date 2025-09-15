@@ -170,7 +170,7 @@ export default function AdminDashboard() {
   const pickImageFromDevice = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
         quality: 0.8,
       });
@@ -197,6 +197,10 @@ export default function AdminDashboard() {
             ? (process.env.SEND_ORIGIN || (process.env as any).EXPO_PUBLIC_SEND_ORIGIN)
             : 'https://www.bloodbond.app';
 
+          console.log('Uploading image to:', `${apiOrigin}/api/uploadImage`);
+          console.log('Image data length:', base64.length);
+          console.log('Filename:', filename);
+
           const uploadResponse = await fetch(`${apiOrigin}/api/uploadImage`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -206,7 +210,17 @@ export default function AdminDashboard() {
             }),
           });
 
+          console.log('Upload response status:', uploadResponse.status);
+          console.log('Upload response headers:', Object.fromEntries(uploadResponse.headers.entries()));
+
+          if (!uploadResponse.ok) {
+            const errorText = await uploadResponse.text();
+            console.error('Upload failed with status:', uploadResponse.status, 'Response:', errorText);
+            throw new Error(`Upload failed: ${uploadResponse.status} - ${errorText}`);
+          }
+
           const uploadResult = await uploadResponse.json();
+          console.log('Upload result:', uploadResult);
 
           if (uploadResult.success) {
             setNotificationImageUrl(uploadResult.downloadUrl);
