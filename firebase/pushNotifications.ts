@@ -141,9 +141,13 @@ export const getPushToken = async () => {
       const isEdge = userAgent.includes('Edg') || userAgent.includes('Edge');
       const isChrome = userAgent.includes('Chrome') && !userAgent.includes('Edg');
       const isFirefox = userAgent.includes('Firefox');
-      const isSafari = userAgent.includes('Safari') && !userAgent.includes('Chrome');
+      const isSafari = userAgent.includes('Safari') && !userAgent.includes('Chrome') && !userAgent.includes('Edg');
+      const isIOS = /iPad|iPhone|iPod/.test(userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      const isIOSChrome = isIOS && userAgent.includes('CriOS');
+      const isIOSSafari = isIOS && isSafari;
 
       console.log('getPushToken: browser detection - Edge:', isEdge, 'Chrome:', isChrome, 'Firefox:', isFirefox, 'Safari:', isSafari);
+      console.log('getPushToken: iOS detection - iOS:', isIOS, 'iOS Chrome:', isIOSChrome, 'iOS Safari:', isIOSSafari);
 
       // STRATEGY 1: For Edge/Chrome, use minimal Firebase interaction with enhanced protection
       if (isEdge || isChrome) {
@@ -264,9 +268,117 @@ export const getPushToken = async () => {
           return null;
         }
 
+      } else if (isIOSSafari) {
+        // STRATEGY 3: iOS Safari specific handling
+        console.log('getPushToken: using iOS Safari-specific token retrieval strategy');
+
+        // iOS Safari has stricter requirements for push notifications
+        // Check if we're in a secure context (required for iOS)
+        const isSecureContext = (typeof window !== 'undefined') ? (window as any).isSecureContext : false;
+        console.log('getPushToken: iOS Safari secure context:', isSecureContext);
+
+        if (!isSecureContext) {
+          console.warn('getPushToken: iOS Safari requires HTTPS for push notifications');
+          return null;
+        }
+
+        const preTokenPerm = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
+        console.log('getPushToken: permission before getToken call:', preTokenPerm);
+
+        if (preTokenPerm !== 'granted') {
+          console.warn('getPushToken: permission revoked before token retrieval, aborting');
+          return null;
+        }
+
+        // iOS Safari needs more time for service worker to be ready
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        // Check service worker state
+        if (registration) {
+          console.log('getPushToken: iOS Safari service worker state:', registration.active?.state);
+          if (registration.active?.state !== 'activated') {
+            console.warn('getPushToken: iOS Safari service worker not fully activated');
+            // Wait a bit more for activation
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+        }
+
+        try {
+          console.log('getPushToken: iOS Safari attempting getToken...');
+          const fcmToken = await getToken(messaging, {
+            vapidKey: FCM_VAPID_KEY,
+            serviceWorkerRegistration: registration,
+          });
+
+          // Verify permission survived
+          const postAttemptPerm = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
+          if (postAttemptPerm !== 'granted') {
+            console.warn('getPushToken: Firebase revoked permission during token retrieval');
+            return null;
+          }
+
+          console.log('getPushToken: iOS Safari getToken succeeded:', !!fcmToken);
+          return fcmToken || null;
+        } catch (tokenErr: any) {
+          console.warn('getPushToken: iOS Safari getToken failed:', tokenErr);
+
+          // Check if Firebase revoked permission during the failed call
+          const postFailurePerm = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
+          if (postFailurePerm !== 'granted') {
+            console.warn('getPushToken: Firebase revoked permission during failed call');
+            return null;
+          }
+
+          // For iOS Safari, if FCM fails, we might need to fall back to browser notifications
+          console.log('getPushToken: iOS Safari FCM failed, will use browser notification fallback');
+          return 'ios-safari-fallback';
+        }
+
+      } else if (isIOSChrome) {
+        // STRATEGY 4: iOS Chrome specific handling
+        console.log('getPushToken: using iOS Chrome-specific token retrieval strategy');
+
+        const preTokenPerm = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
+        console.log('getPushToken: permission before getToken call:', preTokenPerm);
+
+        if (preTokenPerm !== 'granted') {
+          console.warn('getPushToken: permission revoked before token retrieval, aborting');
+          return null;
+        }
+
+        // iOS Chrome behaves more like mobile Chrome than Safari
+        try {
+          console.log('getPushToken: iOS Chrome attempting getToken...');
+          const fcmToken = await getToken(messaging, {
+            vapidKey: FCM_VAPID_KEY,
+            serviceWorkerRegistration: registration,
+          });
+
+          // Verify permission survived
+          const postAttemptPerm = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
+          if (postAttemptPerm !== 'granted') {
+            console.warn('getPushToken: Firebase revoked permission during token retrieval');
+            return null;
+          }
+
+          console.log('getPushToken: iOS Chrome getToken succeeded:', !!fcmToken);
+          return fcmToken || null;
+        } catch (tokenErr: any) {
+          console.warn('getPushToken: iOS Chrome getToken failed:', tokenErr);
+
+          // Check if Firebase revoked permission during the failed call
+          const postFailurePerm = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
+          if (postFailurePerm !== 'granted') {
+            console.warn('getPushToken: Firebase revoked permission during failed call');
+            return null;
+          }
+
+          return null;
+        }
+
       } else {
-        // STRATEGY 3: For Safari and other browsers, use the enhanced protection
-        console.log('getPushToken: using standard enhanced protection for Safari/other browsers');
+        // STRATEGY 5: For other browsers, use the enhanced protection
+        console.log('getPushToken: using standard enhanced protection for other browsers');
 
         const preTokenPerm = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
         console.log('getPushToken: permission before getToken call:', preTokenPerm);
@@ -413,6 +525,28 @@ export const ensureAndRegisterPushToken = async (userId: string, platform?: stri
           fallbackMode: true
         };
       }
+    }
+
+    // Handle iOS Safari fallback token
+    if (token === 'ios-safari-fallback') {
+      console.log('ensureAndRegisterPushToken: iOS Safari fallback token detected, registering fallback mode');
+
+      // Register the iOS Safari fallback token
+      await registerPushToken(userId, 'ios-safari-fallback', platform, deviceId);
+      console.log('ensureAndRegisterPushToken: registered iOS Safari fallback token');
+
+      return {
+        success: true,
+        token: 'ios-safari-fallback',
+        reason: 'ios-safari-fallback-mode',
+        fallbackMode: true,
+        platformNotes: 'iOS Safari detected - using browser notification fallback due to platform limitations'
+      };
+    }
+
+    if (!token) {
+      // Check if permission is still granted for fallback handling
+      const finalPerm = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
 
       // Check if permission was revoked by Firebase (common Firebase bug)
       if (finalPerm === 'default') {
@@ -807,60 +941,78 @@ export const registerPushToken = async (userId: string, token: string, platform 
 
     const userTokensRef = collection(db, 'userTokens');
 
-    // Prefer matching by deviceId when provided (keeps one record per physical device)
+    // First, try to find any existing token for this user/device combination
+    let existingDoc = null;
+    let updateReason = '';
+
+    // 1. Prefer matching by deviceId when provided (keeps one record per physical device)
     if (deviceId) {
       try {
         const qByDevice = query(userTokensRef, where('userId', '==', userId), where('deviceId', '==', deviceId));
         const snap = await getDocs(qByDevice);
         if (!snap.empty) {
-          // Update first matching doc
-          const d = snap.docs[0];
-          await updateDoc(doc(db, 'userTokens', d.id), {
-            token,
-            platform,
-            active: true,
-            updatedAt: Timestamp.now(),
-          });
-          console.log('registerPushToken: updated existing token doc by deviceId', d.id);
-          return;
+          existingDoc = snap.docs[0];
+          updateReason = 'deviceId';
+          console.log('registerPushToken: found existing token by deviceId', existingDoc.id);
         }
       } catch (e) {
         console.warn('registerPushToken: deviceId lookup failed, continuing', e);
       }
     }
 
-    // Next try matching by token to avoid duplicate entries for same token
-    try {
-      const qByToken = query(userTokensRef, where('token', '==', token));
-      const snapToken = await getDocs(qByToken);
-      if (!snapToken.empty) {
-        const d = snapToken.docs[0];
-        await updateDoc(doc(db, 'userTokens', d.id), {
+    // 2. If no deviceId match, try matching by token to avoid duplicate entries
+    if (!existingDoc) {
+      try {
+        const qByToken = query(userTokensRef, where('token', '==', token));
+        const snapToken = await getDocs(qByToken);
+        if (!snapToken.empty) {
+          existingDoc = snapToken.docs[0];
+          updateReason = 'token';
+          console.log('registerPushToken: found existing token by token', existingDoc.id);
+        }
+      } catch (e) {
+        console.warn('registerPushToken: token lookup failed, continuing', e);
+      }
+    }
+
+    // 3. If we found an existing document, update it
+    if (existingDoc) {
+      try {
+        await updateDoc(doc(db, 'userTokens', existingDoc.id), {
           userId,
+          token,
           platform,
+          deviceId: deviceId || null,
           active: true,
           updatedAt: Timestamp.now(),
         });
-        console.log('registerPushToken: updated existing token doc by token', d.id);
+        console.log(`registerPushToken: updated existing token doc by ${updateReason}`, existingDoc.id);
         return;
+      } catch (updateError) {
+        console.warn('registerPushToken: failed to update existing doc, will try to create new', updateError);
+        // Continue to create new doc if update fails
       }
-    } catch (e) {
-      console.warn('registerPushToken: token lookup failed, continuing', e);
     }
 
-    // Create new token document
-    await addDoc(userTokensRef, {
-      userId,
-      token,
-      platform,
-      deviceId: deviceId || null,
-      createdAt: Timestamp.now(),
-      active: true,
-    });
+    // 4. Create new token document only if no existing doc found or update failed
+    try {
+      await addDoc(userTokensRef, {
+        userId,
+        token,
+        platform,
+        deviceId: deviceId || null,
+        createdAt: Timestamp.now(),
+        active: true,
+      });
+      console.log('registerPushToken: created new token doc for user', userId);
+    } catch (createError) {
+      console.error('registerPushToken: failed to create new token doc', createError);
+      throw createError;
+    }
 
-    console.log('registerPushToken: created new token doc for user', userId);
   } catch (error) {
     console.error('Error registering push token:', error);
+    throw error;
   }
 };
 
@@ -1124,34 +1276,49 @@ export const sendPushNotification = async (
     await addDoc(collection(db, 'notifications'), notificationDoc);
     console.log('sendPushNotification: Notification stored in Firestore');
 
-    // Preferred: request serverless API to deliver to user's tokens (uses firebase-admin)
+    // Check user's tokens to determine notification strategy
+    const userTokensRef = collection(db, 'userTokens');
+    const qAll = query(userTokensRef, where('userId', '==', userId), where('active', '==', true), orderBy('createdAt', 'desc'));
+    const snapshotAll = await getDocs(qAll);
+
+    const realTokens = snapshotAll.docs.filter(doc => {
+      const token = doc.data().token;
+      return token !== 'browser-direct-notification' && token !== 'ios-safari-fallback';
+    });
+
+    const fallbackTokens = snapshotAll.docs.filter(doc =>
+      doc.data().token === 'browser-direct-notification' ||
+      doc.data().token === 'ios-safari-fallback'
+    );
+
+    console.log('sendPushNotification: Token analysis - Real tokens:', realTokens.length, 'Fallback tokens:', fallbackTokens.length);
+
+    // Strategy 1: If user has real FCM tokens, use server API
+    if (realTokens.length > 0) {
       try {
-      // Prefer explicit SEND_ORIGIN env var (EXPO_PUBLIC_SEND_ORIGIN supported).
-      // Never rely on window.location.origin to avoid using a local dev origin (localhost).
-      const envSendOrigin = (typeof process !== 'undefined' && (process.env.SEND_ORIGIN || (process.env as any).EXPO_PUBLIC_SEND_ORIGIN))
-        ? (process.env.SEND_ORIGIN || (process.env as any).EXPO_PUBLIC_SEND_ORIGIN)
-        : null;
-      const apiOrigin = envSendOrigin || 'https://bloodbond.app';
-      await fetch(`${apiOrigin}/api/sendNotification`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'user',
-          userId,
-          title,
-          body,
-          data: data || {},
-        }),
-      });
+        // Prefer explicit SEND_ORIGIN env var (EXPO_PUBLIC_SEND_ORIGIN supported).
+        // Never rely on window.location.origin to avoid using a local dev origin (localhost).
+        const envSendOrigin = (typeof process !== 'undefined' && (process.env.SEND_ORIGIN || (process.env as any).EXPO_PUBLIC_SEND_ORIGIN))
+          ? (process.env.SEND_ORIGIN || (process.env as any).EXPO_PUBLIC_SEND_ORIGIN)
+          : null;
+        const apiOrigin = envSendOrigin || 'https://bloodbond.app';
 
-      // Still handle browser-direct-notification fallback locally if present
-      const userTokensRef = collection(db, 'userTokens');
-      const qAll = query(userTokensRef, where('userId', '==', userId), orderBy('createdAt', 'desc'));
-      const snapshotAll = await getDocs(qAll);
-      const fallbackTokens = snapshotAll.docs.filter(doc => doc.data().token === 'browser-direct-notification');
-
-      if (fallbackTokens.length > 0) {
-        console.log('sendPushNotification: Found fallback browser notification token, showing direct browser notification');
+        console.log('sendPushNotification: Sending via FCM API to real tokens');
+        await fetch(`${apiOrigin}/api/sendNotification`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'user',
+            userId,
+            title,
+            body,
+            data: data || {},
+          }),
+        });
+        console.log('sendPushNotification: FCM API send requested successfully');
+      } catch (apiError) {
+        console.warn('sendPushNotification: FCM API send failed:', apiError);
+        // Fall back to browser notification if API fails
         if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
           try {
             const notification = new Notification(title, {
@@ -1160,21 +1327,37 @@ export const sendPushNotification = async (
               data: data || {},
               tag: `bloodbond-${Date.now()}`,
             });
-            setTimeout(() => {
-              notification.close();
-            }, 5000);
-            console.log('sendPushNotification: Browser fallback notification shown');
-          } catch (browserNotifError) {
-            console.warn('sendPushNotification: Failed to show browser fallback notification:', browserNotifError);
+            setTimeout(() => notification.close(), 5000);
+            console.log('sendPushNotification: Browser fallback notification shown due to API failure');
+          } catch (browserError) {
+            console.warn('sendPushNotification: Browser fallback also failed:', browserError);
           }
-        } else {
-          console.warn('sendPushNotification: Browser notification permission not granted for fallback');
         }
       }
-
-      console.log('sendPushNotification: Server send requested');
-    } catch (directSendError) {
-      console.warn('sendPushNotification: Server send request failed; notification stored for server processing:', directSendError);
+    }
+    // Strategy 2: If only fallback tokens exist, show browser notification directly
+    else if (fallbackTokens.length > 0) {
+      console.log('sendPushNotification: Only fallback tokens found, showing direct browser notification');
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        try {
+          const notification = new Notification(title, {
+            body: body,
+            icon: '/favicon.png',
+            data: data || {},
+            tag: `bloodbond-${Date.now()}`,
+          });
+          setTimeout(() => notification.close(), 5000);
+          console.log('sendPushNotification: Browser notification shown for fallback tokens');
+        } catch (browserError) {
+          console.warn('sendPushNotification: Browser notification failed:', browserError);
+        }
+      } else {
+        console.warn('sendPushNotification: Browser notification permission not granted for fallback tokens');
+      }
+    }
+    // Strategy 3: No tokens at all - just log
+    else {
+      console.log('sendPushNotification: No active tokens found for user - notification stored but cannot be delivered');
     }
 
     console.log('sendPushNotification: Push notification send completed successfully');
