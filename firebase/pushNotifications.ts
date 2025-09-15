@@ -1024,8 +1024,11 @@ export const sendPushNotification = async (
     console.log('sendPushNotification: Notification stored in Firestore');
 
     // Preferred: request serverless API to deliver to user's tokens (uses firebase-admin)
-    try {
-      await fetch('/api/sendNotification', {
+      try {
+      const apiOrigin = (typeof window !== 'undefined' && window.location && window.location.origin)
+        ? window.location.origin
+        : 'https://www.bloodbond.app';
+      await fetch(`${apiOrigin}/api/sendNotification`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

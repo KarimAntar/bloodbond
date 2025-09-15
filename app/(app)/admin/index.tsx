@@ -223,7 +223,10 @@ export default function AdminDashboard() {
 
         const targetUser = userSnapshot.docs[0];
         // Call serverless API to send to user tokens via firebase-admin
-        await fetch('/api/sendNotification', {
+        const apiOrigin = (typeof window !== 'undefined' && window.location && window.location.origin)
+          ? window.location.origin
+          : 'https://www.bloodbond.app';
+        await fetch(`${apiOrigin}/api/sendNotification`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -249,7 +252,10 @@ export default function AdminDashboard() {
       } else {
         // Send to all users (broadcast)
         // Send broadcast via serverless API (will deliver to all active tokens)
-        await fetch('/api/sendNotification', {
+        const apiOrigin = (typeof window !== 'undefined' && window.location && window.location.origin)
+          ? window.location.origin
+          : 'https://www.bloodbond.app';
+        await fetch(`${apiOrigin}/api/sendNotification`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

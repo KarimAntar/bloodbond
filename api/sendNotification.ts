@@ -128,6 +128,41 @@ export default async function handler(req: any, res: any) {
         }
       }
 
+      // If we found failures, try to mark matching tokens in Firestore as inactive
+      if (failures.length > 0) {
+        try {
+          const failedTokens = Array.from(new Set(failures.map(f => f.token).filter(Boolean)));
+          console.log('sendToTokens: marking', failedTokens.length, 'failed tokens inactive in Firestore');
+
+          // For each failed token, find docs and mark inactive + record last error
+          for (const t of failedTokens) {
+            try {
+              const snap = await firestore.collection('userTokens').where('token', '==', t).get();
+              if (!snap.empty) {
+                for (const d of snap.docs) {
+                  try {
+                    await d.ref.update({
+                      active: false,
+                      lastError: failures.find(f => f.token === t)?.error || 'send-failed',
+                      invalidatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    });
+                    console.log('sendToTokens: marked token inactive for doc', d.id);
+                  } catch (updateErr) {
+                    console.warn('sendToTokens: failed to update token doc', d.id, updateErr);
+                  }
+                }
+              } else {
+                console.log('sendToTokens: no firestore doc found for failed token', t);
+              }
+            } catch (queryErr) {
+              console.warn('sendToTokens: error querying token', t, queryErr);
+            }
+          }
+        } catch (cleanupErr) {
+          console.warn('sendToTokens: cleanup of failed tokens failed', cleanupErr);
+        }
+      }
+
       return { successCount, failureCount, failures };
     };
 
