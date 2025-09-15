@@ -52,7 +52,7 @@ export default async function handler(req: any, res: any) {
     const firestore = adminSdk.firestore();
     const messaging = adminSdk.messaging();
 
-    const { type, userId, title, body, data, topic, deviceId, image } = req.body || {};
+    const { type, userId, title, body, data, topic, deviceId } = req.body || {};
 
     if (!type || !title || !body) {
       res.status(400).json({ error: 'Missing required fields (type, title, body)' });
@@ -82,43 +82,16 @@ export default async function handler(req: any, res: any) {
       let dedupedTokenObjs = tokenObjs;
       try {
         const map = new Map<string, { token: string; platform?: string; docId?: string; deviceId?: string }>();
-
-        // Platform preference order when choosing which token to keep for the same device:
-        // prefer native platforms that can show images (android/ios/expo/fcm) over web.
-        const platformPriority = (p?: string) => {
-          if (!p) return 0;
-          const normalized = String(p).toLowerCase();
-          if (['android', 'ios', 'expo', 'fcm', 'apns'].includes(normalized)) return 5;
-          if (['chrome', 'edge', 'firefox', 'safari', 'web', 'browser'].includes(normalized)) return 1;
-          return 2;
-        };
-
         for (const t of tokenObjs) {
           const key = t.deviceId || t.token;
           if (!map.has(key)) {
             map.set(key, t);
           } else {
-            // If multiple tokens map to the same device key, prefer the token with higher platform priority.
-            // This reduces duplicate notifications on a single physical device (e.g., web + native).
-            try {
-              const existing = map.get(key)!;
-              const existingPriority = platformPriority(existing.platform);
-              const newPriority = platformPriority(t.platform);
-
-              // If the new token has higher priority, replace the existing one.
-              if (newPriority > existingPriority) {
-                console.log('sendToTokens: dedupe replaced token for key=', key, 'existing=', existing.token?.slice(0,8), 'with=', t.token?.slice(0,8), 'platforms=', existing.platform, '->', t.platform);
-                map.set(key, t);
-              } else {
-                console.log('sendToTokens: dedupe kept existing token for key=', key, 'existing=', existing.token?.slice(0,8), 'skipped=', t.token?.slice(0,8), 'platform=', t.platform);
-              }
-            } catch (innerErr) {
-              // Fallback: keep first token if the prioritization logic fails
-              console.log('sendToTokens: dedupe fallback keep-first for key=', key, innerErr);
-            }
+            // Keep the first seen token for this deviceId/key and log the duplication for diagnostics
+            const existing = map.get(key);
+            console.log('sendToTokens: dedupe skipped duplicate token for key=', key, 'existing=', existing?.token?.slice(0,8), 'skipped=', t.token?.slice(0,8));
           }
         }
-
         dedupedTokenObjs = Array.from(map.values());
       } catch (dedupeErr) {
         console.warn('sendToTokens: dedupe step failed, continuing with original token list', dedupeErr);
@@ -146,40 +119,39 @@ export default async function handler(req: any, res: any) {
           const isNativePlatform = nativePlatforms.includes(platform);
 
           const baseData = (data && typeof data === 'object') ? Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])) : {};
-          // Accept image passed either inside data.image or as top-level `image` in the request body
-          const imageUrl = data?.image || image || '';
+          const imageUrl = data?.image || '';
 
+          // If we confidently detect a web/platform, send data-only so the service worker controls display.
           // If we detect a native platform, include notification so OS displays it.
-          // For web, send notification payload if image is present (to include image), otherwise data-only to let service worker control display.
-          if (isWeb && !isNativePlatform && !imageUrl) {
+          // For unknown platforms (should be rare) treat as web to avoid duplicate browser notifications.
+          if (isWeb && !isNativePlatform) {
             const webpushConfig: any = {
               headers: { Urgency: 'high' },
             };
 
-            // Ensure image is also in data so the service worker or foreground handler can access it
+            // Always use favicon as icon, add image only if uploaded
+            const webpushNotification: any = {
+              title,
+              body,
+              icon: 'https://bloodbond.app/favicon.png', // Always use favicon as notification icon
+            };
+
+            // Add uploaded image as the body image if available
+            if (imageUrl) {
+              webpushNotification.image = imageUrl;
+            }
+
+            webpushConfig.notification = webpushNotification;
+
+            // Ensure image is also in data so foreground handler can access it
             const dataWithImage: any = { ...baseData, _title: title, _body: body };
             if (imageUrl) {
               dataWithImage.image = imageUrl;
             }
 
-            // Diagnostic log for web messages
-            try {
-              console.log('sendToTokens: building web message', {
-                tokenPrefix: token?.slice(0, 8),
-                imageUrl,
-                hasImageInData: !!dataWithImage.image,
-                dataKeys: Object.keys(dataWithImage || {}).slice(0, 10),
-              });
-            } catch (diagErr) {
-              console.warn('sendToTokens: web message diag failed', diagErr);
-            }
-
-            // For web we send data-only (no webpush.notification) — the service worker should display the notification.
-            // This avoids browsers automatically showing a notification while the service worker also displays one,
-            // which causes duplicate notifications (one with image and one plain).
             return {
               token,
-              data: dataWithImage, // data-only for web: service worker should display the notification to avoid duplicates
+              data: dataWithImage, // include title/body and image in data so web client can display if desired
               webpush: webpushConfig,
               // Keep android/apns hints to help delivery but do NOT include notification payload
               android: { priority: 'high' },
@@ -193,19 +165,6 @@ export default async function handler(req: any, res: any) {
             body,
             icon: 'https://bloodbond.app/favicon.png', // Always use favicon as notification icon
           };
-
-          // Diagnostic log for native messages
-          try {
-            console.log('sendToTokens: building native message', {
-              tokenPrefix: token?.slice(0, 8),
-              platform,
-              imageUrl,
-              notificationWillIncludeImage: !!imageUrl,
-              dataKeys: Object.keys(baseData || {}).slice(0, 10),
-            });
-          } catch (diagErr) {
-            console.warn('sendToTokens: native message diag failed', diagErr);
-          }
 
           // Add uploaded image as the body image if available
           if (imageUrl) {
@@ -234,22 +193,6 @@ export default async function handler(req: any, res: any) {
 
         // Prefer sendAll if available (recent admin SDKs)
         const mg = messaging as any;
-
-        // Diagnostic: log a compact summary of messages we are about to send so we can verify
-        // whether image information is present in notification or data payloads.
-        try {
-          const sample = messages.slice(0, 5).map((m: any) => ({
-            tokenPrefix: typeof m.token === 'string' ? m.token.slice(0, 8) : null,
-            hasNotification: !!m.notification,
-            notificationImage: m.notification?.image || null,
-            dataImage: m.data?.image || null,
-            dataKeys: m.data ? Object.keys(m.data).slice(0, 6) : [],
-          }));
-          console.log('sendToTokens: outgoing message sample:', JSON.stringify(sample));
-        } catch (diagErr) {
-          console.warn('sendToTokens: failed to build outgoing message sample log', diagErr);
-        }
-
         if (typeof mg.sendAll === 'function') {
           try {
             const resp = await mg.sendAll(messages);
@@ -325,8 +268,7 @@ export default async function handler(req: any, res: any) {
       }
 
       const baseData = (data && typeof data === 'object') ? Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])) : {};
-      // Accept image passed either inside data.image or as top-level `image` in the request body
-      const imageUrl = data?.image || image || '';
+      const imageUrl = data?.image || '';
 
       const notificationConfig: any = {
         title,

@@ -57,10 +57,8 @@ messaging.onBackgroundMessage(function(payload) {
     renotify: false
   };
 
-  // Add image if present in notification or data
-  if (notif && notif.image) {
-    options.image = notif.image;
-  } else if (data && data.image) {
+  // Add image if present in data
+  if (data && data.image) {
     options.image = data.image;
   }
 
