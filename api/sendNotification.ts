@@ -129,29 +129,18 @@ export default async function handler(req: any, res: any) {
               headers: { Urgency: 'high' },
             };
 
-            // Always use favicon as icon, add image only if uploaded
-            const webpushNotification: any = {
-              title,
-              body,
-              icon: 'https://bloodbond.app/favicon.png', // Always use favicon as notification icon
-            };
-
-            // Add uploaded image as the body image if available
-            if (imageUrl) {
-              webpushNotification.image = imageUrl;
-            }
-
-            webpushConfig.notification = webpushNotification;
-
-            // Ensure image is also in data so foreground handler can access it
+            // Ensure image is also in data so the service worker or foreground handler can access it
             const dataWithImage: any = { ...baseData, _title: title, _body: body };
             if (imageUrl) {
               dataWithImage.image = imageUrl;
             }
 
+            // For web we send data-only (no webpush.notification) — the service worker should display the notification.
+            // This avoids browsers automatically showing a notification while the service worker also displays one,
+            // which causes duplicate notifications (one with image and one plain).
             return {
               token,
-              data: dataWithImage, // include title/body and image in data so web client can display if desired
+              data: dataWithImage, // data-only for web: service worker should display the notification to avoid duplicates
               webpush: webpushConfig,
               // Keep android/apns hints to help delivery but do NOT include notification payload
               android: { priority: 'high' },
