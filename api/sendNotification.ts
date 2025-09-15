@@ -129,15 +129,19 @@ export default async function handler(req: any, res: any) {
               headers: { Urgency: 'high' },
             };
 
-            // Add image to webpush notification if available
+            // Always use favicon as icon, add image only if uploaded
+            const webpushNotification: any = {
+              title,
+              body,
+              icon: 'https://bloodbond.app/favicon.png', // Always use favicon as notification icon
+            };
+
+            // Add uploaded image as the body image if available
             if (imageUrl) {
-              webpushConfig.notification = {
-                title,
-                body,
-                icon: imageUrl, // Use image as icon for web notifications
-                image: imageUrl,
-              };
+              webpushNotification.image = imageUrl;
             }
+
+            webpushConfig.notification = webpushNotification;
 
             return {
               token,
@@ -153,9 +157,10 @@ export default async function handler(req: any, res: any) {
           const notificationConfig: any = {
             title,
             body,
+            icon: 'https://bloodbond.app/favicon.png', // Always use favicon as notification icon
           };
 
-          // Add image to notification if available
+          // Add uploaded image as the body image if available
           if (imageUrl) {
             notificationConfig.image = imageUrl;
           }
@@ -262,9 +267,10 @@ export default async function handler(req: any, res: any) {
       const notificationConfig: any = {
         title,
         body,
+        icon: 'https://bloodbond.app/favicon.png', // Always use favicon as notification icon
       };
 
-      // Add image to notification if available
+      // Add uploaded image as the body image if available
       if (imageUrl) {
         notificationConfig.image = imageUrl;
       }
@@ -336,9 +342,10 @@ export default async function handler(req: any, res: any) {
         const notificationConfig: any = {
           title,
           body,
+          icon: 'https://bloodbond.app/favicon.png', // Always use favicon as notification icon
         };
 
-        // Add image to notification if available
+        // Add uploaded image as the body image if available
         if (imageUrl) {
           notificationConfig.image = imageUrl;
         }
