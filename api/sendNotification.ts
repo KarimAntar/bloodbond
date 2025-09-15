@@ -60,37 +60,94 @@ export default async function handler(req: any, res: any) {
     }
 
     // Helper to send tokens in batches (tries sendAll -> sendMulticast -> per-token fallback)
-    const sendToTokens = async (tokens: string[]) => {
-      if (!tokens || tokens.length === 0) return { successCount: 0, failureCount: 0, failures: [] as any[] };
+    // Accepts token objects so we can vary payload per platform and log diagnostics.
+    const sendToTokens = async (tokenObjs: { token: string; platform?: string; docId?: string; deviceId?: string }[]) => {
+      if (!tokenObjs || tokenObjs.length === 0) return { successCount: 0, failureCount: 0, failures: [] as any[] };
 
-      const batches = chunk(tokens, 450); // keep under FCM limit
+      // Diagnostic: log resolved tokens + platform summary
+      try {
+        const platformCounts: Record<string, number> = {};
+        tokenObjs.forEach(t => {
+          const p = t.platform || 'unknown';
+          platformCounts[p] = (platformCounts[p] || 0) + 1;
+        });
+        console.log('sendToTokens: preparing to send to', tokenObjs.length, 'tokens, platforms:', platformCounts);
+      } catch (diagErr) {
+        console.warn('sendToTokens: diagnostic logging failed', diagErr);
+      }
+
+      // De-duplicate tokens by deviceId when available, otherwise by token.
+      // This prevents sending multiple notifications to the same physical device
+      // (e.g., Expo + native FCM tokens or multiple token docs).
+      let dedupedTokenObjs = tokenObjs;
+      try {
+        const map = new Map<string, { token: string; platform?: string; docId?: string; deviceId?: string }>();
+        for (const t of tokenObjs) {
+          const key = t.deviceId || t.token;
+          if (!map.has(key)) {
+            map.set(key, t);
+          } else {
+            // Keep the first seen token for this deviceId/key and log the duplication for diagnostics
+            const existing = map.get(key);
+            console.log('sendToTokens: dedupe skipped duplicate token for key=', key, 'existing=', existing?.token?.slice(0,8), 'skipped=', t.token?.slice(0,8));
+          }
+        }
+        dedupedTokenObjs = Array.from(map.values());
+      } catch (dedupeErr) {
+        console.warn('sendToTokens: dedupe step failed, continuing with original token list', dedupeErr);
+      }
+
+      const batches = chunk(dedupedTokenObjs, 450); // keep under FCM limit
       let successCount = 0;
       let failureCount = 0;
       const failures: any[] = [];
 
-      for (const batchTokens of batches) {
+      for (const batch of batches) {
         // Build messages for sendAll/sendMulticast
-        const messages: admin.messaging.Message[] = batchTokens.map((t) => ({
-          token: t,
-          notification: {
-            title,
-            body,
-          },
-          data: (data && typeof data === 'object') ? Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])) : {},
-          android: {
-            priority: 'high',
-          },
-          apns: {
-            headers: {
-              'apns-priority': '10',
+        const messages: admin.messaging.Message[] = batch.map((tObj) => {
+          const token = tObj.token;
+          const platform = (tObj.platform || '').toLowerCase();
+
+          // For web tokens send data-only messages to avoid duplicate notifications
+          const isWeb = platform === 'web' || platform === 'browser' || platform === 'chrome' || platform === 'edge' || platform === 'firefox' || platform === 'safari';
+
+          const baseData = (data && typeof data === 'object') ? Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])) : {};
+
+          if (isWeb) {
+            return {
+              token,
+              data: { ...baseData, _title: title, _body: body }, // include title/body in data so web client can display if desired
+              webpush: {
+                headers: { Urgency: 'high' },
+              },
+              android: { priority: 'high' },
+              apns: { headers: { 'apns-priority': '10' } },
+            } as admin.messaging.Message;
+          }
+
+          // Native: include notification so OS displays the notification
+          return {
+            token,
+            notification: {
+              title,
+              body,
             },
-          },
-          webpush: {
-            headers: {
-              Urgency: 'high',
+            data: baseData,
+            android: {
+              priority: 'high',
             },
-          },
-        }));
+            apns: {
+              headers: {
+                'apns-priority': '10',
+              },
+            },
+            webpush: {
+              headers: {
+                Urgency: 'high',
+              },
+            },
+          } as admin.messaging.Message;
+        });
 
         // Prefer sendAll if available (recent admin SDKs)
         const mg = messaging as any;
@@ -101,7 +158,7 @@ export default async function handler(req: any, res: any) {
             failureCount += resp.failureCount || 0;
             if (resp.failureCount > 0 && Array.isArray(resp.responses)) {
               resp.responses.forEach((r: any, i: number) => {
-                if (!r.success) failures.push({ token: batchTokens[i], error: r.error?.toString() || r.error });
+                if (!r.success) failures.push({ token: batch[i].token, error: r.error?.toString() || r.error });
               });
             }
             continue;
@@ -111,19 +168,15 @@ export default async function handler(req: any, res: any) {
           }
         }
 
-        // Skip sendMulticast to avoid runtime mismatch in some firebase-admin versions.
-        // We already attempted sendAll above; fall back to individual sends below.
-
         // Final fallback: send messages individually (serially to avoid TCP bursts)
-        for (let i = 0; i < batchTokens.length; i++) {
+        for (let i = 0; i < batch.length; i++) {
           const msg = messages[i];
           try {
             const resp = await mg.send(msg);
-            // resp may be a messageId string on success
             if (resp) successCount += 1;
           } catch (e: any) {
             failureCount += 1;
-            failures.push({ token: batchTokens[i], error: e?.toString() || e });
+            failures.push({ token: batch[i].token, error: e?.toString() || e });
           }
         }
       }
@@ -195,21 +248,34 @@ export default async function handler(req: any, res: any) {
         return;
       }
 
-      // Get tokens for the user
+      // Get tokens for the user (include platform & doc id for platform-specific handling)
       const tokensSnap = await firestore
         .collection('userTokens')
         .where('userId', '==', userId)
         .where('active', '==', true)
         .get();
 
-      const tokens: string[] = tokensSnap.docs.map(d => d.data().token).filter(Boolean);
+      const tokenObjs = tokensSnap.docs
+        .map(d => {
+          const data = d.data() || {};
+          return {
+            token: data.token,
+            platform: data.platform,
+            deviceId: data.deviceId || null,
+            docId: d.id,
+          };
+        })
+        .filter(t => t.token);
 
-      if (tokens.length === 0) {
+      if (tokenObjs.length === 0) {
         res.status(200).json({ success: true, note: 'no-tokens-for-user', sent: 0 });
         return;
       }
 
-      const result = await sendToTokens(tokens);
+      // Diagnostic logging
+      console.log('sendNotification:user -> userId=', userId, 'resolvedTokens=', tokenObjs.map(t => ({ token: t.token?.slice(0,8), platform: t.platform, docId: t.docId })));
+
+      const result = await sendToTokens(tokenObjs);
       res.status(200).json({ success: true, sent: result.successCount, failures: result.failures, failureCount: result.failureCount });
       return;
     }
@@ -233,14 +299,25 @@ export default async function handler(req: any, res: any) {
         .where('active', '==', true)
         .get();
 
-      const tokens: string[] = tokensSnap.docs.map(d => d.data().token).filter(Boolean);
+      const tokenObjs = tokensSnap.docs
+        .map(d => {
+          const data = d.data() || {};
+          return {
+            token: data.token,
+            platform: data.platform,
+            deviceId: data.deviceId || null,
+            docId: d.id,
+          };
+        })
+        .filter(t => t.token);
 
-      if (tokens.length === 0) {
+      if (tokenObjs.length === 0) {
         res.status(200).json({ success: true, note: 'no-tokens-found', sent: 0 });
         return;
       }
 
-      const result = await sendToTokens(tokens);
+      console.log('sendNotification:broadcast -> totalTokens=', tokenObjs.length);
+      const result = await sendToTokens(tokenObjs);
       res.status(200).json({ success: true, sent: result.successCount, failures: result.failures, failureCount: result.failureCount });
       return;
     }

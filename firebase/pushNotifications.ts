@@ -1,5 +1,5 @@
 import { db } from './firebaseConfig';
-import { collection, addDoc, Timestamp, query, where, orderBy, getDocs } from 'firebase/firestore';
+import { collection, addDoc, Timestamp, query, where, orderBy, getDocs, updateDoc, doc } from 'firebase/firestore';
 import * as Notifications from 'expo-notifications';
 
 // Web: use Firebase Messaging
@@ -790,16 +790,75 @@ export const sendBroadcastNotification = async (title: string, body: string, dat
   }
 };
 
-// Register push token for a user in Firestore
-export const registerPushToken = async (userId: string, token: string, platform = 'web') => {
+/**
+ * Register or upsert a push token for a user.
+ * - If a doc exists with same deviceId for the user, update it.
+ * - Otherwise if a doc exists with same token, update it.
+ * - Otherwise create a new doc.
+ *
+ * Accepts optional deviceId to dedupe multiple tokens from the same device.
+ */
+export const registerPushToken = async (userId: string, token: string, platform = 'web', deviceId?: string) => {
   try {
-    await addDoc(collection(db, 'userTokens'), {
+    if (!userId || !token) {
+      console.warn('registerPushToken: missing userId or token');
+      return;
+    }
+
+    const userTokensRef = collection(db, 'userTokens');
+
+    // Prefer matching by deviceId when provided (keeps one record per physical device)
+    if (deviceId) {
+      try {
+        const qByDevice = query(userTokensRef, where('userId', '==', userId), where('deviceId', '==', deviceId));
+        const snap = await getDocs(qByDevice);
+        if (!snap.empty) {
+          // Update first matching doc
+          const d = snap.docs[0];
+          await updateDoc(doc(db, 'userTokens', d.id), {
+            token,
+            platform,
+            active: true,
+            updatedAt: Timestamp.now(),
+          });
+          console.log('registerPushToken: updated existing token doc by deviceId', d.id);
+          return;
+        }
+      } catch (e) {
+        console.warn('registerPushToken: deviceId lookup failed, continuing', e);
+      }
+    }
+
+    // Next try matching by token to avoid duplicate entries for same token
+    try {
+      const qByToken = query(userTokensRef, where('token', '==', token));
+      const snapToken = await getDocs(qByToken);
+      if (!snapToken.empty) {
+        const d = snapToken.docs[0];
+        await updateDoc(doc(db, 'userTokens', d.id), {
+          userId,
+          platform,
+          active: true,
+          updatedAt: Timestamp.now(),
+        });
+        console.log('registerPushToken: updated existing token doc by token', d.id);
+        return;
+      }
+    } catch (e) {
+      console.warn('registerPushToken: token lookup failed, continuing', e);
+    }
+
+    // Create new token document
+    await addDoc(userTokensRef, {
       userId,
       token,
       platform,
+      deviceId: deviceId || null,
       createdAt: Timestamp.now(),
       active: true,
     });
+
+    console.log('registerPushToken: created new token doc for user', userId);
   } catch (error) {
     console.error('Error registering push token:', error);
   }
@@ -1115,19 +1174,8 @@ export const initializeNotifications = async () => {
         // Set up foreground message handler as per Firebase documentation
         onMessage(messaging, (payload) => {
           console.log('FCM message received in foreground:', payload);
-          if (payload?.notification) {
-            const { title, body } = payload.notification;
-            try {
-              // Create browser notification for foreground messages
-              new Notification(title ?? 'Notification', {
-                body: body ?? undefined,
-                icon: '/favicon.png', // Add icon as per Firebase best practices
-                data: payload?.data ?? {},
-              });
-            } catch (e) {
-              console.error('Error showing browser notification', e);
-            }
-          }
+          // Do not create a system/browser Notification here to avoid duplicates with the service worker.
+          // Foreground UX should show an in-app banner/toast instead (implement separately).
         });
         console.log('initializeNotifications: onMessage handler set up successfully');
       } catch (e) {
