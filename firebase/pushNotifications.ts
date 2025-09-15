@@ -1029,7 +1029,7 @@ const sendFCMMessage = async (token: string, title: string, body: string, data?:
             // Prefer explicit SEND_ORIGIN env var for production builds (EXPO_PUBLIC_SEND_ORIGIN supported).
             click_action: (typeof process !== 'undefined' && (process.env.SEND_ORIGIN || (process.env as any).EXPO_PUBLIC_SEND_ORIGIN))
               ? (process.env.SEND_ORIGIN || (process.env as any).EXPO_PUBLIC_SEND_ORIGIN)
-              : 'https://www.bloodbond.app',
+              : 'https://bloodbond.app',
           },
           data: data || {},
           webpush: {
@@ -1131,7 +1131,7 @@ export const sendPushNotification = async (
       const envSendOrigin = (typeof process !== 'undefined' && (process.env.SEND_ORIGIN || (process.env as any).EXPO_PUBLIC_SEND_ORIGIN))
         ? (process.env.SEND_ORIGIN || (process.env as any).EXPO_PUBLIC_SEND_ORIGIN)
         : null;
-      const apiOrigin = envSendOrigin || 'https://www.bloodbond.app';
+      const apiOrigin = envSendOrigin || 'https://bloodbond.app';
       await fetch(`${apiOrigin}/api/sendNotification`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

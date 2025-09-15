@@ -195,7 +195,7 @@ export default function AdminDashboard() {
           // Upload via API
           const apiOrigin = (typeof process !== 'undefined' && (process.env.SEND_ORIGIN || (process.env as any).EXPO_PUBLIC_SEND_ORIGIN))
             ? (process.env.SEND_ORIGIN || (process.env as any).EXPO_PUBLIC_SEND_ORIGIN)
-            : 'https://www.bloodbond.app';
+            : 'https://bloodbond.app';
 
           console.log('Uploading image to:', `${apiOrigin}/api/uploadImage`);
           console.log('Image data length:', base64.length);
@@ -324,7 +324,7 @@ export default function AdminDashboard() {
       // This ensures admin always targets the configured production/send origin.
       const apiOrigin = (typeof process !== 'undefined' && (process.env.SEND_ORIGIN || (process.env as any).EXPO_PUBLIC_SEND_ORIGIN))
         ? (process.env.SEND_ORIGIN || (process.env as any).EXPO_PUBLIC_SEND_ORIGIN)
-        : 'https://www.bloodbond.app';
+        : 'https://bloodbond.app';
 
       // If "selectAll" is true OR no selected users (and not explicit selection), treat as broadcast
       if (selectAll || (selectedUserIds.length === 0 && !selectAll)) {

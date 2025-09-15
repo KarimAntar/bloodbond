@@ -5,7 +5,7 @@
  *
  * Usage:
  *   node scripts/test_send.js --type=user --userId=USER_ID --deviceId=DEVICE_ID --title="Test" --body="hello" --origin="https://localhost:3000"
- *   node scripts/test_send.js --type=broadcast --title="Broadcast" --body="hello" --origin="https://www.bloodbond.app"
+ *   node scripts/test_send.js --type=broadcast --title="Broadcast" --body="hello" --origin="https://bloodbond.app"
  *
  * Supported flags:
  *   --type      one of "user" | "broadcast" | "topic"   (default: broadcast)
@@ -14,7 +14,7 @@
  *   --topic     topic name (required for type=topic)
  *   --title     notification title
  *   --body      notification body
- *   --origin    full origin of your app (default: https://www.bloodbond.app)
+ *   --origin    full origin of your app (default: https://bloodbond.app)
  */
 
 const http = require('http');
@@ -44,7 +44,7 @@ function parseArgs(argv) {
     const type = args.type || 'broadcast';
     const title = args.title || 'Test Notification';
     const body = args.body || 'Hello from test_send.js';
-    const origin = args.origin || process.env.SEND_ORIGIN || 'https://www.bloodbond.app';
+    const origin = args.origin || process.env.SEND_ORIGIN || 'https://bloodbond.app';
     const userId = args.userId || process.env.TEST_USER_ID;
     const deviceId = args.deviceId;
     const topic = args.topic;
