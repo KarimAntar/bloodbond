@@ -1,4 +1,3 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
 import admin from 'firebase-admin';
 
 const serviceAccountJson = process.env.FCM_SERVICE_ACCOUNT || '';
@@ -42,7 +41,7 @@ const chunk = <T,>(arr: T[], size: number) =>
  *  { type: 'broadcast', title, body, data? }
  *  { type: 'topic', topic, title, body, data? }  // optional
  */
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
     return;
@@ -60,18 +59,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return;
     }
 
-    // Helper to send tokens in batches (multicast)
+    // Helper to send tokens in batches (tries sendAll -> sendMulticast -> per-token fallback)
     const sendToTokens = async (tokens: string[]) => {
       if (!tokens || tokens.length === 0) return { successCount: 0, failureCount: 0, failures: [] as any[] };
 
-      const batches = chunk(tokens, 450); // safe under 500 limit
+      const batches = chunk(tokens, 450); // keep under FCM limit
       let successCount = 0;
       let failureCount = 0;
       const failures: any[] = [];
 
       for (const batchTokens of batches) {
-        const message: admin.messaging.MulticastMessage = {
-          tokens: batchTokens,
+        // Build messages for sendAll/sendMulticast
+        const messages: admin.messaging.Message[] = batchTokens.map((t) => ({
+          token: t,
           notification: {
             title,
             body,
@@ -90,17 +90,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               Urgency: 'high',
             },
           },
-        };
+        }));
 
-        const resp = await messaging.sendMulticast(message);
-        successCount += resp.successCount;
-        failureCount += resp.failureCount;
-        if (resp.failureCount > 0) {
-          resp.responses.forEach((r, i) => {
-            if (!r.success) {
-              failures.push({ token: batchTokens[i], error: r.error?.toString() || r.error });
+        // Prefer sendAll if available (recent admin SDKs)
+        const mg = messaging as any;
+        if (typeof mg.sendAll === 'function') {
+          try {
+            const resp = await mg.sendAll(messages);
+            successCount += resp.successCount || 0;
+            failureCount += resp.failureCount || 0;
+            if (resp.failureCount > 0 && Array.isArray(resp.responses)) {
+              resp.responses.forEach((r: any, i: number) => {
+                if (!r.success) failures.push({ token: batchTokens[i], error: r.error?.toString() || r.error });
+              });
             }
-          });
+            continue;
+          } catch (e) {
+            // fall through to try other methods
+            console.warn('sendToTokens: sendAll failed, falling back', e);
+          }
+        }
+
+        // Skip sendMulticast to avoid runtime mismatch in some firebase-admin versions.
+        // We already attempted sendAll above; fall back to individual sends below.
+
+        // Final fallback: send messages individually (serially to avoid TCP bursts)
+        for (let i = 0; i < batchTokens.length; i++) {
+          const msg = messages[i];
+          try {
+            const resp = await mg.send(msg);
+            // resp may be a messageId string on success
+            if (resp) successCount += 1;
+          } catch (e: any) {
+            failureCount += 1;
+            failures.push({ token: batchTokens[i], error: e?.toString() || e });
+          }
         }
       }
 
