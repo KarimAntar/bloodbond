@@ -10,16 +10,20 @@ import {
   SafeAreaView,
   TextInput,
   Modal,
+  Image,
+  Platform,
 } from 'react-native';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { Colors } from '../../../constants/Colors';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { db } from '../../../firebase/firebaseConfig';
+import { db, storage } from '../../../firebase/firebaseConfig';
+import * as ImagePicker from 'expo-image-picker';
 import {
   collection,
   getDocs,
+  getDoc,
   doc,
   deleteDoc,
   query,
@@ -29,6 +33,7 @@ import {
   where,
   updateDoc,
 } from 'firebase/firestore';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
  // Notifications are sent via serverless API: /api/sendNotification
  // (uses FCM service account loaded from FCM_SERVICE_ACCOUNT env var)
 
@@ -63,6 +68,10 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<'users' | 'requests' | 'notifications'>('users');
   const [users, setUsers] = useState<User[]>([]);
   const [requests, setRequests] = useState<BloodRequest[]>([]);
+  const [userTokens, setUserTokens] = useState<any[]>([]); // { id, userId, token, platform }
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [selectAll, setSelectAll] = useState(false);
+  const [notificationImageUrl, setNotificationImageUrl] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [notificationModal, setNotificationModal] = useState(false);
   const [notificationData, setNotificationData] = useState({
@@ -112,11 +121,110 @@ export default function AdminDashboard() {
         ...doc.data(),
       })) as BloodRequest[];
       setRequests(requestsData);
+
+      // Load user tokens for push targeting (userTokens collection)
+      // Each token doc expected to contain: userId, token, platform, createdAt, optionally deviceId
+      try {
+        const tokensSnapshot = await getDocs(collection(db, 'userTokens'));
+        const tokensData = tokensSnapshot.docs.map(d => ({
+          id: d.id,
+          ...(d.data() as any),
+        }));
+        setUserTokens(tokensData);
+      } catch (tokenErr) {
+        console.warn('Failed to load userTokens collection', tokenErr);
+        setUserTokens([]);
+      }
     } catch (error) {
       console.error('Error loading data:', error);
       Alert.alert('Error', 'Failed to load data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Refresh userTokens independently so the notifications tab always shows the latest recipients
+  const loadUserTokens = async () => {
+    try {
+      const tokensSnapshot = await getDocs(collection(db, 'userTokens'));
+      const tokensData = tokensSnapshot.docs.map(d => ({
+        id: d.id,
+        ...(d.data() as any),
+      }));
+      setUserTokens(tokensData);
+    } catch (err) {
+      console.warn('Failed to load userTokens', err);
+      setUserTokens([]);
+    }
+  };
+
+  useEffect(() => {
+    // When opening the Push Notifications tab refresh tokens and users so recipient list is up-to-date
+    if (activeTab === 'notifications') {
+      loadUserTokens();
+      (async () => {
+        try {
+          const usersSnapshot = await getDocs(collection(db, 'users'));
+          const usersData = usersSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+          })) as User[];
+          setUsers(usersData);
+        } catch (e) {
+          console.warn('Failed to refresh users', e);
+        }
+      })();
+    }
+  }, [activeTab]);
+
+  // Image picker + upload flow for notification images (device upload)
+  const [localImageUri, setLocalImageUri] = useState<string>('');
+
+  useEffect(() => {
+    (async () => {
+      if (Platform.OS !== 'web') {
+        try {
+          const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (status !== 'granted') {
+            Alert.alert('Permission required', 'Permission to access media library is required to upload images.');
+          }
+        } catch (permErr) {
+          console.warn('Image picker permission error', permErr);
+        }
+      }
+    })();
+  }, []);
+
+  const pickImageFromDevice = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const uri = result.assets[0].uri;
+        setLocalImageUri(uri);
+
+        // upload to Firebase Storage
+        try {
+          const response = await fetch(uri);
+          const blob = await response.blob();
+          const filename = uri.split('/').pop() || `notif_${Date.now()}.jpg`;
+          const storageReference = storageRef(storage, `notifications/${Date.now()}_${filename}`);
+          await uploadBytes(storageReference, blob);
+          const downloadUrl = await getDownloadURL(storageReference);
+          setNotificationImageUrl(downloadUrl);
+          Alert.alert('Image uploaded', 'Image uploaded and attached to notification.');
+        } catch (uploadErr) {
+          console.error('Upload error', uploadErr);
+          Alert.alert('Upload failed', 'Failed to upload image to storage.');
+        }
+      }
+    } catch (err) {
+      console.error('Image pick error', err);
+      Alert.alert('Error', 'Failed to pick image');
     }
   };
 
@@ -208,53 +316,18 @@ export default function AdminDashboard() {
     }
 
     try {
-      if (notificationData.recipientEmail) {
-        // Send to specific user
-        const userQuery = query(
-          collection(db, 'users'),
-          where('email', '==', notificationData.recipientEmail)
-        );
-        const userSnapshot = await getDocs(userQuery);
+      // Prepare optional image data
+      const dataPayload: any = {};
+      if (notificationImageUrl) {
+        dataPayload.image = notificationImageUrl;
+      }
 
-        if (userSnapshot.empty) {
-          Alert.alert('Error', 'User not found with this email');
-          return;
-        }
+      const apiOrigin = (typeof window !== 'undefined' && window.location && window.location.origin)
+        ? window.location.origin
+        : 'https://www.bloodbond.app';
 
-        const targetUser = userSnapshot.docs[0];
-        // Call serverless API to send to user tokens via firebase-admin
-        const apiOrigin = (typeof window !== 'undefined' && window.location && window.location.origin)
-          ? window.location.origin
-          : 'https://www.bloodbond.app';
-        await fetch(`${apiOrigin}/api/sendNotification`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            type: 'user',
-            userId: targetUser.id,
-            title: notificationData.title,
-            body: notificationData.message,
-          }),
-        });
-
-        // Also store in notifications collection for the user
-        await addDoc(collection(db, 'notifications'), {
-          userId: targetUser.id,
-          type: 'admin_push',
-          title: notificationData.title,
-          message: notificationData.message,
-          timestamp: serverTimestamp(),
-          read: false,
-          sentBy: user?.uid,
-        });
-
-        Alert.alert('Success', 'Push notification sent to user successfully!');
-      } else {
-        // Send to all users (broadcast)
-        // Send broadcast via serverless API (will deliver to all active tokens)
-        const apiOrigin = (typeof window !== 'undefined' && window.location && window.location.origin)
-          ? window.location.origin
-          : 'https://www.bloodbond.app';
+      if (selectAll || (selectedUserIds.length === 0 && !selectAll)) {
+        // Broadcast to all users
         await fetch(`${apiOrigin}/api/sendNotification`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -262,6 +335,7 @@ export default function AdminDashboard() {
             type: 'broadcast',
             title: notificationData.title,
             body: notificationData.message,
+            data: dataPayload,
           }),
         });
 
@@ -273,6 +347,7 @@ export default function AdminDashboard() {
             type: 'admin_broadcast',
             title: notificationData.title,
             message: notificationData.message,
+            image: notificationImageUrl || null,
             timestamp: serverTimestamp(),
             read: false,
             sentBy: user?.uid,
@@ -281,10 +356,49 @@ export default function AdminDashboard() {
 
         await Promise.all(notificationPromises);
         Alert.alert('Success', `Push notification sent to ${usersSnapshot.docs.length} users successfully!`);
+      } else {
+        // Send to selected users
+        const sendPromises = selectedUserIds.map(uid =>
+          fetch(`${apiOrigin}/api/sendNotification`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'user',
+              userId: uid,
+              title: notificationData.title,
+              body: notificationData.message,
+              data: dataPayload,
+            }),
+          })
+        );
+
+        await Promise.all(sendPromises);
+
+        // Store notification docs per selected user
+        const savePromises = selectedUserIds.map(uid =>
+          addDoc(collection(db, 'notifications'), {
+            userId: uid,
+            type: 'admin_push',
+            title: notificationData.title,
+            message: notificationData.message,
+            image: notificationImageUrl || null,
+            timestamp: serverTimestamp(),
+            read: false,
+            sentBy: user?.uid,
+          })
+        );
+
+        await Promise.all(savePromises);
+
+        Alert.alert('Success', `Push notification sent to ${selectedUserIds.length} users successfully!`);
       }
 
+      // Reset modal state
       setNotificationModal(false);
       setNotificationData({ title: '', message: '', recipientEmail: '' });
+      setSelectedUserIds([]);
+      setSelectAll(false);
+      setNotificationImageUrl('');
     } catch (error) {
       console.error('Error sending notification:', error);
       Alert.alert('Error', 'Failed to send notification');
@@ -637,11 +751,11 @@ export default function AdminDashboard() {
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[dynamicStyles.tab, activeTab === 'requests' && dynamicStyles.activeTab]}
-          onPress={() => setActiveTab('requests')}
+          style={[dynamicStyles.tab, activeTab === 'notifications' && dynamicStyles.activeTab]}
+          onPress={() => setActiveTab('notifications')}
         >
-          <Text style={[dynamicStyles.tabText, activeTab === 'requests' && dynamicStyles.activeTabText]}>
-            Requests ({requests.length})
+          <Text style={[dynamicStyles.tabText, activeTab === 'notifications' && dynamicStyles.activeTabText]}>
+            Push Notifications
           </Text>
         </TouchableOpacity>
       </View>
@@ -678,34 +792,113 @@ export default function AdminDashboard() {
           </View>
         )}
 
-        {activeTab === 'requests' && (
+        {activeTab === 'notifications' && (
           <View style={dynamicStyles.section}>
-            <Text style={dynamicStyles.sectionTitle}>Request Management</Text>
-            {requests.map(request => (
-              <View key={request.id} style={dynamicStyles.requestCard}>
-                <View style={dynamicStyles.requestInfo}>
-                  <Text style={dynamicStyles.requestTitle}>{request.fullName}</Text>
-                  <Text style={dynamicStyles.requestDescription}>
-                    {request.hospital} • {request.contactNumber}
-                  </Text>
-                  <Text style={dynamicStyles.requestDetails}>
-                    {request.bloodType} • {request.city}
-                    {request.urgent && ' • URGENT'}
-                  </Text>
-                  {request.notes && (
-                    <Text style={dynamicStyles.requestNotes} numberOfLines={2}>
-                      {request.notes}
-                    </Text>
-                  )}
-                </View>
-                <TouchableOpacity
-                  onPress={() => handleDeleteRequest(request)}
-                  style={dynamicStyles.deleteButton}
-                >
-                  <Ionicons name="trash-outline" size={20} color={colors.primary} />
-                </TouchableOpacity>
-              </View>
-            ))}
+            <Text style={dynamicStyles.sectionTitle}>Push Notifications</Text>
+
+            <TextInput
+              style={dynamicStyles.input}
+              placeholder="Notification Title"
+              value={notificationData.title}
+              onChangeText={(text) => setNotificationData(prev => ({ ...prev, title: text }))}
+            />
+
+            <TextInput
+              style={[dynamicStyles.input, dynamicStyles.messageInput]}
+              placeholder="Notification Body"
+              value={notificationData.message}
+              onChangeText={(text) => setNotificationData(prev => ({ ...prev, message: text }))}
+              multiline
+              numberOfLines={4}
+            />
+
+            <TextInput
+              style={dynamicStyles.input}
+              placeholder="Optional image URL (or paste a storage URL)"
+              value={notificationImageUrl}
+              onChangeText={(text) => setNotificationImageUrl(text)}
+            />
+
+            <View style={{ marginBottom: 12 }}>
+              <TouchableOpacity
+                onPress={() => {
+                  const newSelectAll = !selectAll;
+                  setSelectAll(newSelectAll);
+                  if (newSelectAll) {
+                    // select all unique users that have tokens
+                    const uniqueUsers = Array.from(new Set(userTokens.map(t => t.userId))).filter(Boolean);
+                    setSelectedUserIds(uniqueUsers);
+                  } else {
+                    setSelectedUserIds([]);
+                  }
+                }}
+                style={[dynamicStyles.roleOption, { justifyContent: 'space-between' }]}
+              >
+                <Text style={dynamicStyles.roleOptionText}>Select All (broadcast)</Text>
+                <Ionicons name={selectAll ? "checkbox" : "square-outline"} size={22} color={colors.primary} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[dynamicStyles.modalSubtitle, { textAlign: 'left', marginBottom: 8 }]}>
+              Available recipients (select one or many)
+            </Text>
+
+            <ScrollView style={{ maxHeight: 240, marginBottom: 12 }}>
+              {Array.from(new Set(userTokens.map(t => t.userId))).filter(Boolean).map(uid => {
+                const profile = users.find(u => u.id === uid) as any;
+                const fullName = profile?.fullName || 'Unknown user';
+                const photo = profile?.photoURL || profile?.photoUrl || '';
+                const isSelected = selectedUserIds.includes(uid);
+
+                return (
+                  <TouchableOpacity
+                    key={uid}
+                    onPress={() => {
+                      if (selectedUserIds.includes(uid)) {
+                        setSelectedUserIds(selectedUserIds.filter(id => id !== uid));
+                        setSelectAll(false);
+                      } else {
+                        setSelectedUserIds([...selectedUserIds, uid]);
+                      }
+                    }}
+                    style={[dynamicStyles.userCard, { flexDirection: 'row', alignItems: 'center' }]}
+                  >
+                    <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: '#eee', marginRight: 12, overflow: 'hidden', justifyContent: 'center', alignItems: 'center' }}>
+                      {photo ? (
+                        <Image source={{ uri: photo }} style={{ width: 48, height: 48 }} />
+                      ) : (
+                        <Ionicons name="person-circle-outline" size={36} color={colors.secondaryText} />
+                      )}
+                    </View>
+
+                    <View style={dynamicStyles.userInfo}>
+                      <Text style={dynamicStyles.userName}>{fullName}</Text>
+                    </View>
+
+                    <Ionicons name={isSelected ? "checkbox" : "square-outline"} size={22} color={isSelected ? colors.primary : colors.secondaryText} />
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <View style={dynamicStyles.modalActions}>
+              <TouchableOpacity
+                onPress={() => {
+                  // reset local notification form
+                  setNotificationData({ title: '', message: '', recipientEmail: '' });
+                  setSelectedUserIds([]);
+                  setSelectAll(false);
+                  setNotificationImageUrl('');
+                }}
+                style={dynamicStyles.cancelButton}
+              >
+                <Text style={dynamicStyles.cancelButtonText}>Clear</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={handleSendNotification} style={dynamicStyles.sendButton}>
+                <Text style={dynamicStyles.sendButtonText}>Send</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
       </ScrollView>
