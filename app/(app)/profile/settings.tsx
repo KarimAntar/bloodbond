@@ -26,7 +26,8 @@ import * as Location from 'expo-location';
 import { saveDataExportRequest } from '../../../utils/dataExport';
 import { submitBugReport, getBugReportTemplate } from '../../../utils/bugReporting';
 import { getLegalDocument, formatLegalContent } from '../../../utils/legalContent';
-import { ensureAndRegisterPushToken, runNotificationDiagnostics } from '../../../firebase/pushNotifications';
+import { ensureAndRegisterPushToken, runNotificationDiagnostics, unregisterPushToken } from '../../../firebase/pushNotifications';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const SettingOption: React.FC<{
   icon: string;
@@ -153,6 +154,23 @@ export default function AppSettingsScreen() {
   const { theme, setTheme, colors } = useTheme();
   const router = useRouter();
 
+  // Device ID helper for push token deduplication and targeting
+  const DEVICE_ID_KEY = 'bloodbond_device_id';
+  const genDeviceId = () => `dev-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`;
+  const getOrCreateDeviceId = async () => {
+    try {
+      let id = await AsyncStorage.getItem(DEVICE_ID_KEY);
+      if (!id) {
+        id = genDeviceId();
+        await AsyncStorage.setItem(DEVICE_ID_KEY, id);
+      }
+      return id;
+    } catch (e) {
+      console.warn('getOrCreateDeviceId error', e);
+      return null;
+    }
+  };
+
   // When permission becomes granted (e.g., user enabled notifications from browser site settings),
   // attempt to register token automatically if the user is signed in and we don't yet have enabled state.
   useEffect(() => {
@@ -163,7 +181,8 @@ export default function AppSettingsScreen() {
         if (!mounted) return;
         if (notificationPermission === 'granted' && user?.uid && !notificationsEnabled) {
           console.log('Permission granted — attempting to register push token automatically');
-          const result = await ensureAndRegisterPushToken(user.uid, Platform.OS === 'web' ? 'web' : 'native');
+          const deviceId = await getOrCreateDeviceId();
+          const result = await ensureAndRegisterPushToken(user.uid, Platform.OS === 'web' ? 'web' : 'native', deviceId ?? undefined);
           if (!mounted) return;
           if (result?.success) {
             setNotificationsEnabled(true);
@@ -199,7 +218,8 @@ export default function AppSettingsScreen() {
       if (value) {
         // On web and native, use the centralized helper which requests permission,
         // obtains a token and registers it in Firestore.
-        const result = await ensureAndRegisterPushToken(user.uid, Platform.OS === 'web' ? 'web' : 'native');
+        const deviceId = await getOrCreateDeviceId();
+        const result = await ensureAndRegisterPushToken(user.uid, Platform.OS === 'web' ? 'web' : 'native', deviceId ?? undefined);
         if (result?.success) {
           setNotificationsEnabled(true);
           // Save preference to user profile
@@ -234,7 +254,21 @@ export default function AppSettingsScreen() {
           }
         }
       } else {
-        // Disable notifications preference; keep tokens for potential future re-enable
+        // Disable notifications: unregister token for this device when possible
+        try {
+          const deviceId = await getOrCreateDeviceId();
+          if (user?.uid && deviceId) {
+            await unregisterPushToken(user.uid, undefined, deviceId);
+            console.log('handleNotificationToggle: unregistered push token for deviceId', deviceId);
+          } else if (user?.uid) {
+            // Fallback: try to unregister without deviceId (will mark any matching token inactive if provided)
+            await unregisterPushToken(user.uid);
+            console.log('handleNotificationToggle: unregistered push tokens for user (no deviceId)');
+          }
+        } catch (e) {
+          console.warn('handleNotificationToggle: failed to unregister token', e);
+        }
+
         setNotificationsEnabled(false);
         // Save preference to user profile
         await updateDoc(doc(db, 'users', user.uid), {

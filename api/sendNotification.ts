@@ -52,7 +52,7 @@ export default async function handler(req: any, res: any) {
     const firestore = adminSdk.firestore();
     const messaging = adminSdk.messaging();
 
-    const { type, userId, title, body, data, topic } = req.body || {};
+    const { type, userId, title, body, data, topic, deviceId } = req.body || {};
 
     if (!type || !title || !body) {
       res.status(400).json({ error: 'Missing required fields (type, title, body)' });
@@ -195,7 +195,7 @@ export default async function handler(req: any, res: any) {
       // If we found failures, try to mark matching tokens in Firestore as inactive
       if (failures.length > 0) {
         try {
-          const failedTokens = Array.from(new Set(failures.map(f => f.token).filter(Boolean)));
+          const failedTokens = Array.from(new Set(failures.map((f: any) => f.token).filter(Boolean)));
           console.log('sendToTokens: marking', failedTokens.length, 'failed tokens inactive in Firestore');
 
           // For each failed token, find docs and mark inactive + record last error
@@ -260,14 +260,20 @@ export default async function handler(req: any, res: any) {
       }
 
       // Get tokens for the user (include platform & doc id for platform-specific handling)
-      const tokensSnap = await firestore
+      // Build query for user tokens. If deviceId is provided, target only that device.
+      let tokensQuery: any = firestore
         .collection('userTokens')
         .where('userId', '==', userId)
-        .where('active', '==', true)
-        .get();
+        .where('active', '==', true);
+
+      if (deviceId) {
+        tokensQuery = tokensQuery.where('deviceId', '==', deviceId);
+      }
+
+      const tokensSnap = await tokensQuery.get();
 
       const tokenObjs = tokensSnap.docs
-        .map(d => {
+        .map((d: any) => {
           const data = d.data() || {};
           return {
             token: data.token,
@@ -276,7 +282,7 @@ export default async function handler(req: any, res: any) {
             docId: d.id,
           };
         })
-        .filter(t => t.token);
+        .filter((t: any) => t.token);
 
       if (tokenObjs.length === 0) {
         res.status(200).json({ success: true, note: 'no-tokens-for-user', sent: 0 });
@@ -311,7 +317,7 @@ export default async function handler(req: any, res: any) {
         .get();
 
       const tokenObjs = tokensSnap.docs
-        .map(d => {
+        .map((d: any) => {
           const data = d.data() || {};
           return {
             token: data.token,
@@ -320,7 +326,7 @@ export default async function handler(req: any, res: any) {
             docId: d.id,
           };
         })
-        .filter(t => t.token);
+        .filter((t: any) => t.token);
 
       if (tokenObjs.length === 0) {
         res.status(200).json({ success: true, note: 'no-tokens-found', sent: 0 });

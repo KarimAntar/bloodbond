@@ -328,7 +328,7 @@ export const getPushToken = async () => {
   Use this on user gesture (e.g., Settings -> Enable notifications) so browsers
   prompt for permission in a clear UX flow.
 */
-export const ensureAndRegisterPushToken = async (userId: string, platform?: string) => {
+export const ensureAndRegisterPushToken = async (userId: string, platform?: string, deviceId?: string) => {
   // Determine platform if not provided
   if (!platform) {
     platform = isWeb ? 'web' : 'native';
@@ -403,7 +403,7 @@ export const ensureAndRegisterPushToken = async (userId: string, platform?: stri
         console.log('WORKAROUND: Using browser Notification API for direct push notifications');
 
         // Register a special "fallback" token that indicates we should use browser notifications
-        await registerPushToken(userId, 'browser-direct-notification', platform);
+        await registerPushToken(userId, 'browser-direct-notification', platform, deviceId);
         console.log('ensureAndRegisterPushToken: registered fallback token for browser notifications');
 
         return {
@@ -449,7 +449,7 @@ export const ensureAndRegisterPushToken = async (userId: string, platform?: stri
 
     console.log('ensureAndRegisterPushToken: registering token in Firestore...');
     // Register token in Firestore
-    await registerPushToken(userId, token, platform);
+    await registerPushToken(userId, token, platform, deviceId);
     console.log('ensureAndRegisterPushToken: token registered successfully!');
     return { success: true, token };
   } catch (error) {
@@ -861,6 +861,45 @@ export const registerPushToken = async (userId: string, token: string, platform 
     console.log('registerPushToken: created new token doc for user', userId);
   } catch (error) {
     console.error('Error registering push token:', error);
+  }
+};
+
+export const unregisterPushToken = async (userId: string, token?: string, deviceId?: string) => {
+  try {
+    if (!userId || (!token && !deviceId)) {
+      console.warn('unregisterPushToken: missing userId or (token|deviceId)');
+      return;
+    }
+
+    const userTokensRef = collection(db, 'userTokens');
+
+    // Build modular query: prefer deviceId if provided, otherwise token
+    let q = query(userTokensRef, where('userId', '==', userId));
+    if (deviceId) {
+      q = query(userTokensRef, where('userId', '==', userId), where('deviceId', '==', deviceId));
+    } else if (token) {
+      q = query(userTokensRef, where('userId', '==', userId), where('token', '==', token));
+    }
+
+    const snap = await getDocs(q);
+    if (snap.empty) {
+      console.log('unregisterPushToken: no matching token docs found');
+      return;
+    }
+
+    for (const d of snap.docs) {
+      try {
+        await updateDoc(doc(db, 'userTokens', d.id), {
+          active: false,
+          deactivatedAt: Timestamp.now(),
+        });
+        console.log('unregisterPushToken: deactivated token doc', d.id);
+      } catch (e) {
+        console.warn('unregisterPushToken: failed to deactivate token doc', d.id, e);
+      }
+    }
+  } catch (error) {
+    console.error('unregisterPushToken error:', error);
   }
 };
 
