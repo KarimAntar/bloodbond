@@ -20,6 +20,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Notifications from 'expo-notifications';
 import * as Location from 'expo-location';
+import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ensureAndRegisterPushToken, unregisterPushToken, runNotificationDiagnostics } from '../../../firebase/pushNotifications';
 import { doc, updateDoc, getDoc } from 'firebase/firestore';
 import { db } from '../../../firebase/firebaseConfig';
 import { SkeletonLoader, SkeletonList } from '../../../components/SkeletonLoader';
@@ -119,6 +122,23 @@ export default function SettingsTabScreen() {
   const router = useRouter();
   const lastRefreshRef = useRef<number | null>(null);
 
+  // Device ID helper (keeps one token per physical device)
+  const DEVICE_ID_KEY = 'bloodbond_device_id';
+  const genDeviceId = () => `dev-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`;
+  const getOrCreateDeviceId = async () => {
+    try {
+      let id = await AsyncStorage.getItem(DEVICE_ID_KEY);
+      if (!id) {
+        id = genDeviceId();
+        await AsyncStorage.setItem(DEVICE_ID_KEY, id);
+      }
+      return id;
+    } catch (e) {
+      console.warn('getOrCreateDeviceId error', e);
+      return null;
+    }
+  };
+
   useEffect(() => {
     if (typeof document !== 'undefined') {
       document.title = 'Settings - BloodBond';
@@ -175,9 +195,21 @@ export default function SettingsTabScreen() {
 
   const loadSettings = async () => {
     try {
-      // Load notification permission status
-      const { status: notificationStatus } = await Notifications.getPermissionsAsync();
-      setNotificationsEnabled(notificationStatus === 'granted');
+      // Web: rely on the browser Permissions API to avoid using expo-notifications
+      if (typeof document !== 'undefined' && Platform.OS === 'web') {
+        try {
+          const perm = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
+          setNotificationsEnabled(perm === 'granted');
+        } catch (e) {
+          console.warn('loadSettings: failed to read Notification.permission', e);
+          const { status: notificationStatus } = await Notifications.getPermissionsAsync();
+          setNotificationsEnabled(notificationStatus === 'granted');
+        }
+      } else {
+        // Native: use expo-notifications permissions
+        const { status: notificationStatus } = await Notifications.getPermissionsAsync();
+        setNotificationsEnabled(notificationStatus === 'granted');
+      }
 
       // Load location permission status
       const { status: locationStatus } = await Location.getForegroundPermissionsAsync();
@@ -189,29 +221,50 @@ export default function SettingsTabScreen() {
 
   const handleNotificationToggle = async (value: boolean) => {
     try {
+      if (!user?.uid) {
+        Alert.alert('Not signed in', 'Please sign in to manage notification settings.');
+        return;
+      }
+
       if (value) {
-        const { status } = await Notifications.requestPermissionsAsync();
-        if (status === 'granted') {
+        // Enable: use centralized helper which requests permission and registers token
+        const deviceId = await getOrCreateDeviceId();
+        const result = await ensureAndRegisterPushToken(user.uid, Platform.OS === 'web' ? 'web' : 'native', deviceId ?? undefined);
+        if (result?.success) {
           setNotificationsEnabled(true);
-          // Save preference to user profile
-          if (user?.uid) {
-            await updateDoc(doc(db, 'users', user.uid), {
-              notificationsEnabled: true
-            });
-          }
+          // Persist preference
+          await updateDoc(doc(db, 'users', user.uid), {
+            notificationsEnabled: true
+          });
           Alert.alert('Success', 'Push notifications enabled');
         } else {
-          Alert.alert('Permission Denied', 'Please enable notifications in your device settings');
           setNotificationsEnabled(false);
+          if (result?.reason === 'permission-denied') {
+            Alert.alert('Permission Denied', 'Please enable notifications in your browser or device settings.');
+          } else {
+            Alert.alert('Error', 'Failed to enable notifications. Check console for details.');
+          }
         }
       } else {
-        setNotificationsEnabled(false);
-        // Save preference to user profile
-        if (user?.uid) {
-          await updateDoc(doc(db, 'users', user.uid), {
-            notificationsEnabled: false
-          });
+        // Disable: unregister tokens for this device (or all user tokens as fallback)
+        try {
+          const deviceId = await getOrCreateDeviceId();
+          if (deviceId) {
+            await unregisterPushToken(user.uid, undefined, deviceId);
+            console.log('handleNotificationToggle: unregistered push token for deviceId', deviceId);
+          } else {
+            await unregisterPushToken(user.uid);
+            console.log('handleNotificationToggle: unregistered push tokens for user (no deviceId)');
+          }
+        } catch (e) {
+          console.warn('handleNotificationToggle: failed to unregister token', e);
         }
+
+        setNotificationsEnabled(false);
+        // Persist preference
+        await updateDoc(doc(db, 'users', user.uid), {
+          notificationsEnabled: false
+        });
         Alert.alert('Success', 'Push notifications disabled');
       }
     } catch (error) {

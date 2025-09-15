@@ -1213,8 +1213,38 @@ export const initializeNotifications = async () => {
         // Set up foreground message handler as per Firebase documentation
         onMessage(messaging, (payload) => {
           console.log('FCM message received in foreground:', payload);
-          // Do not create a system/browser Notification here to avoid duplicates with the service worker.
-          // Foreground UX should show an in-app banner/toast instead (implement separately).
+          try {
+            // Prefer notification payload title/body, fall back to data fields used by server (_title/_body)
+            const title = payload.notification?.title || (payload.data && (payload.data._title || payload.data.title)) || 'BloodBond';
+            const body = payload.notification?.body || (payload.data && (payload.data._body || payload.data.body)) || '';
+    
+            // Only show a system/browser Notification if the Notification API is available and permission is granted.
+            if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+              try {
+                const options: any = {
+                  body,
+                  icon: '/favicon.png',
+                  data: payload.data || {},
+                  tag: `bloodbond-${Date.now()}`,
+                };
+    
+                const notif = new Notification(title, options);
+                // Auto-close after a short interval to avoid lingering notifications
+                setTimeout(() => {
+                  try { notif.close(); } catch (e) {}
+                }, 5000);
+    
+                console.log('initializeNotifications: foreground browser Notification shown');
+              } catch (displayErr) {
+                console.warn('initializeNotifications: failed to display foreground notification', displayErr);
+              }
+            } else {
+              // Fallback: no system notification permission — the app can show an in-app banner/toast instead.
+              console.log('initializeNotifications: Notification API unavailable or permission not granted; consider showing in-app UI');
+            }
+          } catch (e) {
+            console.error('initializeNotifications: onMessage handler error', e);
+          }
         });
         console.log('initializeNotifications: onMessage handler set up successfully');
       } catch (e) {

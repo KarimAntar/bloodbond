@@ -28,6 +28,11 @@ interface UserProfile {
   phone?: string;
   role: string;
   profilePicture?: string;
+
+  // Optional notification/location preferences persisted on the user profile.
+  // These are optional to avoid breaking existing profiles that don't include them.
+  notificationsEnabled?: boolean;
+  locationEnabled?: boolean;
 }
 
 type AuthContextType = {
