@@ -1023,69 +1023,51 @@ export const sendPushNotification = async (
     await addDoc(collection(db, 'notifications'), notificationDoc);
     console.log('sendPushNotification: Notification stored in Firestore');
 
-    // For testing: try to send directly to user's tokens
+    // Preferred: request serverless API to deliver to user's tokens (uses firebase-admin)
     try {
-      const userTokensRef = collection(db, 'userTokens');
-      // First check all tokens for the user
-      const qAll = query(userTokensRef, where('userId', '==', userId), orderBy('createdAt', 'desc'));
-      const snapshotAll = await getDocs(qAll);
-      console.log('sendPushNotification: Found', snapshotAll.size, 'total user tokens');
-      snapshotAll.forEach((doc) => {
-        const data = doc.data();
-        console.log('sendPushNotification: Token:', {
-          platform: data.platform,
-          tokenPreview: data.token.substring(0, 20) + '...',
-          active: data.active
-        });
+      await fetch('/api/sendNotification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'user',
+          userId,
+          title,
+          body,
+          data: data || {},
+        }),
       });
 
-      // Check for fallback browser notification token
+      // Still handle browser-direct-notification fallback locally if present
+      const userTokensRef = collection(db, 'userTokens');
+      const qAll = query(userTokensRef, where('userId', '==', userId), orderBy('createdAt', 'desc'));
+      const snapshotAll = await getDocs(qAll);
       const fallbackTokens = snapshotAll.docs.filter(doc => doc.data().token === 'browser-direct-notification');
+
       if (fallbackTokens.length > 0) {
         console.log('sendPushNotification: Found fallback browser notification token, showing direct browser notification');
-
-        // Show browser notification directly using Notification API
         if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
           try {
             const notification = new Notification(title, {
               body: body,
               icon: '/favicon.png',
               data: data || {},
-              tag: `bloodbond-${Date.now()}`, // Unique tag to prevent duplicates
+              tag: `bloodbond-${Date.now()}`,
             });
-
-            // Auto-close after 5 seconds
             setTimeout(() => {
               notification.close();
             }, 5000);
-
-            console.log('sendPushNotification: Browser notification shown successfully');
+            console.log('sendPushNotification: Browser fallback notification shown');
           } catch (browserNotifError) {
-            console.warn('sendPushNotification: Failed to show browser notification:', browserNotifError);
+            console.warn('sendPushNotification: Failed to show browser fallback notification:', browserNotifError);
           }
         } else {
-          console.warn('sendPushNotification: Browser notification permission not granted');
+          console.warn('sendPushNotification: Browser notification permission not granted for fallback');
         }
       }
 
-      // Then check web tokens specifically for FCM
-      const q = query(userTokensRef, where('userId', '==', userId), where('platform', '==', 'web'), orderBy('createdAt', 'desc'));
-      const snapshot = await getDocs(q);
-
-      console.log('sendPushNotification: Found', snapshot.size, 'web FCM tokens');
-
-      if (!snapshot.empty) {
-        const token = snapshot.docs[0].data().token;
-        console.log('sendPushNotification: Found FCM token, attempting direct FCM send');
-        console.log('sendPushNotification: Token preview:', token.substring(0, 20) + '...');
-
-        await sendFCMMessage(token, title, body, data);
-        console.log('sendPushNotification: Direct FCM send completed');
-      } else {
-        console.log('sendPushNotification: No web FCM tokens found for direct send');
-      }
+      console.log('sendPushNotification: Server send requested');
     } catch (directSendError) {
-      console.warn('sendPushNotification: Direct send failed, notification stored for cloud function processing:', directSendError);
+      console.warn('sendPushNotification: Server send request failed; notification stored for server processing:', directSendError);
     }
 
     console.log('sendPushNotification: Push notification send completed successfully');

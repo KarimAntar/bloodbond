@@ -29,7 +29,8 @@ import {
   where,
   updateDoc,
 } from 'firebase/firestore';
-import { sendBroadcastNotification, sendPushNotification } from '../../../firebase/pushNotifications';
+ // Notifications are sent via serverless API: /api/sendNotification
+ // (uses FCM service account loaded from FCM_SERVICE_ACCOUNT env var)
 
 interface User {
   id: string;
@@ -221,11 +222,17 @@ export default function AdminDashboard() {
         }
 
         const targetUser = userSnapshot.docs[0];
-        await sendPushNotification(
-          targetUser.id,
-          notificationData.title,
-          notificationData.message
-        );
+        // Call serverless API to send to user tokens via firebase-admin
+        await fetch('/api/sendNotification', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'user',
+            userId: targetUser.id,
+            title: notificationData.title,
+            body: notificationData.message,
+          }),
+        });
 
         // Also store in notifications collection for the user
         await addDoc(collection(db, 'notifications'), {
@@ -241,10 +248,16 @@ export default function AdminDashboard() {
         Alert.alert('Success', 'Push notification sent to user successfully!');
       } else {
         // Send to all users (broadcast)
-        await sendBroadcastNotification(
-          notificationData.title,
-          notificationData.message
-        );
+        // Send broadcast via serverless API (will deliver to all active tokens)
+        await fetch('/api/sendNotification', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'broadcast',
+            title: notificationData.title,
+            body: notificationData.message,
+          }),
+        });
 
         // Store broadcast notification for all users
         const usersSnapshot = await getDocs(collection(db, 'users'));
