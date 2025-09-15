@@ -1,0 +1,23 @@
+rules_version = '2';
+// Firebase Storage rules to allow only authenticated admin users to write to /notifications/*
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Allow read access to notification assets (adjust if you want to restrict reads)
+    match /notifications/{allPaths=**} {
+      // Allow writes only for authenticated users with an admin auth claim.
+      // Storage rules can't reliably read Firestore user docs, so require an auth custom claim.
+      // To grant admin access for a user, set a custom claim on the user token:
+      //   admin.auth().setCustomUserClaims(uid, { admin: true })
+      // or set request.auth.token.role == 'admin' if you populate that claim.
+      allow write: if request.auth != null && (request.auth.token.admin == true || request.auth.token.role == 'admin');
+      // Public reads for notification images (change to stricter rule if needed)
+      allow read: if true;
+    }
+
+    // Deny write to all other paths from clients by default
+    match /{allPaths=**} {
+      allow read: if true;
+      allow write: if false;
+    }
+  }
+}
