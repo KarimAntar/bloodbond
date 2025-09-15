@@ -1421,52 +1421,10 @@ export const initializeNotifications = async () => {
         onMessage(messaging, (payload) => {
           console.log('FCM message received in foreground:', payload);
           try {
-            // Check if this message has webpush configuration (indicates it was sent for web platforms)
-            const hasWebpushConfig = (payload as any).webpush && (payload as any).webpush.notification;
-            const hasNotificationPayload = payload.notification && (payload.notification.title || payload.notification.body);
-            const hasDataPayload = payload.data && (payload.data._title || payload.data._body || payload.data.title || payload.data.body);
-
-            // For web platforms, FCM messages with webpush configuration are handled by the service worker
-            // We should NOT show a duplicate browser notification for the same message
-            // Only show foreground notifications for native messages or pure data-only messages
-            if (hasWebpushConfig) {
-              console.log('initializeNotifications: webpush config present, letting service worker handle display');
-              return; // Service worker will handle this
-            }
-
-            // For native platforms or data-only messages that need client-side display
-            const title = payload.notification?.title || (payload.data && (payload.data._title || payload.data.title)) || 'BloodBond';
-            const body = payload.notification?.body || (payload.data && (payload.data._body || payload.data.body)) || '';
-
-            // Only show a system/browser Notification if the Notification API is available and permission is granted.
-            if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-              try {
-                const options: any = {
-                  body,
-                  icon: '/favicon.png',
-                  data: payload.data || {},
-                  tag: `bloodbond-${Date.now()}`,
-                };
-
-                // Add image if present in data
-                if (payload.data && payload.data.image) {
-                  options.image = payload.data.image;
-                }
-
-                const notif = new Notification(title, options);
-                // Auto-close after a short interval to avoid lingering notifications
-                setTimeout(() => {
-                  try { notif.close(); } catch (e) {}
-                }, 5000);
-
-                console.log('initializeNotifications: foreground browser Notification shown');
-              } catch (displayErr) {
-                console.warn('initializeNotifications: failed to display foreground notification', displayErr);
-              }
-            } else {
-              // Fallback: no system notification permission — the app can show an in-app banner/toast instead.
-              console.log('initializeNotifications: Notification API unavailable or permission not granted; consider showing in-app UI');
-            }
+            // For web platforms, all FCM messages should be handled by the service worker to avoid duplicates
+            // The foreground handler should not show notifications for web messages
+            console.log('initializeNotifications: foreground message received, but letting service worker handle all web notifications');
+            return; // Always let service worker handle notifications for web platform
           } catch (e) {
             console.error('initializeNotifications: onMessage handler error', e);
           }

@@ -143,9 +143,15 @@ export default async function handler(req: any, res: any) {
 
             webpushConfig.notification = webpushNotification;
 
+            // Ensure image is also in data so foreground handler can access it
+            const dataWithImage: any = { ...baseData, _title: title, _body: body };
+            if (imageUrl) {
+              dataWithImage.image = imageUrl;
+            }
+
             return {
               token,
-              data: { ...baseData, _title: title, _body: body }, // include title/body in data so web client can display if desired
+              data: dataWithImage, // include title/body and image in data so web client can display if desired
               webpush: webpushConfig,
               // Keep android/apns hints to help delivery but do NOT include notification payload
               android: { priority: 'high' },
