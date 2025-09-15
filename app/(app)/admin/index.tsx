@@ -191,7 +191,7 @@ export default function AdminDashboard() {
           Alert.alert('Image uploaded', 'Image uploaded and attached to notification.');
         } catch (uploadErr) {
           console.error('Upload error', uploadErr);
-          Alert.alert('Upload failed', 'Failed to upload image to storage.');
+          Alert.alert('Upload failed', String(uploadErr?.message || uploadErr));
         }
       }
     } catch (err) {
@@ -280,18 +280,12 @@ export default function AdminDashboard() {
       const dataPayload: any = {};
       if (notificationImageUrl) dataPayload.image = notificationImageUrl;
 
-      // Prefer explicit SEND_ORIGIN. When running on localhost the dev web server
-      // may not host serverless /api routes, so prefer SEND_ORIGIN or production.
-      let apiOrigin = 'https://www.bloodbond.app';
-      try {
-        if (typeof window !== 'undefined' && window.location && window.location.hostname && !window.location.hostname.includes('localhost')) {
-          apiOrigin = window.location.origin;
-        } else if (process.env.SEND_ORIGIN) {
-          apiOrigin = process.env.SEND_ORIGIN;
-        }
-      } catch (e) {
-        // Leave apiOrigin as fallback
-      }
+      // Prefer explicit SEND_ORIGIN env var (EXPO_PUBLIC_SEND_ORIGIN supported).
+      // Never rely on window.location.origin to avoid using a local dev origin (localhost).
+      // This ensures admin always targets the configured production/send origin.
+      const apiOrigin = (typeof process !== 'undefined' && (process.env.SEND_ORIGIN || (process.env as any).EXPO_PUBLIC_SEND_ORIGIN))
+        ? (process.env.SEND_ORIGIN || (process.env as any).EXPO_PUBLIC_SEND_ORIGIN)
+        : 'https://www.bloodbond.app';
 
       // If "selectAll" is true OR no selected users (and not explicit selection), treat as broadcast
       if (selectAll || (selectedUserIds.length === 0 && !selectAll)) {
@@ -306,7 +300,7 @@ export default function AdminDashboard() {
           }),
         });
 
-        const json = await resp.json().catch(() => ({}));
+        const json = await resp.json().catch(() => ({} as any));
         Alert.alert('Success', `Broadcast request sent. ${json.sent ? json.sent + ' delivered (approx)' : ''}`);
       } else {
         // send per selected user (server will resolve tokens)
@@ -325,7 +319,7 @@ export default function AdminDashboard() {
         );
 
         const results = await Promise.all(promises);
-        const parsed = await Promise.all(results.map(r => r.json().catch(() => ({}))));
+        const parsed = await Promise.all(results.map(r => r.json().catch(() => ({} as any))));
         const totalSent = parsed.reduce((acc: any, p: any) => acc + (p.sent || 0), 0);
         Alert.alert('Success', `Notification send requests complete. ${totalSent ? totalSent + ' delivered (approx)' : ''}`);
       }

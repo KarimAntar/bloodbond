@@ -1126,9 +1126,12 @@ export const sendPushNotification = async (
 
     // Preferred: request serverless API to deliver to user's tokens (uses firebase-admin)
       try {
-      const apiOrigin = (typeof window !== 'undefined' && window.location && window.location.origin)
-        ? window.location.origin
-        : 'https://www.bloodbond.app';
+      // Prefer explicit SEND_ORIGIN env var (EXPO_PUBLIC_SEND_ORIGIN supported).
+      // Never rely on window.location.origin to avoid using a local dev origin (localhost).
+      const envSendOrigin = (typeof process !== 'undefined' && (process.env.SEND_ORIGIN || (process.env as any).EXPO_PUBLIC_SEND_ORIGIN))
+        ? (process.env.SEND_ORIGIN || (process.env as any).EXPO_PUBLIC_SEND_ORIGIN)
+        : null;
+      const apiOrigin = envSendOrigin || 'https://www.bloodbond.app';
       await fetch(`${apiOrigin}/api/sendNotification`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
