@@ -82,16 +82,43 @@ export default async function handler(req: any, res: any) {
       let dedupedTokenObjs = tokenObjs;
       try {
         const map = new Map<string, { token: string; platform?: string; docId?: string; deviceId?: string }>();
+
+        // Platform preference order when choosing which token to keep for the same device:
+        // prefer native platforms that can show images (android/ios/expo/fcm) over web.
+        const platformPriority = (p?: string) => {
+          if (!p) return 0;
+          const normalized = String(p).toLowerCase();
+          if (['android', 'ios', 'expo', 'fcm', 'apns'].includes(normalized)) return 5;
+          if (['chrome', 'edge', 'firefox', 'safari', 'web', 'browser'].includes(normalized)) return 1;
+          return 2;
+        };
+
         for (const t of tokenObjs) {
           const key = t.deviceId || t.token;
           if (!map.has(key)) {
             map.set(key, t);
           } else {
-            // Keep the first seen token for this deviceId/key and log the duplication for diagnostics
-            const existing = map.get(key);
-            console.log('sendToTokens: dedupe skipped duplicate token for key=', key, 'existing=', existing?.token?.slice(0,8), 'skipped=', t.token?.slice(0,8));
+            // If multiple tokens map to the same device key, prefer the token with higher platform priority.
+            // This reduces duplicate notifications on a single physical device (e.g., web + native).
+            try {
+              const existing = map.get(key)!;
+              const existingPriority = platformPriority(existing.platform);
+              const newPriority = platformPriority(t.platform);
+
+              // If the new token has higher priority, replace the existing one.
+              if (newPriority > existingPriority) {
+                console.log('sendToTokens: dedupe replaced token for key=', key, 'existing=', existing.token?.slice(0,8), 'with=', t.token?.slice(0,8), 'platforms=', existing.platform, '->', t.platform);
+                map.set(key, t);
+              } else {
+                console.log('sendToTokens: dedupe kept existing token for key=', key, 'existing=', existing.token?.slice(0,8), 'skipped=', t.token?.slice(0,8), 'platform=', t.platform);
+              }
+            } catch (innerErr) {
+              // Fallback: keep first token if the prioritization logic fails
+              console.log('sendToTokens: dedupe fallback keep-first for key=', key, innerErr);
+            }
           }
         }
+
         dedupedTokenObjs = Array.from(map.values());
       } catch (dedupeErr) {
         console.warn('sendToTokens: dedupe step failed, continuing with original token list', dedupeErr);
