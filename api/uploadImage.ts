@@ -1,9 +1,9 @@
 import admin from 'firebase-admin';
 
-const serviceAccountJson = process.env.FCM_SERVICE_ACCOUNT || '';
+const serviceAccountJson = process.env.EXPO_PUBLIC_FCM_SERVICE_ACCOUNT_KEY || '';
 
 if (!serviceAccountJson) {
-  console.error('FCM service account env var (FCM_SERVICE_ACCOUNT) is missing');
+  console.error('FCM service account env var (EXPO_PUBLIC_FCM_SERVICE_ACCOUNT_KEY) is missing');
 }
 
 // Lazily initialize admin SDK
@@ -11,14 +11,14 @@ function initAdmin() {
   if (admin.apps.length) return admin;
 
   if (!serviceAccountJson) {
-    throw new Error('Missing FCM_SERVICE_ACCOUNT environment variable. Cannot initialize firebase-admin.');
+    throw new Error('Missing EXPO_PUBLIC_FCM_SERVICE_ACCOUNT_KEY environment variable. Cannot initialize firebase-admin.');
   }
 
   let serviceAccount: any;
   try {
     serviceAccount = JSON.parse(serviceAccountJson);
   } catch (e) {
-    console.error('Failed to parse FCM_SERVICE_ACCOUNT JSON', e);
+    console.error('Failed to parse EXPO_PUBLIC_FCM_SERVICE_ACCOUNT_KEY JSON', e);
     throw e;
   }
 
@@ -38,7 +38,7 @@ export default async function handler(req: any, res: any) {
 
   try {
     const adminSdk = initAdmin();
-    const bucket = adminSdk.storage().bucket();
+    const bucket = adminSdk.storage().bucket('bloodbond-892f7.firebasestorage.app');
 
     // Expect the image as base64 or multipart form data
     const { imageData, filename } = req.body;
@@ -78,6 +78,13 @@ export default async function handler(req: any, res: any) {
     res.status(200).json({ success: true, downloadUrl });
   } catch (error) {
     console.error('Upload error:', error);
-    res.status(500).json({ error: 'Failed to upload image' });
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorDetails = error instanceof Error ? {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    } : { message: 'Unknown error' };
+    console.error('Error details:', errorDetails);
+    res.status(500).json({ error: 'Failed to upload image', details: errorMessage });
   }
 }
