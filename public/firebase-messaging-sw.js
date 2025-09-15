@@ -20,6 +20,16 @@ firebase.initializeApp(firebaseConfig);
 
 const messaging = firebase.messaging();
 
+self.addEventListener('install', function(event) {
+  // Activate new service worker immediately
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', function(event) {
+  // Take control of uncontrolled clients as soon as the SW activates
+  event.waitUntil(clients.claim());
+});
+
 // Handle background messages
 messaging.onBackgroundMessage(function(payload) {
   console.log('[firebase-messaging-sw.js] Received background message ', payload);

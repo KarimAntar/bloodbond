@@ -2,8 +2,8 @@ const https = require('https');
 
 const data = JSON.stringify({
   type: 'broadcast',
-  title: 'Broadcast Test',
-  body: 'Hello everyone'
+  title: 'Bloodbond',
+  body: 'Hello, I am just testing'
 });
 
 const options = {
