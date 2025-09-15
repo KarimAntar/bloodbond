@@ -23,28 +23,27 @@ import * as ImagePicker from 'expo-image-picker';
 import {
   collection,
   getDocs,
-  getDoc,
   doc,
   deleteDoc,
   query,
   orderBy,
   addDoc,
   serverTimestamp,
-  where,
   updateDoc,
 } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
- // Notifications are sent via serverless API: /api/sendNotification
- // (uses FCM service account loaded from FCM_SERVICE_ACCOUNT env var)
+// Notifications are sent via serverless API: /api/sendNotification
+// (uses FCM service account loaded from FCM_SERVICE_ACCOUNT env var)
 
 interface User {
   id: string;
   fullName: string;
   email: string;
-  bloodType: string;
-  city: string;
-  role: string;
-  createdAt: any;
+  bloodType?: string;
+  city?: string;
+  role?: string;
+  photoURL?: string;
+  createdAt?: any;
 }
 
 interface BloodRequest {
@@ -57,7 +56,7 @@ interface BloodRequest {
   contactNumber: string;
   notes?: string;
   urgent?: boolean;
-  createdAt: any;
+  createdAt?: any;
 }
 
 export default function AdminDashboard() {
@@ -65,13 +64,15 @@ export default function AdminDashboard() {
   const { currentTheme } = useTheme();
   const colors = Colors[currentTheme];
   const router = useRouter();
+
   const [activeTab, setActiveTab] = useState<'users' | 'requests' | 'notifications'>('users');
   const [users, setUsers] = useState<User[]>([]);
   const [requests, setRequests] = useState<BloodRequest[]>([]);
-  const [userTokens, setUserTokens] = useState<any[]>([]); // { id, userId, token, platform }
+  const [userTokens, setUserTokens] = useState<any[]>([]); // token docs
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [selectAll, setSelectAll] = useState(false);
   const [notificationImageUrl, setNotificationImageUrl] = useState<string>('');
+  const [localImageUri, setLocalImageUri] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [notificationModal, setNotificationModal] = useState(false);
   const [notificationData, setNotificationData] = useState({
@@ -87,70 +88,49 @@ export default function AdminDashboard() {
   const [requestToDelete, setRequestToDelete] = useState<BloodRequest | null>(null);
 
   useEffect(() => {
-    // Wait until auth initialization completes to avoid redirect loops
     if (initializing) return;
-
-    // If profile isn't loaded yet, wait (avoid redirect while profile fetch is in-progress)
     if (!userProfile) return;
-
-    // If there's no authenticated user or profile role is not admin, redirect away
     if (!user || userProfile.role?.trim()?.toLowerCase() !== 'admin') {
       router.replace('/(app)/(tabs)');
       return;
     }
-
     loadData();
   }, [initializing, user, userProfile]);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      // Load users
       const usersSnapshot = await getDocs(collection(db, 'users'));
-      const usersData = usersSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as User[];
+      const usersData = usersSnapshot.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as User[];
       setUsers(usersData);
 
-      // Load requests
       const requestsQuery = query(collection(db, 'requests'), orderBy('createdAt', 'desc'));
       const requestsSnapshot = await getDocs(requestsQuery);
-      const requestsData = requestsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as BloodRequest[];
+      const requestsData = requestsSnapshot.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as BloodRequest[];
       setRequests(requestsData);
 
-      // Load user tokens for push targeting (userTokens collection)
-      // Each token doc expected to contain: userId, token, platform, createdAt, optionally deviceId
+      // Load tokens
       try {
         const tokensSnapshot = await getDocs(collection(db, 'userTokens'));
-        const tokensData = tokensSnapshot.docs.map(d => ({
-          id: d.id,
-          ...(d.data() as any),
-        }));
+        const tokensData = tokensSnapshot.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
         setUserTokens(tokensData);
       } catch (tokenErr) {
         console.warn('Failed to load userTokens collection', tokenErr);
         setUserTokens([]);
       }
-    } catch (error) {
-      console.error('Error loading data:', error);
+    } catch (e) {
+      console.error('Error loading data:', e);
       Alert.alert('Error', 'Failed to load data');
     } finally {
       setLoading(false);
     }
   };
 
-  // Refresh userTokens independently so the notifications tab always shows the latest recipients
+  // refresh tokens when opening notifications tab so recipient list is fresh
   const loadUserTokens = async () => {
     try {
       const tokensSnapshot = await getDocs(collection(db, 'userTokens'));
-      const tokensData = tokensSnapshot.docs.map(d => ({
-        id: d.id,
-        ...(d.data() as any),
-      }));
+      const tokensData = tokensSnapshot.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
       setUserTokens(tokensData);
     } catch (err) {
       console.warn('Failed to load userTokens', err);
@@ -159,16 +139,12 @@ export default function AdminDashboard() {
   };
 
   useEffect(() => {
-    // When opening the Push Notifications tab refresh tokens and users so recipient list is up-to-date
     if (activeTab === 'notifications') {
       loadUserTokens();
       (async () => {
         try {
           const usersSnapshot = await getDocs(collection(db, 'users'));
-          const usersData = usersSnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-          })) as User[];
+          const usersData = usersSnapshot.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as User[];
           setUsers(usersData);
         } catch (e) {
           console.warn('Failed to refresh users', e);
@@ -176,9 +152,6 @@ export default function AdminDashboard() {
       })();
     }
   }, [activeTab]);
-
-  // Image picker + upload flow for notification images (device upload)
-  const [localImageUri, setLocalImageUri] = useState<string>('');
 
   useEffect(() => {
     (async () => {
@@ -207,7 +180,6 @@ export default function AdminDashboard() {
         const uri = result.assets[0].uri;
         setLocalImageUri(uri);
 
-        // upload to Firebase Storage
         try {
           const response = await fetch(uri);
           const blob = await response.blob();
@@ -228,23 +200,21 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleDeleteUser = (user: User) => {
-    setUserToDelete(user);
+  const handleDeleteUser = (u: User) => {
+    setUserToDelete(u);
     setDeleteUserModalVisible(true);
   };
 
   const confirmDeleteUser = async () => {
     if (!userToDelete) return;
-
     setDeleteUserModalVisible(false);
-
     try {
       await deleteDoc(doc(db, 'users', userToDelete.id));
-      setUsers(users.filter(u => u.id !== userToDelete.id));
+      setUsers(prev => prev.filter(x => x.id !== userToDelete.id));
       Alert.alert('Success', 'User deleted successfully');
       setUserToDelete(null);
-    } catch (error) {
-      console.error('Error deleting user:', error);
+    } catch (e) {
+      console.error('Error deleting user:', e);
       Alert.alert('Error', 'Failed to delete user');
       setUserToDelete(null);
     }
@@ -257,48 +227,38 @@ export default function AdminDashboard() {
 
   const handleChangeRole = async (newRole: string) => {
     if (!selectedUser) return;
-
     try {
-      await updateDoc(doc(db, 'users', selectedUser.id), {
-        role: newRole,
-      });
-
-      // Update local state
-      setUsers(users.map(u =>
-        u.id === selectedUser.id ? { ...u, role: newRole } : u
-      ));
-
+      await updateDoc(doc(db, 'users', selectedUser.id), { role: newRole });
+      setUsers(prev => prev.map(u => u.id === selectedUser.id ? { ...u, role: newRole } : u));
       Alert.alert('Success', `${selectedUser.fullName}'s role changed to ${newRole}`);
       setRoleModal(false);
       setSelectedUser(null);
-    } catch (error) {
-      console.error('Error changing role:', error);
-      Alert.alert('Error', 'Failed to change user role');
+    } catch (e) {
+      console.error('Error changing role:', e);
+      Alert.alert('Error', 'Failed to change role');
     }
   };
 
-  const openRoleModal = (user: User) => {
-    setSelectedUser(user);
+  const openRoleModal = (u: User) => {
+    setSelectedUser(u);
     setRoleModal(true);
   };
 
-  const handleDeleteRequest = (request: BloodRequest) => {
-    setRequestToDelete(request);
+  const handleDeleteRequest = (r: BloodRequest) => {
+    setRequestToDelete(r);
     setDeleteRequestModalVisible(true);
   };
 
   const confirmDeleteRequest = async () => {
     if (!requestToDelete) return;
-
     setDeleteRequestModalVisible(false);
-
     try {
       await deleteDoc(doc(db, 'requests', requestToDelete.id));
-      setRequests(requests.filter(r => r.id !== requestToDelete.id));
+      setRequests(prev => prev.filter(x => x.id !== requestToDelete.id));
       Alert.alert('Success', 'Request deleted successfully');
       setRequestToDelete(null);
-    } catch (error) {
-      console.error('Error deleting request:', error);
+    } catch (e) {
+      console.error('Error deleting request:', e);
       Alert.alert('Error', 'Failed to delete request');
       setRequestToDelete(null);
     }
@@ -309,26 +269,33 @@ export default function AdminDashboard() {
     setRequestToDelete(null);
   };
 
+  // send notification: client will call the server API; avoid writing notification docs here
   const handleSendNotification = async () => {
     if (!notificationData.title.trim() || !notificationData.message.trim()) {
-      Alert.alert('Error', 'Please fill in all fields');
+      Alert.alert('Error', 'Please fill in Title and Body');
       return;
     }
 
     try {
-      // Prepare optional image data
       const dataPayload: any = {};
-      if (notificationImageUrl) {
-        dataPayload.image = notificationImageUrl;
+      if (notificationImageUrl) dataPayload.image = notificationImageUrl;
+
+      // Prefer explicit SEND_ORIGIN. When running on localhost the dev web server
+      // may not host serverless /api routes, so prefer SEND_ORIGIN or production.
+      let apiOrigin = 'https://www.bloodbond.app';
+      try {
+        if (typeof window !== 'undefined' && window.location && window.location.hostname && !window.location.hostname.includes('localhost')) {
+          apiOrigin = window.location.origin;
+        } else if (process.env.SEND_ORIGIN) {
+          apiOrigin = process.env.SEND_ORIGIN;
+        }
+      } catch (e) {
+        // Leave apiOrigin as fallback
       }
 
-      const apiOrigin = (typeof window !== 'undefined' && window.location && window.location.origin)
-        ? window.location.origin
-        : 'https://www.bloodbond.app';
-
+      // If "selectAll" is true OR no selected users (and not explicit selection), treat as broadcast
       if (selectAll || (selectedUserIds.length === 0 && !selectAll)) {
-        // Broadcast to all users
-        await fetch(`${apiOrigin}/api/sendNotification`, {
+        const resp = await fetch(`${apiOrigin}/api/sendNotification`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -339,26 +306,11 @@ export default function AdminDashboard() {
           }),
         });
 
-        // Store broadcast notification for all users
-        const usersSnapshot = await getDocs(collection(db, 'users'));
-        const notificationPromises = usersSnapshot.docs.map(userDoc =>
-          addDoc(collection(db, 'notifications'), {
-            userId: userDoc.id,
-            type: 'admin_broadcast',
-            title: notificationData.title,
-            message: notificationData.message,
-            image: notificationImageUrl || null,
-            timestamp: serverTimestamp(),
-            read: false,
-            sentBy: user?.uid,
-          })
-        );
-
-        await Promise.all(notificationPromises);
-        Alert.alert('Success', `Push notification sent to ${usersSnapshot.docs.length} users successfully!`);
+        const json = await resp.json().catch(() => ({}));
+        Alert.alert('Success', `Broadcast request sent. ${json.sent ? json.sent + ' delivered (approx)' : ''}`);
       } else {
-        // Send to selected users
-        const sendPromises = selectedUserIds.map(uid =>
+        // send per selected user (server will resolve tokens)
+        const promises = selectedUserIds.map(uid =>
           fetch(`${apiOrigin}/api/sendNotification`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -372,331 +324,60 @@ export default function AdminDashboard() {
           })
         );
 
-        await Promise.all(sendPromises);
-
-        // Store notification docs per selected user
-        const savePromises = selectedUserIds.map(uid =>
-          addDoc(collection(db, 'notifications'), {
-            userId: uid,
-            type: 'admin_push',
-            title: notificationData.title,
-            message: notificationData.message,
-            image: notificationImageUrl || null,
-            timestamp: serverTimestamp(),
-            read: false,
-            sentBy: user?.uid,
-          })
-        );
-
-        await Promise.all(savePromises);
-
-        Alert.alert('Success', `Push notification sent to ${selectedUserIds.length} users successfully!`);
+        const results = await Promise.all(promises);
+        const parsed = await Promise.all(results.map(r => r.json().catch(() => ({}))));
+        const totalSent = parsed.reduce((acc: any, p: any) => acc + (p.sent || 0), 0);
+        Alert.alert('Success', `Notification send requests complete. ${totalSent ? totalSent + ' delivered (approx)' : ''}`);
       }
 
-      // Reset modal state
+      // Reset local UI state (do not create duplicate in-app notifications from client)
       setNotificationModal(false);
       setNotificationData({ title: '', message: '', recipientEmail: '' });
       setSelectedUserIds([]);
       setSelectAll(false);
       setNotificationImageUrl('');
-    } catch (error) {
-      console.error('Error sending notification:', error);
+      setLocalImageUri('');
+    } catch (e) {
+      console.error('Error sending notification:', e);
       Alert.alert('Error', 'Failed to send notification');
     }
   };
 
-  // Create dynamic styles based on theme
+  // UI helpers
+  const activeTokenUserIds = Array.from(new Set(userTokens.filter((t: any) => t.active !== false).map((t: any) => t.userId))).filter(Boolean);
+
+  // dynamic styles
   const dynamicStyles = StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: colors.screenBackground,
-    },
-    loadingContainer: {
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
-      backgroundColor: colors.screenBackground,
-    },
-    loadingText: {
-      marginTop: 16,
-      fontSize: 16,
-      color: colors.secondaryText,
-    },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 20,
-      paddingVertical: 16,
-      backgroundColor: colors.cardBackground,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.border,
-    },
-    backButton: {
-      padding: 8,
-    },
-    headerTitle: {
-      fontSize: 20,
-      fontWeight: 'bold',
-      color: colors.primaryText,
-    },
-    notificationButton: {
-      padding: 8,
-    },
-    tabBar: {
-      flexDirection: 'row',
-      backgroundColor: colors.cardBackground,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.border,
-    },
-    tab: {
-      flex: 1,
-      paddingVertical: 16,
-      alignItems: 'center',
-    },
-    activeTab: {
-      borderBottomWidth: 2,
-      borderBottomColor: colors.primary,
-    },
-    tabText: {
-      fontSize: 16,
-      color: colors.secondaryText,
-    },
-    activeTabText: {
-      color: colors.primary,
-      fontWeight: '600',
-    },
-    content: {
-      flex: 1,
-    },
-    section: {
-      padding: 20,
-    },
-    sectionTitle: {
-      fontSize: 18,
-      fontWeight: 'bold',
-      color: colors.primaryText,
-      marginBottom: 16,
-    },
-    userCard: {
-      backgroundColor: colors.cardBackground,
-      borderRadius: 12,
-      padding: 16,
-      marginBottom: 12,
-      flexDirection: 'row',
-      alignItems: 'center',
-      boxShadow: '0px 1px 4px rgba(0,0,0,0.08)',
-
-    },
-    userInfo: {
-      flex: 1,
-    },
-    userName: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: colors.primaryText,
-    },
-    userEmail: {
-      fontSize: 14,
-      color: colors.secondaryText,
-      marginTop: 2,
-    },
-    userDetails: {
-      fontSize: 12,
-      color: colors.secondaryText,
-      marginTop: 4,
-    },
-    requestCard: {
-      backgroundColor: colors.cardBackground,
-      borderRadius: 12,
-      padding: 16,
-      marginBottom: 12,
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      boxShadow: '0px 1px 4px rgba(0,0,0,0.08)',
-
-    },
-    requestInfo: {
-      flex: 1,
-    },
-    requestTitle: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: colors.primaryText,
-    },
-    requestDescription: {
-      fontSize: 14,
-      color: colors.secondaryText,
-      marginTop: 4,
-      lineHeight: 20,
-    },
-    requestDetails: {
-      fontSize: 12,
-      color: colors.secondaryText,
-      marginTop: 8,
-    },
-    requestNotes: {
-      fontSize: 12,
-      color: colors.secondaryText,
-      marginTop: 6,
-      fontStyle: 'italic',
-    },
-    userActions: {
-      flexDirection: 'row',
-      gap: 8,
-    },
-    roleButton: {
-      padding: 8,
-      backgroundColor: colors.primary + '20',
-      borderRadius: 6,
-    },
-    deleteButton: {
-      padding: 8,
-    },
-    modalContainer: {
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    },
-    modalContent: {
-      backgroundColor: colors.cardBackground,
-      borderRadius: 16,
-      padding: 24,
-      width: '90%',
-      maxWidth: 400,
-    },
-    modalTitle: {
-      fontSize: 20,
-      fontWeight: 'bold',
-      color: colors.primaryText,
-      marginBottom: 20,
-      textAlign: 'center',
-    },
-    input: {
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 8,
-      padding: 12,
-      fontSize: 16,
-      marginBottom: 16,
-      color: colors.primaryText,
-      backgroundColor: colors.screenBackground,
-    },
-    messageInput: {
-      height: 100,
-      textAlignVertical: 'top',
-    },
-    modalActions: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      gap: 12,
-    },
-    cancelButton: {
-      flex: 1,
-      padding: 12,
-      borderRadius: 8,
-      borderWidth: 1,
-      borderColor: colors.border,
-      alignItems: 'center',
-    },
-    cancelButtonText: {
-      fontSize: 16,
-      color: colors.secondaryText,
-    },
-    sendButton: {
-      flex: 1,
-      padding: 12,
-      borderRadius: 8,
-      backgroundColor: colors.primary,
-      alignItems: 'center',
-    },
-    sendButtonText: {
-      fontSize: 16,
-      color: 'white',
-      fontWeight: '600',
-    },
-    modalSubtitle: {
-      fontSize: 16,
-      color: colors.secondaryText,
-      textAlign: 'center',
-      marginBottom: 24,
-    },
-    roleOptions: {
-      gap: 12,
-      marginBottom: 24,
-    },
-    roleOption: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      padding: 16,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.cardBackground,
-    },
-    roleOptionSelected: {
-      backgroundColor: colors.primary,
-      borderColor: colors.primary,
-    },
-    roleOptionText: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: colors.primaryText,
-      marginLeft: 12,
-      flex: 1,
-    },
-    roleOptionTextSelected: {
-      color: 'white',
-    },
-    roleOptionDesc: {
-      fontSize: 12,
-      color: colors.secondaryText,
-      marginTop: 2,
-    },
-    roleOptionDescSelected: {
-      color: 'rgba(255,255,255,0.8)',
-    },
-    modalOverlay: {
-      flex: 1,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    modalHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginBottom: 16,
-    },
-    modalMessage: {
-      fontSize: 16,
-      color: colors.secondaryText,
-      lineHeight: 24,
-      marginBottom: 24,
-    },
-    modalButtons: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      gap: 12,
-    },
-    modalButton: {
-      flex: 1,
-      paddingVertical: 12,
-      paddingHorizontal: 24,
-      borderRadius: 8,
-      alignItems: 'center',
-      flexDirection: 'row',
-      justifyContent: 'center',
-      gap: 8,
-    },
-    deleteConfirmButton: {
-      backgroundColor: colors.primary,
-    },
-    deleteConfirmButtonText: {
-      fontSize: 16,
-      color: 'white',
-      fontWeight: '600',
-    },
+    container: { flex: 1, backgroundColor: colors.screenBackground },
+    loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.screenBackground },
+    loadingText: { marginTop: 16, fontSize: 16, color: colors.secondaryText },
+    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, backgroundColor: colors.cardBackground, borderBottomWidth: 1, borderBottomColor: colors.border },
+    backButton: { padding: 8 },
+    headerTitle: { fontSize: 20, fontWeight: 'bold', color: colors.primaryText },
+    notificationButton: { padding: 8 },
+    tabBar: { flexDirection: 'row', backgroundColor: colors.cardBackground, borderBottomWidth: 1, borderBottomColor: colors.border },
+    tab: { flex: 1, paddingVertical: 16, alignItems: 'center' },
+    activeTab: { borderBottomWidth: 2, borderBottomColor: colors.primary },
+    tabText: { fontSize: 16, color: colors.secondaryText },
+    activeTabText: { color: colors.primary, fontWeight: '600' },
+    content: { flex: 1 },
+    section: { padding: 20 },
+    sectionTitle: { fontSize: 18, fontWeight: 'bold', color: colors.primaryText, marginBottom: 16 },
+    userCard: { backgroundColor: colors.cardBackground, borderRadius: 12, padding: 16, marginBottom: 12, flexDirection: 'row', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 4, elevation: 1 },
+    userInfo: { flex: 1 },
+    userName: { fontSize: 16, fontWeight: '600', color: colors.primaryText },
+    userEmail: { fontSize: 14, color: colors.secondaryText, marginTop: 2 },
+    userDetails: { fontSize: 12, color: colors.secondaryText, marginTop: 4 },
+    input: { borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: 12, fontSize: 16, marginBottom: 16, color: colors.primaryText, backgroundColor: colors.screenBackground },
+    messageInput: { height: 100, textAlignVertical: 'top' },
+    modalActions: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
+    cancelButton: { flex: 1, padding: 12, borderRadius: 8, borderWidth: 1, borderColor: colors.border, alignItems: 'center' },
+    cancelButtonText: { fontSize: 16, color: colors.secondaryText },
+    sendButton: { flex: 1, padding: 12, borderRadius: 8, backgroundColor: colors.primary, alignItems: 'center' },
+    sendButtonText: { fontSize: 16, color: 'white', fontWeight: '600' },
+    modalSubtitle: { fontSize: 16, color: colors.secondaryText, textAlign: 'center', marginBottom: 24 },
+    roleOption: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.cardBackground },
+    roleOptionText: { fontSize: 16, fontWeight: '600', color: colors.primaryText, marginLeft: 12, flex: 1 },
   });
 
   if (initializing || !userProfile) {
@@ -733,30 +414,18 @@ export default function AdminDashboard() {
           <Ionicons name="arrow-back" size={24} color={colors.secondaryText} />
         </TouchableOpacity>
         <Text style={dynamicStyles.headerTitle}>Admin Dashboard</Text>
-        <TouchableOpacity
-          onPress={() => setNotificationModal(true)}
-          style={dynamicStyles.notificationButton}
-        >
+        <TouchableOpacity onPress={() => setNotificationModal(true)} style={dynamicStyles.notificationButton}>
           <Ionicons name="notifications-outline" size={24} color={colors.primary} />
         </TouchableOpacity>
       </View>
 
       <View style={dynamicStyles.tabBar}>
-        <TouchableOpacity
-          style={[dynamicStyles.tab, activeTab === 'users' && dynamicStyles.activeTab]}
-          onPress={() => setActiveTab('users')}
-        >
-          <Text style={[dynamicStyles.tabText, activeTab === 'users' && dynamicStyles.activeTabText]}>
-            Users ({users.length})
-          </Text>
+        <TouchableOpacity style={[dynamicStyles.tab, activeTab === 'users' && dynamicStyles.activeTab]} onPress={() => setActiveTab('users')}>
+          <Text style={[dynamicStyles.tabText, activeTab === 'users' && dynamicStyles.activeTabText]}>Users ({users.length})</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={[dynamicStyles.tab, activeTab === 'notifications' && dynamicStyles.activeTab]}
-          onPress={() => setActiveTab('notifications')}
-        >
-          <Text style={[dynamicStyles.tabText, activeTab === 'notifications' && dynamicStyles.activeTabText]}>
-            Push Notifications
-          </Text>
+
+        <TouchableOpacity style={[dynamicStyles.tab, activeTab === 'notifications' && dynamicStyles.activeTab]} onPress={() => setActiveTab('notifications')}>
+          <Text style={[dynamicStyles.tabText, activeTab === 'notifications' && dynamicStyles.activeTabText]}>Push Notifications</Text>
         </TouchableOpacity>
       </View>
 
@@ -764,27 +433,19 @@ export default function AdminDashboard() {
         {activeTab === 'users' && (
           <View style={dynamicStyles.section}>
             <Text style={dynamicStyles.sectionTitle}>User Management</Text>
-            {users.map(user => (
-              <View key={user.id} style={dynamicStyles.userCard}>
+            {users.map(u => (
+              <View key={u.id} style={dynamicStyles.userCard}>
                 <View style={dynamicStyles.userInfo}>
-                  <Text style={dynamicStyles.userName}>{user.fullName}</Text>
-                  <Text style={dynamicStyles.userEmail}>{user.email}</Text>
-                  <Text style={dynamicStyles.userDetails}>
-                    {user.bloodType} • {user.city} • {user.role}
-                  </Text>
+                  <Text style={dynamicStyles.userName}>{u.fullName}</Text>
+                  <Text style={dynamicStyles.userEmail}>{u.email}</Text>
+                  <Text style={dynamicStyles.userDetails}>{u.bloodType || ''} • {u.city || ''} • {u.role || ''}</Text>
                 </View>
-                <View style={dynamicStyles.userActions}>
-                  <TouchableOpacity
-                    onPress={() => openRoleModal(user)}
-                    style={dynamicStyles.roleButton}
-                  >
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TouchableOpacity onPress={() => openRoleModal(u)} style={dynamicStyles.roleOption}>
                     <Ionicons name="person-outline" size={18} color={colors.primary} />
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => handleDeleteUser(user)}
-                    style={dynamicStyles.deleteButton}
-                  >
-                    <Ionicons name="trash-outline" size={20} color={colors.primary} />
+                  <TouchableOpacity onPress={() => handleDeleteUser(u)} style={dynamicStyles.roleOption}>
+                    <Ionicons name="trash-outline" size={18} color={colors.primary} />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -798,35 +459,49 @@ export default function AdminDashboard() {
 
             <TextInput
               style={dynamicStyles.input}
-              placeholder="Notification Title"
+              placeholder="Title"
               value={notificationData.title}
-              onChangeText={(text) => setNotificationData(prev => ({ ...prev, title: text }))}
+              onChangeText={(t) => setNotificationData(prev => ({ ...prev, title: t }))}
             />
 
             <TextInput
               style={[dynamicStyles.input, dynamicStyles.messageInput]}
-              placeholder="Notification Body"
+              placeholder="Body"
               value={notificationData.message}
-              onChangeText={(text) => setNotificationData(prev => ({ ...prev, message: text }))}
+              onChangeText={(t) => setNotificationData(prev => ({ ...prev, message: t }))}
               multiline
               numberOfLines={4}
             />
 
             <TextInput
               style={dynamicStyles.input}
-              placeholder="Optional image URL (or paste a storage URL)"
+              placeholder="Optional image URL (or upload below)"
               value={notificationImageUrl}
-              onChangeText={(text) => setNotificationImageUrl(text)}
+              onChangeText={(t) => setNotificationImageUrl(t)}
             />
 
+            {/* Pick image from device + preview */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <TouchableOpacity onPress={pickImageFromDevice} style={[dynamicStyles.roleOption, { paddingVertical: 10, paddingHorizontal: 12 }]}>
+                <Ionicons name="image-outline" size={20} color={colors.primary} />
+                <Text style={[dynamicStyles.roleOptionText, { marginLeft: 8, fontSize: 14 }]}>Pick image from device</Text>
+              </TouchableOpacity>
+
+              {(localImageUri || notificationImageUrl) ? (
+                <View style={{ marginLeft: 6 }}>
+                  <Image source={{ uri: localImageUri || notificationImageUrl }} style={{ width: 56, height: 56, borderRadius: 8 }} />
+                </View>
+              ) : null}
+            </View>
+
+            {/* Select All (only users with active tokens) */}
             <View style={{ marginBottom: 12 }}>
               <TouchableOpacity
                 onPress={() => {
                   const newSelectAll = !selectAll;
                   setSelectAll(newSelectAll);
                   if (newSelectAll) {
-                    // select all unique users that have tokens
-                    const uniqueUsers = Array.from(new Set(userTokens.map(t => t.userId))).filter(Boolean);
+                    const uniqueUsers = activeTokenUserIds;
                     setSelectedUserIds(uniqueUsers);
                   } else {
                     setSelectedUserIds([]);
@@ -834,17 +509,15 @@ export default function AdminDashboard() {
                 }}
                 style={[dynamicStyles.roleOption, { justifyContent: 'space-between' }]}
               >
-                <Text style={dynamicStyles.roleOptionText}>Select All (broadcast)</Text>
+                <Text style={dynamicStyles.roleOptionText}>Select All (broadcast to users with tokens)</Text>
                 <Ionicons name={selectAll ? "checkbox" : "square-outline"} size={22} color={colors.primary} />
               </TouchableOpacity>
             </View>
 
-            <Text style={[dynamicStyles.modalSubtitle, { textAlign: 'left', marginBottom: 8 }]}>
-              Available recipients (select one or many)
-            </Text>
+            <Text style={[dynamicStyles.modalSubtitle, { textAlign: 'left', marginBottom: 8 }]}>Available recipients (select one or many)</Text>
 
-            <ScrollView style={{ maxHeight: 240, marginBottom: 12 }}>
-              {Array.from(new Set(userTokens.map(t => t.userId))).filter(Boolean).map(uid => {
+            <ScrollView style={{ maxHeight: 260, marginBottom: 12 }}>
+              {activeTokenUserIds.map(uid => {
                 const profile = users.find(u => u.id === uid) as any;
                 const fullName = profile?.fullName || 'Unknown user';
                 const photo = profile?.photoURL || profile?.photoUrl || '';
@@ -855,10 +528,10 @@ export default function AdminDashboard() {
                     key={uid}
                     onPress={() => {
                       if (selectedUserIds.includes(uid)) {
-                        setSelectedUserIds(selectedUserIds.filter(id => id !== uid));
+                        setSelectedUserIds(prev => prev.filter(id => id !== uid));
                         setSelectAll(false);
                       } else {
-                        setSelectedUserIds([...selectedUserIds, uid]);
+                        setSelectedUserIds(prev => [...prev, uid]);
                       }
                     }}
                     style={[dynamicStyles.userCard, { flexDirection: 'row', alignItems: 'center' }]}
@@ -882,16 +555,13 @@ export default function AdminDashboard() {
             </ScrollView>
 
             <View style={dynamicStyles.modalActions}>
-              <TouchableOpacity
-                onPress={() => {
-                  // reset local notification form
-                  setNotificationData({ title: '', message: '', recipientEmail: '' });
-                  setSelectedUserIds([]);
-                  setSelectAll(false);
-                  setNotificationImageUrl('');
-                }}
-                style={dynamicStyles.cancelButton}
-              >
+              <TouchableOpacity onPress={() => {
+                setNotificationData({ title: '', message: '', recipientEmail: '' });
+                setSelectedUserIds([]);
+                setSelectAll(false);
+                setNotificationImageUrl('');
+                setLocalImageUri('');
+              }} style={dynamicStyles.cancelButton}>
                 <Text style={dynamicStyles.cancelButtonText}>Clear</Text>
               </TouchableOpacity>
 
@@ -903,41 +573,17 @@ export default function AdminDashboard() {
         )}
       </ScrollView>
 
+      {/* Modal: alternative send UI (keeps existing modal but it will call same handler) */}
       <Modal visible={notificationModal} animationType="slide" transparent>
-        <View style={dynamicStyles.modalContainer}>
-          <View style={dynamicStyles.modalContent}>
-            <Text style={dynamicStyles.modalTitle}>Send Notification</Text>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <View style={{ backgroundColor: colors.cardBackground, borderRadius: 12, padding: 18, width: '92%', maxWidth: 420 }}>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: colors.primaryText, marginBottom: 12, textAlign: 'center' }}>Send Notification</Text>
 
-            <TextInput
-              style={dynamicStyles.input}
-              placeholder="Notification Title"
-              value={notificationData.title}
-              onChangeText={(text) => setNotificationData(prev => ({ ...prev, title: text }))}
-            />
+            <TextInput style={dynamicStyles.input} placeholder="Title" value={notificationData.title} onChangeText={(t) => setNotificationData(prev => ({ ...prev, title: t }))} />
+            <TextInput style={[dynamicStyles.input, dynamicStyles.messageInput]} placeholder="Message" value={notificationData.message} onChangeText={(t) => setNotificationData(prev => ({ ...prev, message: t }))} multiline numberOfLines={4} />
 
-            <TextInput
-              style={[dynamicStyles.input, dynamicStyles.messageInput]}
-              placeholder="Notification Message"
-              value={notificationData.message}
-              onChangeText={(text) => setNotificationData(prev => ({ ...prev, message: text }))}
-              multiline
-              numberOfLines={4}
-            />
-
-            <TextInput
-              style={dynamicStyles.input}
-              placeholder="Recipient Email (leave empty for all users)"
-              value={notificationData.recipientEmail}
-              onChangeText={(text) => setNotificationData(prev => ({ ...prev, recipientEmail: text }))}
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-
-            <View style={dynamicStyles.modalActions}>
-              <TouchableOpacity
-                onPress={() => setNotificationModal(false)}
-                style={dynamicStyles.cancelButton}
-              >
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12 }}>
+              <TouchableOpacity onPress={() => setNotificationModal(false)} style={dynamicStyles.cancelButton}>
                 <Text style={dynamicStyles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={handleSendNotification} style={dynamicStyles.sendButton}>
@@ -948,140 +594,62 @@ export default function AdminDashboard() {
         </View>
       </Modal>
 
+      {/* Role modal, delete modals (kept unchanged structurally) */}
       <Modal visible={roleModal} animationType="slide" transparent>
-        <View style={dynamicStyles.modalContainer}>
-          <View style={dynamicStyles.modalContent}>
-            <Text style={dynamicStyles.modalTitle}>Change User Role</Text>
-            <Text style={dynamicStyles.modalSubtitle}>
-              Select a new role for {selectedUser?.fullName}
-            </Text>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <View style={{ backgroundColor: colors.cardBackground, borderRadius: 12, padding: 18, width: '92%', maxWidth: 420 }}>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: colors.primaryText, marginBottom: 12 }}>Change User Role</Text>
+            <Text style={{ marginBottom: 12, color: colors.secondaryText }}>Select a new role for {selectedUser?.fullName}</Text>
 
-            <View style={dynamicStyles.roleOptions}>
-              <TouchableOpacity
-                style={[dynamicStyles.roleOption, selectedUser?.role === 'user' && dynamicStyles.roleOptionSelected]}
-                onPress={() => handleChangeRole('user')}
-              >
-                <Ionicons name="person" size={24} color={selectedUser?.role === 'user' ? 'white' : colors.secondaryText} />
-                <Text style={[dynamicStyles.roleOptionText, selectedUser?.role === 'user' && dynamicStyles.roleOptionTextSelected]}>
-                  User
-                </Text>
-                <Text style={[dynamicStyles.roleOptionDesc, selectedUser?.role === 'user' && dynamicStyles.roleOptionDescSelected]}>
-                  Regular user with basic access
-                </Text>
+            <View style={{ gap: 8 }}>
+              <TouchableOpacity onPress={() => handleChangeRole('user')} style={dynamicStyles.roleOption}>
+                <Ionicons name="person" size={20} color={colors.secondaryText} />
+                <Text style={dynamicStyles.roleOptionText}>User</Text>
               </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[dynamicStyles.roleOption, selectedUser?.role === 'moderator' && dynamicStyles.roleOptionSelected]}
-                onPress={() => handleChangeRole('moderator')}
-              >
-                <Ionicons name="shield-checkmark" size={24} color={selectedUser?.role === 'moderator' ? 'white' : colors.secondaryText} />
-                <Text style={[dynamicStyles.roleOptionText, selectedUser?.role === 'moderator' && dynamicStyles.roleOptionTextSelected]}>
-                  Moderator
-                </Text>
-                <Text style={[dynamicStyles.roleOptionDesc, selectedUser?.role === 'moderator' && dynamicStyles.roleOptionDescSelected]}>
-                  Can delete requests only
-                </Text>
+              <TouchableOpacity onPress={() => handleChangeRole('moderator')} style={dynamicStyles.roleOption}>
+                <Ionicons name="shield-checkmark" size={20} color={colors.secondaryText} />
+                <Text style={dynamicStyles.roleOptionText}>Moderator</Text>
               </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[dynamicStyles.roleOption, selectedUser?.role === 'admin' && dynamicStyles.roleOptionSelected]}
-                onPress={() => handleChangeRole('admin')}
-              >
-                <Ionicons name="settings" size={24} color={selectedUser?.role === 'admin' ? 'white' : colors.secondaryText} />
-                <Text style={[dynamicStyles.roleOptionText, selectedUser?.role === 'admin' && dynamicStyles.roleOptionTextSelected]}>
-                  Admin
-                </Text>
-                <Text style={[dynamicStyles.roleOptionDesc, selectedUser?.role === 'admin' && dynamicStyles.roleOptionDescSelected]}>
-                  Full administrative access
-                </Text>
+              <TouchableOpacity onPress={() => handleChangeRole('admin')} style={dynamicStyles.roleOption}>
+                <Ionicons name="settings" size={20} color={colors.secondaryText} />
+                <Text style={dynamicStyles.roleOptionText}>Admin</Text>
               </TouchableOpacity>
             </View>
 
-            <View style={dynamicStyles.modalActions}>
-              <TouchableOpacity
-                onPress={() => setRoleModal(false)}
-                style={dynamicStyles.cancelButton}
-              >
-                <Text style={dynamicStyles.cancelButtonText}>Cancel</Text>
+            <View style={{ marginTop: 12, flexDirection: 'row', gap: 12 }}>
+              <TouchableOpacity onPress={() => setRoleModal(false)} style={dynamicStyles.cancelButton}>
+                <Text style={dynamicStyles.cancelButtonText}>Close</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
 
-      {/* Delete User Modal */}
-      <Modal
-        visible={deleteUserModalVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={cancelDeleteUser}
-      >
-        <View style={dynamicStyles.modalOverlay}>
-          <View style={dynamicStyles.modalContent}>
-            <View style={dynamicStyles.modalHeader}>
-              <Ionicons name="person-remove" size={24} color={colors.primary} />
-              <Text style={dynamicStyles.modalTitle}>Delete User</Text>
-            </View>
+      {/* Delete user modal */}
+      <Modal visible={deleteUserModalVisible} transparent animationType="fade">
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <View style={{ backgroundColor: colors.cardBackground, borderRadius: 12, padding: 18, width: '92%', maxWidth: 420 }}>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: colors.primaryText, marginBottom: 8 }}>Delete User</Text>
+            <Text style={{ color: colors.secondaryText, marginBottom: 12 }}>Are you sure you want to delete "{userToDelete?.fullName}"'s account? This action cannot be undone.</Text>
 
-            <Text style={dynamicStyles.modalMessage}>
-              Are you sure you want to delete "{userToDelete?.fullName}"'s account?
-              This action cannot be undone.
-            </Text>
-
-            <View style={dynamicStyles.modalButtons}>
-              <TouchableOpacity
-                style={[dynamicStyles.modalButton, dynamicStyles.cancelButton]}
-                onPress={cancelDeleteUser}
-              >
-                <Text style={dynamicStyles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[dynamicStyles.modalButton, dynamicStyles.deleteConfirmButton]}
-                onPress={confirmDeleteUser}
-              >
-                <Ionicons name="person-remove" size={16} color="white" />
-                <Text style={dynamicStyles.deleteConfirmButtonText}>Delete User</Text>
-              </TouchableOpacity>
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <TouchableOpacity onPress={cancelDeleteUser} style={dynamicStyles.cancelButton}><Text style={dynamicStyles.cancelButtonText}>Cancel</Text></TouchableOpacity>
+              <TouchableOpacity onPress={confirmDeleteUser} style={dynamicStyles.sendButton}><Text style={dynamicStyles.sendButtonText}>Delete</Text></TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
 
-      {/* Delete Request Modal */}
-      <Modal
-        visible={deleteRequestModalVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={cancelDeleteRequest}
-      >
-        <View style={dynamicStyles.modalOverlay}>
-          <View style={dynamicStyles.modalContent}>
-            <View style={dynamicStyles.modalHeader}>
-              <Ionicons name="trash-outline" size={24} color={colors.primary} />
-              <Text style={dynamicStyles.modalTitle}>Delete Request</Text>
-            </View>
+      {/* Delete request modal */}
+      <Modal visible={deleteRequestModalVisible} transparent animationType="fade">
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <View style={{ backgroundColor: colors.cardBackground, borderRadius: 12, padding: 18, width: '92%', maxWidth: 420 }}>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: colors.primaryText, marginBottom: 8 }}>Delete Request</Text>
+            <Text style={{ color: colors.secondaryText, marginBottom: 12 }}>Are you sure you want to delete "{requestToDelete?.fullName}"'s request? This action cannot be undone.</Text>
 
-            <Text style={dynamicStyles.modalMessage}>
-              Are you sure you want to delete "{requestToDelete?.fullName}"'s blood donation request?
-              This action cannot be undone.
-            </Text>
-
-            <View style={dynamicStyles.modalButtons}>
-              <TouchableOpacity
-                style={[dynamicStyles.modalButton, dynamicStyles.cancelButton]}
-                onPress={cancelDeleteRequest}
-              >
-                <Text style={dynamicStyles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[dynamicStyles.modalButton, dynamicStyles.deleteConfirmButton]}
-                onPress={confirmDeleteRequest}
-              >
-                <Ionicons name="trash" size={16} color="white" />
-                <Text style={dynamicStyles.deleteConfirmButtonText}>Delete Request</Text>
-              </TouchableOpacity>
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <TouchableOpacity onPress={cancelDeleteRequest} style={dynamicStyles.cancelButton}><Text style={dynamicStyles.cancelButtonText}>Cancel</Text></TouchableOpacity>
+              <TouchableOpacity onPress={confirmDeleteRequest} style={dynamicStyles.sendButton}><Text style={dynamicStyles.sendButtonText}>Delete</Text></TouchableOpacity>
             </View>
           </View>
         </View>
@@ -1091,292 +659,5 @@ export default function AdminDashboard() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8f9fa',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f8f9fa',
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#666',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  backButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
-  },
-  notificationButton: {
-    padding: 8,
-  },
-  tabBar: {
-    flexDirection: 'row',
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  activeTab: {
-    borderBottomWidth: 2,
-    borderBottomColor: '#E53E3E',
-  },
-  tabText: {
-    fontSize: 16,
-    color: '#666',
-  },
-  activeTabText: {
-    color: '#E53E3E',
-    fontWeight: '600',
-  },
-  content: {
-    flex: 1,
-  },
-  section: {
-    padding: 20,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
-    marginBottom: 16,
-  },
-  userCard: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    boxShadow: '0px 1px 4px rgba(0,0,0,0.08)',
-
-  },
-  userInfo: {
-    flex: 1,
-  },
-  userName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1a1a1a',
-  },
-  userEmail: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 2,
-  },
-  userDetails: {
-    fontSize: 12,
-    color: '#999',
-    marginTop: 4,
-  },
-  requestCard: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    boxShadow: '0px 1px 4px rgba(0,0,0,0.08)',
-
-  },
-  requestInfo: {
-    flex: 1,
-  },
-  requestTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1a1a1a',
-  },
-  requestDescription: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 4,
-    lineHeight: 20,
-  },
-  requestDetails: {
-    fontSize: 12,
-    color: '#999',
-    marginTop: 8,
-  },
-  requestNotes: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 6,
-    fontStyle: 'italic',
-  },
-  userActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  roleButton: {
-    padding: 8,
-    backgroundColor: '#EBF8FF',
-    borderRadius: 6,
-  },
-  deleteButton: {
-    padding: 8,
-  },
-  modalContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
-  modalContent: {
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 24,
-    width: '90%',
-    maxWidth: 400,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    marginBottom: 16,
-  },
-  messageInput: {
-    height: 100,
-    textAlignVertical: 'top',
-  },
-  modalActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  cancelButton: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    alignItems: 'center',
-  },
-  cancelButtonText: {
-    fontSize: 16,
-    color: '#666',
-  },
-  sendButton: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 8,
-    backgroundColor: '#E53E3E',
-    alignItems: 'center',
-  },
-  sendButtonText: {
-    fontSize: 16,
-    color: 'white',
-    fontWeight: '600',
-  },
-  modalSubtitle: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  roleOptions: {
-    gap: 12,
-    marginBottom: 24,
-  },
-  roleOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    backgroundColor: 'white',
-  },
-  roleOptionSelected: {
-    backgroundColor: '#E53E3E',
-    borderColor: '#E53E3E',
-  },
-  roleOptionText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1a1a1a',
-    marginLeft: 12,
-    flex: 1,
-  },
-  roleOptionTextSelected: {
-    color: 'white',
-  },
-  roleOptionDesc: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 2,
-  },
-  roleOptionDescSelected: {
-    color: 'rgba(255,255,255,0.8)',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  modalMessage: {
-    fontSize: 16,
-    color: '#666',
-    lineHeight: 24,
-    marginBottom: 24,
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  modalButton: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  deleteConfirmButton: {
-    backgroundColor: '#E53E3E',
-  },
-  deleteConfirmButtonText: {
-    fontSize: 16,
-    color: 'white',
-    fontWeight: '600',
-  },
+  container: { flex: 1, backgroundColor: '#f8f9fa' },
 });
