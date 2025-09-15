@@ -1421,10 +1421,22 @@ export const initializeNotifications = async () => {
         onMessage(messaging, (payload) => {
           console.log('FCM message received in foreground:', payload);
           try {
-            // Prefer notification payload title/body, fall back to data fields used by server (_title/_body)
+            // Check if this message has a notification payload (native-style) or data-only (web-style)
+            const hasNotificationPayload = payload.notification && (payload.notification.title || payload.notification.body);
+            const hasDataPayload = payload.data && (payload.data._title || payload.data._body || payload.data.title || payload.data.body);
+
+            // For web platforms, FCM messages with notification payload are handled by the service worker
+            // We should NOT show a duplicate browser notification for the same message
+            // Only show foreground notifications for data-only messages that need client-side display
+            if (hasNotificationPayload && !hasDataPayload) {
+              console.log('initializeNotifications: notification payload present, letting service worker handle display');
+              return; // Service worker will handle this
+            }
+
+            // For data-only messages or messages that need client-side handling
             const title = payload.notification?.title || (payload.data && (payload.data._title || payload.data.title)) || 'BloodBond';
             const body = payload.notification?.body || (payload.data && (payload.data._body || payload.data.body)) || '';
-    
+
             // Only show a system/browser Notification if the Notification API is available and permission is granted.
             if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
               try {
@@ -1434,13 +1446,18 @@ export const initializeNotifications = async () => {
                   data: payload.data || {},
                   tag: `bloodbond-${Date.now()}`,
                 };
-    
+
+                // Add image if present in data
+                if (payload.data && payload.data.image) {
+                  options.image = payload.data.image;
+                }
+
                 const notif = new Notification(title, options);
                 // Auto-close after a short interval to avoid lingering notifications
                 setTimeout(() => {
                   try { notif.close(); } catch (e) {}
                 }, 5000);
-    
+
                 console.log('initializeNotifications: foreground browser Notification shown');
               } catch (displayErr) {
                 console.warn('initializeNotifications: failed to display foreground notification', displayErr);

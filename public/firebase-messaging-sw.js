@@ -57,6 +57,11 @@ messaging.onBackgroundMessage(function(payload) {
     renotify: false
   };
 
+  // Add image if present in data
+  if (data && data.image) {
+    options.image = data.image;
+  }
+
   return self.registration.showNotification(title, options);
 });
 
