@@ -38,12 +38,19 @@ messaging.onBackgroundMessage(function(payload) {
   const notif = payload.notification || null;
   const data = payload.data || {};
 
-  // Determine title/body: use notification if present, otherwise use data fields set by server (_title/_body)
-  const title = (notif && notif.title) ? notif.title : (data._title || data.title || 'Bloodbond');
-  const body = (notif && notif.body) ? notif.body : (data._body || data.body || '');
-  const tag = data.tag || (notif && (notif.tag || null)) || `bloodbond-${Date.now()}`;
+  // If there is an explicit notification payload, FCM has already displayed the notification
+  // Do not show another one to avoid duplicates
+  if (notif) {
+    console.log('[firebase-messaging-sw.js] Notification payload present, assuming FCM displayed it, skipping service worker display');
+    return;
+  }
 
-  // If there is nothing to show, skip showing a notification to avoid duplicates
+  // Determine title/body from data fields
+  const title = data._title || data.title || 'Bloodbond';
+  const body = data._body || data.body || '';
+  const tag = data.tag || `bloodbond-${Date.now()}`;
+
+  // If there is nothing to show, skip showing a notification
   if (!title && !body) {
     console.log('[firebase-messaging-sw.js] No title/body to show for background message, skipping notification.');
     return;
