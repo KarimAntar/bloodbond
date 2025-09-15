@@ -163,6 +163,18 @@ export default async function handler(req: any, res: any) {
               dataWithImage.image = imageUrl;
             }
 
+            // Diagnostic log for web messages
+            try {
+              console.log('sendToTokens: building web message', {
+                tokenPrefix: token?.slice(0, 8),
+                imageUrl,
+                hasImageInData: !!dataWithImage.image,
+                dataKeys: Object.keys(dataWithImage || {}).slice(0, 10),
+              });
+            } catch (diagErr) {
+              console.warn('sendToTokens: web message diag failed', diagErr);
+            }
+
             // For web we send data-only (no webpush.notification) — the service worker should display the notification.
             // This avoids browsers automatically showing a notification while the service worker also displays one,
             // which causes duplicate notifications (one with image and one plain).
@@ -182,6 +194,19 @@ export default async function handler(req: any, res: any) {
             body,
             icon: 'https://bloodbond.app/favicon.png', // Always use favicon as notification icon
           };
+
+          // Diagnostic log for native messages
+          try {
+            console.log('sendToTokens: building native message', {
+              tokenPrefix: token?.slice(0, 8),
+              platform,
+              imageUrl,
+              notificationWillIncludeImage: !!imageUrl,
+              dataKeys: Object.keys(baseData || {}).slice(0, 10),
+            });
+          } catch (diagErr) {
+            console.warn('sendToTokens: native message diag failed', diagErr);
+          }
 
           // Add uploaded image as the body image if available
           if (imageUrl) {
