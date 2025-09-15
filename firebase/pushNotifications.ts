@@ -1026,7 +1026,10 @@ const sendFCMMessage = async (token: string, title: string, body: string, data?:
             title,
             body,
             icon: '/favicon.png',
-            click_action: window.location.origin,
+            // Prefer explicit SEND_ORIGIN env var for production builds (EXPO_PUBLIC_SEND_ORIGIN supported).
+            click_action: (typeof process !== 'undefined' && (process.env.SEND_ORIGIN || (process.env as any).EXPO_PUBLIC_SEND_ORIGIN))
+              ? (process.env.SEND_ORIGIN || (process.env as any).EXPO_PUBLIC_SEND_ORIGIN)
+              : 'https://www.bloodbond.app',
           },
           data: data || {},
           webpush: {
