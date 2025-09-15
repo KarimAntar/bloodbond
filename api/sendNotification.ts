@@ -52,7 +52,7 @@ export default async function handler(req: any, res: any) {
     const firestore = adminSdk.firestore();
     const messaging = adminSdk.messaging();
 
-    const { type, userId, title, body, data, topic, deviceId } = req.body || {};
+    const { type, userId, title, body, data, topic, deviceId, image } = req.body || {};
 
     if (!type || !title || !body) {
       res.status(400).json({ error: 'Missing required fields (type, title, body)' });
@@ -146,7 +146,8 @@ export default async function handler(req: any, res: any) {
           const isNativePlatform = nativePlatforms.includes(platform);
 
           const baseData = (data && typeof data === 'object') ? Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])) : {};
-          const imageUrl = data?.image || '';
+          // Accept image passed either inside data.image or as top-level `image` in the request body
+          const imageUrl = data?.image || image || '';
 
           // If we confidently detect a web/platform, send data-only so the service worker controls display.
           // If we detect a native platform, include notification so OS displays it.
@@ -209,6 +210,22 @@ export default async function handler(req: any, res: any) {
 
         // Prefer sendAll if available (recent admin SDKs)
         const mg = messaging as any;
+
+        // Diagnostic: log a compact summary of messages we are about to send so we can verify
+        // whether image information is present in notification or data payloads.
+        try {
+          const sample = messages.slice(0, 5).map((m: any) => ({
+            tokenPrefix: typeof m.token === 'string' ? m.token.slice(0, 8) : null,
+            hasNotification: !!m.notification,
+            notificationImage: m.notification?.image || null,
+            dataImage: m.data?.image || null,
+            dataKeys: m.data ? Object.keys(m.data).slice(0, 6) : [],
+          }));
+          console.log('sendToTokens: outgoing message sample:', JSON.stringify(sample));
+        } catch (diagErr) {
+          console.warn('sendToTokens: failed to build outgoing message sample log', diagErr);
+        }
+
         if (typeof mg.sendAll === 'function') {
           try {
             const resp = await mg.sendAll(messages);
@@ -284,7 +301,8 @@ export default async function handler(req: any, res: any) {
       }
 
       const baseData = (data && typeof data === 'object') ? Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])) : {};
-      const imageUrl = data?.image || '';
+      // Accept image passed either inside data.image or as top-level `image` in the request body
+      const imageUrl = data?.image || image || '';
 
       const notificationConfig: any = {
         title,
