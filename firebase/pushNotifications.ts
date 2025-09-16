@@ -872,6 +872,137 @@ export const testNotification = async () => {
   }
 };
 
+/**
+ * Clean up duplicate tokens for a user
+ * This function identifies and deactivates duplicate tokens
+ */
+export const cleanupDuplicateTokens = async (userId: string) => {
+  try {
+    console.log('cleanupDuplicateTokens: Starting cleanup for user:', userId);
+
+    const userTokensRef = collection(db, 'userTokens');
+    const q = query(userTokensRef, where('userId', '==', userId), where('active', '==', true));
+    const snapshot = await getDocs(q);
+
+    if (snapshot.empty) {
+      console.log('cleanupDuplicateTokens: No active tokens found for user');
+      return { success: true, cleaned: 0 };
+    }
+
+    console.log('cleanupDuplicateTokens: Found', snapshot.docs.length, 'active tokens');
+
+    // Group tokens by deviceId (preferred) or token
+    const tokenGroups: { [key: string]: any[] } = {};
+    const processedTokens = new Set<string>();
+
+    snapshot.docs.forEach(doc => {
+      const data = doc.data();
+      const key = data.deviceId || data.token;
+
+      if (!tokenGroups[key]) {
+        tokenGroups[key] = [];
+      }
+      tokenGroups[key].push({ id: doc.id, data, key });
+    });
+
+    let cleanedCount = 0;
+
+    // For each group with duplicates, keep only the most recent token
+    for (const [key, tokens] of Object.entries(tokenGroups)) {
+      if (tokens.length > 1) {
+        console.log('cleanupDuplicateTokens: Found', tokens.length, 'duplicates for key:', key);
+
+        // Sort by creation date (newest first)
+        tokens.sort((a, b) => {
+          const aDate = a.data.createdAt?.toDate?.() || new Date(0);
+          const bDate = b.data.createdAt?.toDate?.() || new Date(0);
+          return bDate.getTime() - aDate.getTime();
+        });
+
+        // Keep the first (newest) token, deactivate the rest
+        for (let i = 1; i < tokens.length; i++) {
+          try {
+            await updateDoc(doc(db, 'userTokens', tokens[i].id), {
+              active: false,
+              deactivatedAt: Timestamp.now(),
+              deactivationReason: 'duplicate-cleanup'
+            });
+            console.log('cleanupDuplicateTokens: Deactivated duplicate token:', tokens[i].id);
+            cleanedCount++;
+          } catch (error) {
+            console.warn('cleanupDuplicateTokens: Failed to deactivate token:', tokens[i].id, error);
+          }
+        }
+      }
+    }
+
+    console.log('cleanupDuplicateTokens: Cleanup completed, deactivated', cleanedCount, 'duplicate tokens');
+    return { success: true, cleaned: cleanedCount };
+  } catch (error) {
+    console.error('cleanupDuplicateTokens error:', error);
+    return { success: false, error: String(error) };
+  }
+};
+
+/**
+ * Get diagnostic information about user's tokens
+ */
+export const getUserTokenDiagnostics = async (userId: string) => {
+  try {
+    console.log('getUserTokenDiagnostics: Getting diagnostics for user:', userId);
+
+    const userTokensRef = collection(db, 'userTokens');
+    const q = query(userTokensRef, where('userId', '==', userId));
+    const snapshot = await getDocs(q);
+
+    const tokens = snapshot.docs.map(doc => ({
+      id: doc.id,
+      token: doc.data().token?.substring(0, 20) + '...',
+      platform: doc.data().platform,
+      deviceId: doc.data().deviceId,
+      device: doc.data().device,
+      browser: doc.data().browser,
+      active: doc.data().active,
+      createdAt: doc.data().createdAt?.toDate?.()?.toISOString(),
+      updatedAt: doc.data().updatedAt?.toDate?.()?.toISOString(),
+      deactivatedAt: doc.data().deactivatedAt?.toDate?.()?.toISOString()
+    }));
+
+    const activeTokens = tokens.filter(t => t.active);
+    const inactiveTokens = tokens.filter(t => !t.active);
+
+    // Group by device/platform
+    const deviceGroups: { [key: string]: any[] } = {};
+    activeTokens.forEach(token => {
+      const key = token.deviceId || token.token;
+      if (!deviceGroups[key]) {
+        deviceGroups[key] = [];
+      }
+      deviceGroups[key].push(token);
+    });
+
+    const duplicates = Object.values(deviceGroups).filter(group => group.length > 1);
+
+    return {
+      success: true,
+      summary: {
+        totalTokens: tokens.length,
+        activeTokens: activeTokens.length,
+        inactiveTokens: inactiveTokens.length,
+        duplicateGroups: duplicates.length
+      },
+      duplicates: duplicates.map(group => ({
+        deviceKey: group[0].deviceId || group[0].token,
+        tokens: group
+      })),
+      allTokens: tokens
+    };
+  } catch (error) {
+    console.error('getUserTokenDiagnostics error:', error);
+    return { success: false, error: String(error) };
+  }
+};
+
 
 /*
   Send a broadcast notification record that a server or Cloud Function can
@@ -993,7 +1124,12 @@ export const registerPushToken = async (userId: string, token: string, platform 
         if (!snap.empty) {
           existingDoc = snap.docs[0];
           updateReason = 'deviceId';
-          console.log('registerPushToken: found existing token by deviceId', existingDoc.id);
+          console.log('registerPushToken: found existing token by deviceId', existingDoc.id, 'existing token:', existingDoc.data().token?.substring(0, 20) + '...');
+
+          // If we found a different token for the same device, this indicates a duplicate registration
+          if (existingDoc.data().token !== token) {
+            console.warn('registerPushToken: DUPLICATE TOKEN DETECTED! Device already has token:', existingDoc.data().token?.substring(0, 20) + '...', 'new token:', token?.substring(0, 20) + '...');
+          }
         }
       } catch (e) {
         console.warn('registerPushToken: deviceId lookup failed, continuing', e);
@@ -1019,6 +1155,31 @@ export const registerPushToken = async (userId: string, token: string, platform 
       } catch (e) {
         console.warn('registerPushToken: token lookup failed, continuing', e);
       }
+    }
+
+    // 3. Check for multiple active tokens for this user (potential duplicate source)
+    try {
+      const qAllUserTokens = query(userTokensRef, where('userId', '==', userId), where('active', '==', true));
+      const allUserTokensSnap = await getDocs(qAllUserTokens);
+      console.log('registerPushToken: User has', allUserTokensSnap.docs.length, 'active tokens');
+
+      if (allUserTokensSnap.docs.length > 1) {
+        console.warn('registerPushToken: MULTIPLE ACTIVE TOKENS DETECTED for user:', userId);
+        allUserTokensSnap.docs.forEach((doc, index) => {
+          const data = doc.data();
+          console.warn(`registerPushToken: Token ${index + 1}:`, {
+            id: doc.id,
+            token: data.token?.substring(0, 20) + '...',
+            platform: data.platform,
+            deviceId: data.deviceId,
+            device: data.device,
+            browser: data.browser,
+            createdAt: data.createdAt?.toDate?.()?.toISOString()
+          });
+        });
+      }
+    } catch (checkError) {
+      console.warn('registerPushToken: Failed to check for multiple tokens', checkError);
     }
 
     // 3. If we found an existing document, update it
