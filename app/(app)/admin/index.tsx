@@ -31,8 +31,8 @@ import {
   serverTimestamp,
   updateDoc,
 } from 'firebase/firestore';
-// Notifications are sent via serverless API: /api/sendNotification
-// (uses FCM service account loaded from FCM_SERVICE_ACCOUNT env var)
+// Import the proper notification function to ensure consistency
+import { sendPushNotification } from '../../../firebase/pushNotifications';
 
 interface User {
   id: string;
@@ -308,7 +308,7 @@ export default function AdminDashboard() {
     setRequestToDelete(null);
   };
 
-  // send notification: client will call the server API; avoid writing notification docs here
+  // send notification: use the proper client-side function for consistency and deduplication
   const handleSendNotification = async () => {
     if (!notificationData.title.trim() || !notificationData.message.trim()) {
       Alert.alert('Error', 'Please fill in Title and Body');
@@ -319,15 +319,13 @@ export default function AdminDashboard() {
       const dataPayload: any = {};
       if (notificationImageUrl) dataPayload.image = notificationImageUrl;
 
-      // Prefer explicit SEND_ORIGIN env var (EXPO_PUBLIC_SEND_ORIGIN supported).
-      // Never rely on window.location.origin to avoid using a local dev origin (localhost).
-      // This ensures admin always targets the configured production/send origin.
-      const apiOrigin = (typeof process !== 'undefined' && (process.env.SEND_ORIGIN || (process.env as any).EXPO_PUBLIC_SEND_ORIGIN))
-        ? (process.env.SEND_ORIGIN || (process.env as any).EXPO_PUBLIC_SEND_ORIGIN)
-        : 'https://bloodbond.app';
-
       // If "selectAll" is true OR no selected users (and not explicit selection), treat as broadcast
       if (selectAll || (selectedUserIds.length === 0 && !selectAll)) {
+        // For broadcast, we need to call the API directly since sendPushNotification doesn't support broadcast
+        const apiOrigin = (typeof process !== 'undefined' && (process.env.SEND_ORIGIN || (process.env as any).EXPO_PUBLIC_SEND_ORIGIN))
+          ? (process.env.SEND_ORIGIN || (process.env as any).EXPO_PUBLIC_SEND_ORIGIN)
+          : 'https://bloodbond.app';
+
         const resp = await fetch(`${apiOrigin}/api/sendNotification`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -342,28 +340,31 @@ export default function AdminDashboard() {
         const json = await resp.json().catch(() => ({} as any));
         Alert.alert('Success', `Broadcast request sent. ${json.sent ? json.sent + ' delivered (approx)' : ''}`);
       } else {
-        // send per selected user (server will resolve tokens)
-        const promises = selectedUserIds.map(uid =>
-          fetch(`${apiOrigin}/api/sendNotification`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              type: 'user',
-              userId: uid,
-              title: notificationData.title,
-              body: notificationData.message,
-              data: dataPayload,
-            }),
-          })
-        );
+        // Send to selected users using the proper client-side function
+        let totalSent = 0;
+        let successCount = 0;
 
-        const results = await Promise.all(promises);
-        const parsed = await Promise.all(results.map(r => r.json().catch(() => ({} as any))));
-        const totalSent = parsed.reduce((acc: any, p: any) => acc + (p.sent || 0), 0);
-        Alert.alert('Success', `Notification send requests complete. ${totalSent ? totalSent + ' delivered (approx)' : ''}`);
+        for (const userId of selectedUserIds) {
+          try {
+            // Use the correct function signature: (userId, title, body, data)
+            const result = await sendPushNotification(
+              userId,
+              notificationData.title,
+              notificationData.message,
+              dataPayload
+            );
+            successCount++;
+            // The function returns { success: true } but doesn't include sent count
+            // We'll estimate based on successful calls
+          } catch (userError) {
+            console.error(`Failed to send to user ${userId}:`, userError);
+          }
+        }
+
+        Alert.alert('Success', `Notifications sent to ${successCount}/${selectedUserIds.length} users.`);
       }
 
-      // Reset local UI state (do not create duplicate in-app notifications from client)
+      // Reset local UI state
       setNotificationModal(false);
       setNotificationData({ title: '', message: '', recipientEmail: '' });
       setSelectedUserIds([]);
