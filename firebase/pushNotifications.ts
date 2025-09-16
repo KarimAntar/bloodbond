@@ -1322,6 +1322,12 @@ export const sendPushNotification = async (
           const result = await response.json();
           console.log('sendPushNotification: FCM API send successful:', result);
           notificationSent = true; // Mark as sent to prevent duplicates
+
+          // Add Android-specific delay to prevent race conditions
+          if (isWeb && /Android/i.test(navigator.userAgent)) {
+            console.log('sendPushNotification: Android detected, adding delay to prevent duplicates');
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
         } else {
           console.warn('sendPushNotification: FCM API send failed with status:', response.status);
           const errorText = await response.text();

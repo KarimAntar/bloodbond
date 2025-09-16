@@ -34,21 +34,27 @@ self.addEventListener('activate', function(event) {
 messaging.onBackgroundMessage(function(payload) {
   console.log('[firebase-messaging-sw.js] Received background message ', payload);
 
-  // Prefer explicit notification payload when present (FCM automatic display)
   const notif = payload.notification || null;
   const data = payload.data || {};
 
-  // If there is an explicit notification payload, FCM has already displayed the notification
-  // Do not show another one to avoid duplicates
-  if (notif) {
-    console.log('[firebase-messaging-sw.js] Notification payload present, assuming FCM displayed it, skipping service worker display');
-    return;
-  }
+  // Determine title/body from notification payload OR data fields
+  let title, body, tag, image;
 
-  // Determine title/body from data fields
-  const title = data._title || data.title || 'Bloodbond';
-  const body = data._body || data.body || '';
-  const tag = data.tag || `bloodbond-${Date.now()}`;
+  if (notif) {
+    // FCM sent notification payload - use it directly
+    console.log('[firebase-messaging-sw.js] Using FCM notification payload');
+    title = notif.title || 'Bloodbond';
+    body = notif.body || '';
+    image = notif.image || data.image;
+    tag = `bloodbond-${Date.now()}`;
+  } else {
+    // Fallback to data fields (legacy support)
+    console.log('[firebase-messaging-sw.js] Using data payload fallback');
+    title = data._title || data.title || 'Bloodbond';
+    body = data._body || data.body || '';
+    image = data.image;
+    tag = data.tag || `bloodbond-${Date.now()}`;
+  }
 
   // If there is nothing to show, skip showing a notification
   if (!title && !body) {
@@ -61,14 +67,16 @@ messaging.onBackgroundMessage(function(payload) {
     icon: '/favicon.png',
     data: data,
     tag,
-    renotify: false
+    renotify: false,
+    requireInteraction: true
   };
 
-  // Add image if present in data
-  if (data && data.image) {
-    options.image = data.image;
+  // Add image if present
+  if (image) {
+    options.image = image;
   }
 
+  console.log('[firebase-messaging-sw.js] Showing notification:', { title, body, tag });
   return self.registration.showNotification(title, options);
 });
 
