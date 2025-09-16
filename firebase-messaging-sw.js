@@ -21,13 +21,24 @@ firebase.initializeApp(firebaseConfig);
 const messaging = firebase.messaging();
 
 self.addEventListener('install', function(event) {
+  console.log('[firebase-messaging-sw.js] Service worker installing...');
   // Activate new service worker immediately
   self.skipWaiting();
 });
 
 self.addEventListener('activate', function(event) {
+  console.log('[firebase-messaging-sw.js] Service worker activating...');
   // Take control of uncontrolled clients as soon as the SW activates
   event.waitUntil(clients.claim());
+  console.log('[firebase-messaging-sw.js] Service worker activated and claimed clients');
+});
+
+// Add message listener for debugging
+self.addEventListener('message', function(event) {
+  console.log('[firebase-messaging-sw.js] Received message from main thread:', event.data);
+  if (event.data && event.data.type === 'ping') {
+    event.ports[0].postMessage({ type: 'pong', timestamp: Date.now() });
+  }
 });
 
 // Handle background messages

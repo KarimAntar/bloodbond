@@ -1419,6 +1419,30 @@ export const initializeNotifications = async () => {
         return true;
       }
 
+      // Test service worker communication
+      try {
+        console.log('initializeNotifications: Testing service worker communication...');
+        if ('serviceWorker' in navigator) {
+          const registration = await navigator.serviceWorker.getRegistration('/');
+          if (registration) {
+            console.log('initializeNotifications: Service worker registration found:', registration.scope);
+
+            // Test communication with service worker
+            const channel = new MessageChannel();
+            channel.port1.onmessage = (event) => {
+              console.log('initializeNotifications: Service worker responded:', event.data);
+            };
+
+            registration.active?.postMessage({ type: 'ping' }, [channel.port2]);
+            console.log('initializeNotifications: Ping sent to service worker');
+          } else {
+            console.warn('initializeNotifications: No service worker registration found');
+          }
+        }
+      } catch (swTestError) {
+        console.warn('initializeNotifications: Service worker test failed:', swTestError);
+      }
+
       // Following Firebase docs: Initialize messaging first, then set up message handler
       const messaging = getMessaging();
 
@@ -1430,6 +1454,53 @@ export const initializeNotifications = async () => {
             // For web platforms, all FCM messages should be handled by the service worker to avoid duplicates
             // The foreground handler should not show notifications for web messages
             console.log('initializeNotifications: foreground message received, but letting service worker handle all web notifications');
+
+            // Add fallback: If service worker doesn't handle the message within 3 seconds, show it ourselves
+            setTimeout(async () => {
+              console.log('initializeNotifications: Checking if service worker handled the message...');
+
+              // Check if we can show a fallback notification
+              if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+                try {
+                  // Extract notification data
+                  const notif = payload.notification || null;
+                  const data = payload.data || {};
+
+                  let title = 'BloodBond';
+                  let body = '';
+
+                  if (notif) {
+                    title = notif.title || 'BloodBond';
+                    body = notif.body || '';
+                  } else {
+                    title = data._title || data.title || 'BloodBond';
+                    body = data._body || data.body || '';
+                  }
+
+                  console.log('initializeNotifications: Service worker may have failed, showing fallback notification');
+
+                  const fallbackNotification = new Notification(title, {
+                    body: body,
+                    icon: '/favicon.png',
+                    data: data,
+                    tag: `bloodbond-fallback-${Date.now()}`,
+                    requireInteraction: true
+                  });
+
+                  // Auto-close after 10 seconds
+                  setTimeout(() => {
+                    fallbackNotification.close();
+                  }, 10000);
+
+                  console.log('initializeNotifications: Fallback notification shown successfully');
+                } catch (fallbackError) {
+                  console.error('initializeNotifications: Fallback notification failed:', fallbackError);
+                }
+              } else {
+                console.log('initializeNotifications: Cannot show fallback - permission not granted');
+              }
+            }, 3000); // Wait 3 seconds for service worker to handle
+
             return; // Always let service worker handle notifications for web platform
           } catch (e) {
             console.error('initializeNotifications: onMessage handler error', e);
