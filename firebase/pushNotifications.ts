@@ -1392,8 +1392,9 @@ export const sendPushNotification = async (
 
     // Determine notification strategy to prevent duplicates
     let notificationSent = false;
+    let notificationMethod = '';
 
-    // Strategy 1: If user has real FCM tokens, use server API ONLY
+    // Strategy 1: If user has real FCM tokens, use server API ONLY (preferred for all platforms)
     if (realTokens.length > 0 && !notificationSent) {
       try {
         // Prefer explicit SEND_ORIGIN env var (EXPO_PUBLIC_SEND_ORIGIN supported).
@@ -1419,12 +1420,13 @@ export const sendPushNotification = async (
         if (response.ok) {
           const result = await response.json();
           console.log('sendPushNotification: FCM API send successful:', result);
-          notificationSent = true; // Mark as sent to prevent duplicates
+          notificationSent = true;
+          notificationMethod = 'fcm-api';
 
           // Add Android-specific delay to prevent race conditions
           if (isWeb && /Android/i.test(navigator.userAgent)) {
             console.log('sendPushNotification: Android detected, adding delay to prevent duplicates');
-            await new Promise(resolve => setTimeout(resolve, 2000)); // Increased delay for Android
+            await new Promise(resolve => setTimeout(resolve, 2000));
           }
         } else {
           console.warn('sendPushNotification: FCM API send failed with status:', response.status);
@@ -1433,12 +1435,11 @@ export const sendPushNotification = async (
         }
       } catch (apiError) {
         console.warn('sendPushNotification: FCM API send failed with exception:', apiError);
-        // Don't fall back to browser notification here - let it try other strategies
       }
     }
 
-    // Strategy 2: If FCM API failed or no real tokens, try fallback tokens
-    if (!notificationSent && fallbackTokens.length > 0) {
+    // Strategy 2: If FCM API failed AND no real tokens exist, try fallback tokens (only for web platforms)
+    if (!notificationSent && fallbackTokens.length > 0 && isWeb) {
       console.log('sendPushNotification: Using fallback tokens for browser notification');
       if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
         try {
@@ -1450,7 +1451,8 @@ export const sendPushNotification = async (
           });
           setTimeout(() => notification.close(), 5000);
           console.log('sendPushNotification: Browser notification shown for fallback tokens');
-          notificationSent = true; // Mark as sent
+          notificationSent = true;
+          notificationMethod = 'fallback-token';
         } catch (browserError) {
           console.warn('sendPushNotification: Browser notification failed:', browserError);
         }
@@ -1459,8 +1461,8 @@ export const sendPushNotification = async (
       }
     }
 
-    // Strategy 3: If still not sent and we have permission, show browser notification as last resort
-    if (!notificationSent && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+    // Strategy 3: If still not sent and we have permission, show browser notification as last resort (web only)
+    if (!notificationSent && isWeb && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
       try {
         console.log('sendPushNotification: Last resort - showing browser notification');
         const notification = new Notification(title, {
@@ -1472,10 +1474,19 @@ export const sendPushNotification = async (
         setTimeout(() => notification.close(), 5000);
         console.log('sendPushNotification: Browser notification shown as last resort');
         notificationSent = true;
+        notificationMethod = 'browser-fallback';
       } catch (browserError) {
         console.warn('sendPushNotification: Last resort browser notification also failed:', browserError);
       }
     }
+
+    console.log('sendPushNotification: Notification delivery result:', {
+      sent: notificationSent,
+      method: notificationMethod,
+      realTokens: realTokens.length,
+      fallbackTokens: fallbackTokens.length,
+      platform: isWeb ? 'web' : 'native'
+    });
 
     // Strategy 4: No notification could be sent
     if (!notificationSent) {
