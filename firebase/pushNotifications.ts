@@ -914,16 +914,30 @@ export const registerPushToken = async (userId: string, token: string, platform 
       return;
     }
 
+    console.log('registerPushToken: Starting registration for user:', userId, 'platform:', platform, 'deviceId:', deviceId);
+
     const userTokensRef = collection(db, 'userTokens');
+
+    // Generate a consistent deviceId for Android if not provided
+    let finalDeviceId = deviceId;
+    if (!finalDeviceId && isWeb && /Android/i.test(navigator.userAgent)) {
+      // Generate a consistent deviceId for Android browsers
+      const userAgent = navigator.userAgent;
+      const screenInfo = `${screen.width}x${screen.height}`;
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      finalDeviceId = btoa(`${userAgent}-${screenInfo}-${timezone}`).substring(0, 32);
+      console.log('registerPushToken: Generated Android deviceId:', finalDeviceId);
+    }
 
     // First, try to find any existing token for this user/device combination
     let existingDoc = null;
     let updateReason = '';
 
     // 1. Prefer matching by deviceId when provided (keeps one record per physical device)
-    if (deviceId) {
+    if (finalDeviceId) {
       try {
-        const qByDevice = query(userTokensRef, where('userId', '==', userId), where('deviceId', '==', deviceId));
+        console.log('registerPushToken: Searching by deviceId:', finalDeviceId);
+        const qByDevice = query(userTokensRef, where('userId', '==', userId), where('deviceId', '==', finalDeviceId));
         const snap = await getDocs(qByDevice);
         if (!snap.empty) {
           existingDoc = snap.docs[0];
@@ -938,12 +952,18 @@ export const registerPushToken = async (userId: string, token: string, platform 
     // 2. If no deviceId match, try matching by token to avoid duplicate entries
     if (!existingDoc) {
       try {
+        console.log('registerPushToken: Searching by token:', token.substring(0, 20) + '...');
         const qByToken = query(userTokensRef, where('token', '==', token));
         const snapToken = await getDocs(qByToken);
         if (!snapToken.empty) {
           existingDoc = snapToken.docs[0];
           updateReason = 'token';
           console.log('registerPushToken: found existing token by token', existingDoc.id);
+
+          // If we found by token but have a deviceId, update the deviceId
+          if (finalDeviceId && !existingDoc.data().deviceId) {
+            console.log('registerPushToken: updating deviceId for existing token');
+          }
         }
       } catch (e) {
         console.warn('registerPushToken: token lookup failed, continuing', e);
@@ -953,14 +973,20 @@ export const registerPushToken = async (userId: string, token: string, platform 
     // 3. If we found an existing document, update it
     if (existingDoc) {
       try {
-        await updateDoc(doc(db, 'userTokens', existingDoc.id), {
+        const updateData: any = {
           userId,
           token,
           platform,
-          deviceId: deviceId || null,
           active: true,
           updatedAt: Timestamp.now(),
-        });
+        };
+
+        // Only update deviceId if we have one and it's different
+        if (finalDeviceId) {
+          updateData.deviceId = finalDeviceId;
+        }
+
+        await updateDoc(doc(db, 'userTokens', existingDoc.id), updateData);
         console.log(`registerPushToken: updated existing token doc by ${updateReason}`, existingDoc.id);
         return; // Successfully updated, exit function
       } catch (updateError) {
@@ -972,9 +998,11 @@ export const registerPushToken = async (userId: string, token: string, platform 
     // 4. Create new token document only if no existing doc found or update failed
     // But first, do one more check to prevent race conditions
     try {
+      console.log('registerPushToken: No existing doc found, checking for race conditions...');
+
       // Double-check if a document was created by another process
-      const finalCheckQuery = deviceId
-        ? query(userTokensRef, where('userId', '==', userId), where('deviceId', '==', deviceId))
+      const finalCheckQuery = finalDeviceId
+        ? query(userTokensRef, where('userId', '==', userId), where('deviceId', '==', finalDeviceId))
         : query(userTokensRef, where('token', '==', token));
 
       const finalCheckSnap = await getDocs(finalCheckQuery);
@@ -982,27 +1010,40 @@ export const registerPushToken = async (userId: string, token: string, platform 
       if (!finalCheckSnap.empty) {
         // Another process created the document, update it instead
         const existingFinalDoc = finalCheckSnap.docs[0];
-        await updateDoc(doc(db, 'userTokens', existingFinalDoc.id), {
+        console.log('registerPushToken: Race condition detected, updating existing doc:', existingFinalDoc.id);
+
+        const updateData: any = {
           userId,
           token,
           platform,
-          deviceId: deviceId || null,
           active: true,
           updatedAt: Timestamp.now(),
-        });
+        };
+
+        if (finalDeviceId) {
+          updateData.deviceId = finalDeviceId;
+        }
+
+        await updateDoc(doc(db, 'userTokens', existingFinalDoc.id), updateData);
         console.log('registerPushToken: updated document created by another process', existingFinalDoc.id);
         return;
       }
 
       // No existing document found, create new one
-      await addDoc(userTokensRef, {
+      console.log('registerPushToken: Creating new token document...');
+      const newDocData: any = {
         userId,
         token,
         platform,
-        deviceId: deviceId || null,
         createdAt: Timestamp.now(),
         active: true,
-      });
+      };
+
+      if (finalDeviceId) {
+        newDocData.deviceId = finalDeviceId;
+      }
+
+      await addDoc(userTokensRef, newDocData);
       console.log('registerPushToken: created new token doc for user', userId);
     } catch (createError) {
       console.error('registerPushToken: failed to create new token doc', createError);
@@ -1326,7 +1367,7 @@ export const sendPushNotification = async (
           // Add Android-specific delay to prevent race conditions
           if (isWeb && /Android/i.test(navigator.userAgent)) {
             console.log('sendPushNotification: Android detected, adding delay to prevent duplicates');
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await new Promise(resolve => setTimeout(resolve, 2000)); // Increased delay for Android
           }
         } else {
           console.warn('sendPushNotification: FCM API send failed with status:', response.status);
@@ -1479,13 +1520,24 @@ export const initializeNotifications = async () => {
 
                   console.log('initializeNotifications: Service worker may have failed, showing fallback notification');
 
-                  const fallbackNotification = new Notification(title, {
+                  // Extract image from payload data
+                  const imageUrl = data.image || notif?.image;
+
+                  const notificationOptions: any = {
                     body: body,
                     icon: '/favicon.png',
                     data: data,
                     tag: `bloodbond-fallback-${Date.now()}`,
                     requireInteraction: true
-                  });
+                  };
+
+                  // Add image if available
+                  if (imageUrl) {
+                    notificationOptions.image = imageUrl;
+                    console.log('initializeNotifications: Adding image to fallback notification:', imageUrl);
+                  }
+
+                  const fallbackNotification = new Notification(title, notificationOptions);
 
                   // Auto-close after 10 seconds
                   setTimeout(() => {
