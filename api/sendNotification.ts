@@ -258,6 +258,37 @@ export default async function handler(req: any, res: any) {
         }
       }
 
+      // Additional cleanup: Remove tokens that consistently fail
+      try {
+        const allTokens = await firestore.collection('userTokens').where('active', '==', false).get();
+        const tokensToDelete = [];
+
+        for (const doc of allTokens.docs) {
+          const data = doc.data();
+          const lastError = data.lastError || '';
+          const invalidatedAt = data.invalidatedAt;
+
+          // Delete tokens that have been invalid for more than 24 hours
+          if (invalidatedAt && lastError &&
+              (Date.now() - invalidatedAt.toMillis()) > (24 * 60 * 60 * 1000)) {
+            tokensToDelete.push(doc.id);
+            console.log('sendToTokens: scheduling deletion of old invalid token:', doc.id);
+          }
+        }
+
+        // Delete old invalid tokens
+        for (const docId of tokensToDelete) {
+          try {
+            await firestore.collection('userTokens').doc(docId).delete();
+            console.log('sendToTokens: deleted old invalid token:', docId);
+          } catch (deleteErr) {
+            console.warn('sendToTokens: failed to delete old token:', docId, deleteErr);
+          }
+        }
+      } catch (cleanupErr) {
+        console.warn('sendToTokens: cleanup of old tokens failed', cleanupErr);
+      }
+
       return { successCount, failureCount, failures };
     };
 
