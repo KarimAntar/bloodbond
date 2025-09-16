@@ -19,6 +19,9 @@ Notifications.setNotificationHandler({
 // Determine platform
 const isWeb = typeof window !== 'undefined' && window.document;
 
+// Global debouncing for token registration to prevent duplicates
+let isRegisteringToken = false;
+
 /*
   NOTE:
   - For web push via FCM you must provide your VAPID public key.
@@ -420,6 +423,15 @@ export const ensureAndRegisterPushToken = async (userId: string, platform?: stri
   if (!platform) {
     platform = isWeb ? 'web' : 'native';
   }
+
+  // Prevent duplicate simultaneous calls
+  if (isRegisteringToken) {
+    console.log('ensureAndRegisterPushToken: Already registering token, skipping duplicate call');
+    return { success: true, reason: 'already-registering' };
+  }
+
+  isRegisteringToken = true;
+
   try {
     console.log('ensureAndRegisterPushToken: STARTING for userId:', userId, 'platform:', platform);
 
@@ -564,6 +576,9 @@ export const ensureAndRegisterPushToken = async (userId: string, platform?: stri
   } catch (error) {
     console.error('ensureAndRegisterPushToken error:', error);
     return { success: false, reason: 'error', error };
+  } finally {
+    // Always reset the debouncing flag
+    isRegisteringToken = false;
   }
 };
 
@@ -929,6 +944,42 @@ export const registerPushToken = async (userId: string, token: string, platform 
       console.log('registerPushToken: Generated Android deviceId:', finalDeviceId);
     }
 
+    // Detect device type and browser
+    let deviceType = 'desktop';
+    let browserName = 'unknown';
+
+    if (isWeb) {
+      const userAgent = navigator.userAgent.toLowerCase();
+
+      // Detect device type
+      if (/android/i.test(userAgent)) {
+        deviceType = 'mobile';
+      } else if (/ipad|iphone|ipod/i.test(userAgent)) {
+        deviceType = 'mobile';
+      } else if (/tablet/i.test(userAgent) || (/android/i.test(userAgent) && !/mobile/i.test(userAgent))) {
+        deviceType = 'tablet';
+      } else {
+        deviceType = 'desktop';
+      }
+
+      // Detect browser
+      if (userAgent.includes('chrome') && !userAgent.includes('edg')) {
+        browserName = 'chrome';
+      } else if (userAgent.includes('firefox')) {
+        browserName = 'firefox';
+      } else if (userAgent.includes('safari') && !userAgent.includes('chrome')) {
+        browserName = 'safari';
+      } else if (userAgent.includes('edg')) {
+        browserName = 'edge';
+      } else if (userAgent.includes('opera')) {
+        browserName = 'opera';
+      } else {
+        browserName = 'unknown';
+      }
+
+      console.log('registerPushToken: Detected device:', deviceType, 'browser:', browserName);
+    }
+
     // First, try to find any existing token for this user/device combination
     let existingDoc = null;
     let updateReason = '';
@@ -979,6 +1030,8 @@ export const registerPushToken = async (userId: string, token: string, platform 
           platform,
           active: true,
           updatedAt: Timestamp.now(),
+          device: deviceType,
+          browser: browserName,
         };
 
         // Only update deviceId if we have one and it's different
@@ -1018,6 +1071,8 @@ export const registerPushToken = async (userId: string, token: string, platform 
           platform,
           active: true,
           updatedAt: Timestamp.now(),
+          device: deviceType,
+          browser: browserName,
         };
 
         if (finalDeviceId) {
@@ -1037,6 +1092,8 @@ export const registerPushToken = async (userId: string, token: string, platform 
         platform,
         createdAt: Timestamp.now(),
         active: true,
+        device: deviceType,
+        browser: browserName,
       };
 
       if (finalDeviceId) {
@@ -1044,7 +1101,7 @@ export const registerPushToken = async (userId: string, token: string, platform 
       }
 
       await addDoc(userTokensRef, newDocData);
-      console.log('registerPushToken: created new token doc for user', userId);
+      console.log('registerPushToken: created new token doc for user', userId, 'device:', deviceType, 'browser:', browserName);
     } catch (createError) {
       console.error('registerPushToken: failed to create new token doc', createError);
       throw createError;
