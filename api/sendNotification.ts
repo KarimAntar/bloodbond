@@ -112,7 +112,7 @@ export default async function handler(req: any, res: any) {
           // Consider unknown/empty platforms as web to avoid sending notification payloads
           // to browser tokens that may display duplicates. Explicitly treat common native
           // platform identifiers as native.
-          const nativePlatforms = ['android', 'ios', 'expo', 'apns', 'fcm'];
+          const nativePlatforms = ['android', 'ios', 'expo', 'apns', 'fcm', 'native'];
           const webIndicators = ['web', 'browser', 'chrome', 'edge', 'firefox', 'safari'];
 
           const isWeb = !platform || webIndicators.includes(platform);
