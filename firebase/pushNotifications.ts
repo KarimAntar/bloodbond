@@ -1626,7 +1626,7 @@ export const sendPushNotification = async (
     if (!notificationSent && isWeb && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
       try {
         console.log('sendPushNotification: Last resort - showing browser notification');
-        const notification = new Notification(title, {
+        const notification = new Notification(`Fallback: ${title}`, {
           body: body,
           icon: '/favicon.png',
           data: data || {},

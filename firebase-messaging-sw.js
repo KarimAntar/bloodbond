@@ -45,6 +45,8 @@ self.addEventListener('message', function(event) {
 messaging.onBackgroundMessage(function(payload) {
   console.log('[firebase-messaging-sw.js] ===== BACKGROUND MESSAGE RECEIVED =====');
   console.log('[firebase-messaging-sw.js] Full payload:', JSON.stringify(payload, null, 2));
+  console.log('[firebase-messaging-sw.js] payload.notification exists:', !!payload.notification);
+  console.log('[firebase-messaging-sw.js] payload.data exists:', !!payload.data);
 
   try {
     const notif = payload.notification || null;
@@ -56,6 +58,8 @@ messaging.onBackgroundMessage(function(payload) {
     // Determine title/body from notification payload OR data fields
     let title, body, tag, image;
 
+    console.log('[firebase-messaging-sw.js] About to determine title/body');
+
     if (notif) {
       // FCM sent notification payload - use it directly
       console.log('[firebase-messaging-sw.js] Using FCM notification payload');
@@ -63,6 +67,7 @@ messaging.onBackgroundMessage(function(payload) {
       body = notif.body || '';
       image = notif.image || data.image;
       tag = `bloodbond-${Date.now()}`;
+      console.log('[firebase-messaging-sw.js] Title from notification:', title);
     } else {
       // Fallback to data fields (legacy support)
       console.log('[firebase-messaging-sw.js] Using data payload fallback');
@@ -70,10 +75,13 @@ messaging.onBackgroundMessage(function(payload) {
       body = data._body || data.body || '';
       image = data.image;
       tag = data.tag || `bloodbond-${Date.now()}`;
+      console.log('[firebase-messaging-sw.js] Title from data:', title);
     }
 
+    console.log('[firebase-messaging-sw.js] Title before prefix:', title);
     // Add prefix to identify service worker notifications
     title = `SW: ${title}`;
+    console.log('[firebase-messaging-sw.js] Title after prefix:', title);
 
     console.log('[firebase-messaging-sw.js] Extracted data:', { title, body, tag, image });
 
