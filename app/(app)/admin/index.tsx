@@ -30,6 +30,7 @@ import {
   addDoc,
   serverTimestamp,
   updateDoc,
+  where,
 } from 'firebase/firestore';
 // Notifications are sent via serverless API: /api/sendNotification
 // (uses FCM service account loaded from FCM_SERVICE_ACCOUNT env var)
@@ -379,6 +380,90 @@ export default function AdminDashboard() {
   // UI helpers
   const activeTokenUserIds = Array.from(new Set(userTokens.filter((t: any) => t.active !== false).map((t: any) => t.userId))).filter(Boolean);
 
+  // Cleanup duplicate tokens
+  const handleCleanupDuplicateTokens = async () => {
+    try {
+      Alert.alert(
+        'Cleanup Duplicate Tokens',
+        'This will remove duplicate push tokens for all users. Continue?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Cleanup',
+            style: 'destructive',
+            onPress: async () => {
+              setLoading(true);
+              try {
+                // Get all unique user IDs with tokens
+                const userIds = Array.from(new Set(userTokens.map((t: any) => t.userId))).filter(Boolean);
+
+                let totalCleaned = 0;
+                for (const userId of userIds) {
+                  try {
+                    // Query for user's active tokens
+                    const userTokensQuery = query(
+                      collection(db, 'userTokens'),
+                      where('userId', '==', userId),
+                      where('active', '==', true)
+                    );
+                    const userTokensSnap = await getDocs(userTokensQuery);
+
+                    if (userTokensSnap.docs.length > 1) {
+                      // Group by deviceId (preferred) or token
+                      const tokenGroups: { [key: string]: any[] } = {};
+                      userTokensSnap.docs.forEach(doc => {
+                        const data = doc.data();
+                        const key = data.deviceId || data.token;
+                        if (!tokenGroups[key]) tokenGroups[key] = [];
+                        tokenGroups[key].push({ id: doc.id, data });
+                      });
+
+                      // For each group with duplicates, keep only the most recent
+                      for (const [key, tokens] of Object.entries(tokenGroups)) {
+                        if (tokens.length > 1) {
+                          // Sort by creation date (newest first)
+                          tokens.sort((a, b) => {
+                            const aDate = a.data.createdAt?.toDate?.() || new Date(0);
+                            const bDate = b.data.createdAt?.toDate?.() || new Date(0);
+                            return bDate.getTime() - aDate.getTime();
+                          });
+
+                          // Deactivate older duplicates
+                          for (let i = 1; i < tokens.length; i++) {
+                            await updateDoc(doc(db, 'userTokens', tokens[i].id), {
+                              active: false,
+                              deactivatedAt: serverTimestamp(),
+                              deactivationReason: 'duplicate-cleanup'
+                            });
+                            totalCleaned++;
+                          }
+                        }
+                      }
+                    }
+                  } catch (userErr) {
+                    console.warn('Error cleaning tokens for user:', userId, userErr);
+                  }
+                }
+
+                // Refresh tokens
+                await loadUserTokens();
+                Alert.alert('Success', `Cleaned up ${totalCleaned} duplicate tokens`);
+              } catch (error) {
+                console.error('Error cleaning duplicate tokens:', error);
+                Alert.alert('Error', 'Failed to cleanup duplicate tokens');
+              } finally {
+                setLoading(false);
+              }
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('Error in cleanup:', error);
+      Alert.alert('Error', 'Failed to start cleanup');
+    }
+  };
+
   // dynamic styles
   const dynamicStyles = StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.screenBackground },
@@ -489,6 +574,14 @@ export default function AdminDashboard() {
         {activeTab === 'notifications' && (
           <View style={dynamicStyles.section}>
             <Text style={dynamicStyles.sectionTitle}>Push Notifications</Text>
+
+            {/* Cleanup duplicate tokens button */}
+            <View style={{ marginBottom: 16 }}>
+              <TouchableOpacity onPress={handleCleanupDuplicateTokens} style={[dynamicStyles.roleOption, { backgroundColor: '#ffebee', borderColor: '#f44336' }]}>
+                <Ionicons name="trash-bin-outline" size={20} color="#f44336" />
+                <Text style={[dynamicStyles.roleOptionText, { color: '#f44336', fontSize: 14 }]}>Cleanup Duplicate Tokens</Text>
+              </TouchableOpacity>
+            </View>
 
             <TextInput
               style={dynamicStyles.input}

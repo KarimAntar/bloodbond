@@ -1482,12 +1482,12 @@ const sendFCMMessage = async (token: string, title: string, body: string, data?:
 
       if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
         try {
-          const notification = new Notification(title, {
-            body: body,
-            icon: '/favicon.png',
-            data: data || {},
-            tag: `bloodbond-${Date.now()}`,
-          });
+        const notification = new Notification(`Fallback: ${title}`, {
+          body: body,
+          icon: '/favicon.png',
+          data: data || {},
+          tag: `bloodbond-${Date.now()}`,
+        });
 
           setTimeout(() => {
             notification.close();
@@ -1572,7 +1572,7 @@ export const sendPushNotification = async (
           body: JSON.stringify({
             type: 'user',
             userId,
-            title,
+            title: `FCM: ${title}`,
             body,
             data: data || {},
           }),
@@ -1604,7 +1604,7 @@ export const sendPushNotification = async (
       console.log('sendPushNotification: Using fallback tokens for browser notification');
       if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
         try {
-          const notification = new Notification(title, {
+          const notification = new Notification(`Browser: ${title}`, {
             body: body,
             icon: '/favicon.png',
             data: data || {},
