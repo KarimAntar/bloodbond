@@ -1720,6 +1720,7 @@ export const initializeNotifications = async () => {
         // Set up foreground message handler as per Firebase documentation
         onMessage(messaging, (payload) => {
           console.log('FCM message received in foreground:', payload);
+          console.log('FCM foreground handler - full user agent:', navigator.userAgent);
           try {
             // For web platforms, all FCM messages should be handled by the service worker to avoid duplicates
             // The foreground handler should not show notifications for web messages
