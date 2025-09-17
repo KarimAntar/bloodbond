@@ -1731,6 +1731,14 @@ export const initializeNotifications = async () => {
             const isAndroid = /Android/i.test(userAgent);
             const isChrome = /Chrome/i.test(userAgent) && !/Edg/i.test(userAgent);
 
+            console.log('initializeNotifications: User agent detection:', {
+              userAgent: userAgent.substring(0, 50) + '...',
+              isAndroid,
+              isChrome,
+              shouldSkipFallback: isAndroid && isChrome,
+              conditionResult: !isAndroid || !isChrome
+            });
+
             if (!isAndroid || !isChrome) {
               setTimeout(async () => {
                 console.log('initializeNotifications: Checking if service worker handled the message...');
@@ -1772,7 +1780,7 @@ export const initializeNotifications = async () => {
                       console.log('initializeNotifications: Adding image to fallback notification:', imageUrl);
                     }
 
-                    const fallbackNotification = new Notification(title, notificationOptions);
+                    const fallbackNotification = new Notification(`Foreground: ${title}`, notificationOptions);
 
                     // Auto-close after 10 seconds
                     setTimeout(() => {
