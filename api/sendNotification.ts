@@ -125,23 +125,14 @@ export default async function handler(req: any, res: any) {
           // If we detect a native platform, include notification so OS displays it.
           // For unknown platforms (should be rare) treat as web to avoid duplicate browser notifications.
           if (isWeb && !isNativePlatform) {
-            const webpushConfig: any = {
-              headers: { Urgency: 'high' },
-            };
+          const webpushConfig: any = {
+            headers: { Urgency: 'high' },
+          };
 
-            // Always use favicon as icon, add image only if uploaded
-            const webpushNotification: any = {
-              title,
-              body,
-              icon: 'https://bloodbond.app/favicon.png', // Always use favicon as notification icon
-            };
-
-            // Add uploaded image as the body image if available
-            if (imageUrl) {
-              webpushNotification.image = imageUrl;
-            }
-
-            webpushConfig.notification = webpushNotification;
+          // For web tokens, DO NOT include notification payload in webpush
+          // This prevents FCM from displaying notifications directly and ensures
+          // the service worker handles them to avoid duplicates
+          // The title/body are included in the data payload for the service worker
 
             // Ensure image is also in data so foreground handler can access it
             const dataWithImage: any = { ...baseData, _title: title, _body: body };
