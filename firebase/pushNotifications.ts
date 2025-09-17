@@ -1727,20 +1727,17 @@ export const initializeNotifications = async () => {
             console.log('initializeNotifications: foreground message received, but letting service worker handle all web notifications');
 
             // Add fallback: If service worker doesn't handle the message within 3 seconds, show it ourselves
-            // Skip fallback for Android Chrome to prevent duplicates - Android should rely on service worker only
+            // Skip fallback for Android devices to prevent duplicates - Android should rely on service worker only
             const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
             const isAndroid = /Android/i.test(userAgent);
-            const isChrome = /Chrome/i.test(userAgent) && !/Edg/i.test(userAgent);
 
-            console.log('initializeNotifications: User agent detection:', {
+            console.log('initializeNotifications: Android detection:', {
               userAgent: userAgent.substring(0, 50) + '...',
               isAndroid,
-              isChrome,
-              shouldSkipFallback: isAndroid && isChrome,
-              conditionResult: !isAndroid || !isChrome
+              willSkipFallback: isAndroid
             });
 
-            if (!isAndroid || !isChrome) {
+            if (!isAndroid) {
               setTimeout(async () => {
                 console.log('initializeNotifications: Checking if service worker handled the message...');
 
