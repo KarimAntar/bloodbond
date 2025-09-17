@@ -134,11 +134,13 @@ export default async function handler(req: any, res: any) {
           // the service worker handles them to avoid duplicates
           // The title/body are included in the data payload for the service worker
 
-            // Ensure image is also in data so foreground handler can access it
-            const dataWithImage: any = { ...baseData, _title: title, _body: body };
+            // For web tokens, send minimal data to prevent FCM direct display
+            // The service worker will construct the notification from this minimal data
+            const dataWithImage: any = { ...baseData };
             if (imageUrl) {
               dataWithImage.image = imageUrl;
             }
+            // Do not include _title and _body in data to prevent FCM direct display
 
             return {
               token,

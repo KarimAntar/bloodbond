@@ -1737,7 +1737,8 @@ export const initializeNotifications = async () => {
               willSkipFallback: isAndroid
             });
 
-            if (!isAndroid) {
+            // Temporarily disable foreground fallback for all devices to debug
+            if (false) {
               setTimeout(async () => {
                 console.log('initializeNotifications: Checking if service worker handled the message...');
 
