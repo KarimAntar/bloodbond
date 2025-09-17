@@ -72,6 +72,9 @@ messaging.onBackgroundMessage(function(payload) {
       tag = data.tag || `bloodbond-${Date.now()}`;
     }
 
+    // Add prefix to identify service worker notifications
+    title = `SW: ${title}`;
+
     console.log('[firebase-messaging-sw.js] Extracted data:', { title, body, tag, image });
 
     // If there is nothing to show, skip showing a notification
