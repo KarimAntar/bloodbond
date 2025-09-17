@@ -1726,61 +1726,70 @@ export const initializeNotifications = async () => {
             console.log('initializeNotifications: foreground message received, but letting service worker handle all web notifications');
 
             // Add fallback: If service worker doesn't handle the message within 3 seconds, show it ourselves
-            setTimeout(async () => {
-              console.log('initializeNotifications: Checking if service worker handled the message...');
+            // Skip fallback for Android Chrome to prevent duplicates - Android should rely on service worker only
+            const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+            const isAndroid = /Android/i.test(userAgent);
+            const isChrome = /Chrome/i.test(userAgent) && !/Edg/i.test(userAgent);
 
-              // Check if we can show a fallback notification
-              if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-                try {
-                  // Extract notification data
-                  const notif = payload.notification || null;
-                  const data = payload.data || {};
+            if (!isAndroid || !isChrome) {
+              setTimeout(async () => {
+                console.log('initializeNotifications: Checking if service worker handled the message...');
 
-                  let title = 'BloodBond';
-                  let body = '';
+                // Check if we can show a fallback notification
+                if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+                  try {
+                    // Extract notification data
+                    const notif = payload.notification || null;
+                    const data = payload.data || {};
 
-                  if (notif) {
-                    title = notif.title || 'BloodBond';
-                    body = notif.body || '';
-                  } else {
-                    title = data._title || data.title || 'BloodBond';
-                    body = data._body || data.body || '';
+                    let title = 'BloodBond';
+                    let body = '';
+
+                    if (notif) {
+                      title = notif.title || 'BloodBond';
+                      body = notif.body || '';
+                    } else {
+                      title = data._title || data.title || 'BloodBond';
+                      body = data._body || data.body || '';
+                    }
+
+                    console.log('initializeNotifications: Service worker may have failed, showing fallback notification');
+
+                    // Extract image from payload data
+                    const imageUrl = data.image || notif?.image;
+
+                    const notificationOptions: any = {
+                      body: body,
+                      icon: '/favicon.png',
+                      data: data,
+                      tag: `bloodbond-fallback-${Date.now()}`,
+                      requireInteraction: true
+                    };
+
+                    // Add image if available
+                    if (imageUrl) {
+                      notificationOptions.image = imageUrl;
+                      console.log('initializeNotifications: Adding image to fallback notification:', imageUrl);
+                    }
+
+                    const fallbackNotification = new Notification(title, notificationOptions);
+
+                    // Auto-close after 10 seconds
+                    setTimeout(() => {
+                      fallbackNotification.close();
+                    }, 10000);
+
+                    console.log('initializeNotifications: Fallback notification shown successfully');
+                  } catch (fallbackError) {
+                    console.error('initializeNotifications: Fallback notification failed:', fallbackError);
                   }
-
-                  console.log('initializeNotifications: Service worker may have failed, showing fallback notification');
-
-                  // Extract image from payload data
-                  const imageUrl = data.image || notif?.image;
-
-                  const notificationOptions: any = {
-                    body: body,
-                    icon: '/favicon.png',
-                    data: data,
-                    tag: `bloodbond-fallback-${Date.now()}`,
-                    requireInteraction: true
-                  };
-
-                  // Add image if available
-                  if (imageUrl) {
-                    notificationOptions.image = imageUrl;
-                    console.log('initializeNotifications: Adding image to fallback notification:', imageUrl);
-                  }
-
-                  const fallbackNotification = new Notification(title, notificationOptions);
-
-                  // Auto-close after 10 seconds
-                  setTimeout(() => {
-                    fallbackNotification.close();
-                  }, 10000);
-
-                  console.log('initializeNotifications: Fallback notification shown successfully');
-                } catch (fallbackError) {
-                  console.error('initializeNotifications: Fallback notification failed:', fallbackError);
+                } else {
+                  console.log('initializeNotifications: Cannot show fallback - permission not granted');
                 }
-              } else {
-                console.log('initializeNotifications: Cannot show fallback - permission not granted');
-              }
-            }, 3000); // Wait 3 seconds for service worker to handle
+              }, 3000); // Wait 3 seconds for service worker to handle
+            } else {
+              console.log('initializeNotifications: Skipping fallback notification for Android Chrome to prevent duplicates');
+            }
 
             return; // Always let service worker handle notifications for web platform
           } catch (e) {
