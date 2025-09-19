@@ -97,14 +97,13 @@ export default function AppSettingsScreen() {
           console.log('settings: Notification.permission =', perm);
           if (!mounted) return;
           setNotificationPermission(perm as any);
-          // Respect an explicit user preference stored on their profile when present;
-          // otherwise fall back to the browser permission state.
-          setNotificationsEnabled(typeof userProfile?.notificationsEnabled !== 'undefined' ? !!userProfile.notificationsEnabled : (perm === 'granted'));
+          // Don't set toggle here - let token check determine the actual state based on database
+          // This prevents showing enabled when user has no tokens but had enabled previously
         } else {
           const { status } = await Notifications.getPermissionsAsync();
           if (!mounted) return;
           setNotificationPermission(status === 'granted' ? 'granted' : 'default');
-          setNotificationsEnabled(typeof userProfile?.notificationsEnabled !== 'undefined' ? !!userProfile.notificationsEnabled : (status === 'granted'));
+          // Don't set toggle here - let token check determine the actual state based on database
         }
 
         // Skip Permissions API entirely - it can cause permission revocation
