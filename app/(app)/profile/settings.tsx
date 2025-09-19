@@ -222,47 +222,7 @@ export default function AppSettingsScreen() {
     return () => { mounted = false; };
   }, [user?.uid, userTokensChecked]);
 
-  // When permission becomes granted (e.g., user enabled notifications from browser site settings),
-  // attempt to register token automatically if the user is signed in and we don't yet have enabled state.
-  // Note: We don't auto-enable the toggle here - let the token check determine the state based on database
-  useEffect(() => {
-    let mounted = true;
 
-    const tryRegisterTokenOnGrant = async () => {
-      try {
-        if (!mounted) return;
-        // Only auto-register when browser permission is granted AND the user has not explicitly disabled notifications.
-        // Check the user's persisted preference (userProfile.notificationsEnabled). If it's explicitly false, respect user's choice.
-        const userPrefAllows = userProfile?.notificationsEnabled !== false;
-        if (notificationPermission === 'granted' && user?.uid && userPrefAllows) {
-          console.log('Permission granted — attempting to register push token automatically (background)');
-          const deviceId = await getOrCreateDeviceId();
-          const result = await ensureAndRegisterPushToken(user.uid, Platform.OS === 'web' ? 'web' : 'native', deviceId ?? undefined);
-          if (!mounted) return;
-          if (result?.success) {
-            // Don't auto-enable toggle here - let token check detect the new tokens and enable it
-            console.log('Auto-registered token successfully - token check will enable toggle');
-            // Optionally update user profile to indicate notifications are available
-            try {
-              await updateDoc(doc(db, 'users', user.uid), {
-                notificationsEnabled: true
-              });
-            } catch (e) {
-              console.warn('Failed to persist notificationsEnabled to Firestore', e);
-            }
-          } else {
-            console.warn('Auto-register after permission grant failed', result);
-          }
-        }
-      } catch (e) {
-        console.error('Error auto-registering push token on permission grant', e);
-      }
-    };
-
-    tryRegisterTokenOnGrant();
-
-    return () => { mounted = false; };
-  }, [notificationPermission, user]);
 
   const handleNotificationToggle = async (value: boolean) => {
     // Prevent repeated presses while processing
