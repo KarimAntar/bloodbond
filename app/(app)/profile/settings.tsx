@@ -195,15 +195,9 @@ export default function AppSettingsScreen() {
 
         console.log('settings: Found tokens:', tokens.length, 'active:', activeTokens.length);
 
-        if (activeTokens.length > 0) {
-          // User has active tokens - enable toggle
-          setNotificationsEnabled(true);
-          console.log('settings: User has active tokens, setting toggle to ON');
-        } else {
-          // User has no active tokens (either no tokens or inactive tokens) - disable toggle
-          setNotificationsEnabled(false);
-          console.log('settings: User has no active tokens, setting toggle to OFF');
-        }
+        // Always start with toggle OFF - user must manually enable notifications
+        setNotificationsEnabled(false);
+        console.log('settings: Toggle set to OFF by default, found', activeTokens.length, 'active tokens');
 
         setUserTokensChecked(true);
       } catch (error) {
