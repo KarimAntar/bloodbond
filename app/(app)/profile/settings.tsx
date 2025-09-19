@@ -16,7 +16,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
-import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { doc, updateDoc, deleteDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../../firebase/firebaseConfig';
 import { updatePassword, deleteUser, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
 import { auth } from '../../../firebase/firebaseConfig';
@@ -78,10 +78,12 @@ const SettingOption: React.FC<{
 );
 
 export default function AppSettingsScreen() {
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState<'default'|'denied'|'granted'|'unsupported'>('default');
   const [locationEnabled, setLocationEnabled] = useState(true);
   const [darkModeEnabled, setDarkModeEnabled] = useState(false);
+  const [notificationToggleLoading, setNotificationToggleLoading] = useState(false);
+  const [userTokensChecked, setUserTokensChecked] = useState(false);
 
   // Keep UI in sync with actual permission state (important after page reloads or origin changes).
   useEffect(() => {
@@ -173,6 +175,55 @@ export default function AppSettingsScreen() {
     }
   };
 
+  // Check user's existing tokens and set notification toggle state accordingly
+  useEffect(() => {
+    let mounted = true;
+
+    const checkUserTokens = async () => {
+      try {
+        if (!mounted || !user?.uid || userTokensChecked) return;
+
+        console.log('settings: Checking user tokens for notification toggle state');
+
+        const userTokensRef = collection(db, 'userTokens');
+        const q = query(userTokensRef, where('userId', '==', user.uid));
+        const snapshot = await getDocs(q);
+
+        if (!mounted) return;
+
+        const tokens = snapshot.docs.map(doc => doc.data());
+        const activeTokens = tokens.filter(token => token.active !== false);
+
+        console.log('settings: Found tokens:', tokens.length, 'active:', activeTokens.length);
+
+        if (activeTokens.length > 0) {
+          // User has active tokens - enable toggle
+          setNotificationsEnabled(true);
+          console.log('settings: User has active tokens, setting toggle to ON');
+        } else if (tokens.length > 0) {
+          // User has tokens but they're inactive - disable toggle
+          setNotificationsEnabled(false);
+          console.log('settings: User has inactive tokens, setting toggle to OFF');
+        } else {
+          // User has no tokens - disable toggle
+          setNotificationsEnabled(false);
+          console.log('settings: User has no tokens, setting toggle to OFF');
+        }
+
+        setUserTokensChecked(true);
+      } catch (error) {
+        console.warn('settings: Error checking user tokens:', error);
+        if (mounted) {
+          setUserTokensChecked(true);
+        }
+      }
+    };
+
+    checkUserTokens();
+
+    return () => { mounted = false; };
+  }, [user?.uid, userTokensChecked]);
+
   // When permission becomes granted (e.g., user enabled notifications from browser site settings),
   // attempt to register token automatically if the user is signed in and we don't yet have enabled state.
   useEffect(() => {
@@ -214,6 +265,14 @@ export default function AppSettingsScreen() {
   }, [notificationPermission, user, notificationsEnabled]);
 
   const handleNotificationToggle = async (value: boolean) => {
+    // Prevent repeated presses while processing
+    if (notificationToggleLoading) {
+      console.log('handleNotificationToggle: already processing, ignoring duplicate call');
+      return;
+    }
+
+    setNotificationToggleLoading(true);
+
     try {
       if (!user?.uid) {
         Alert.alert('Not signed in', 'Please sign in to manage notification settings.');
@@ -284,6 +343,8 @@ export default function AppSettingsScreen() {
     } catch (error) {
       console.error('Error toggling notifications:', error);
       Alert.alert('Error', 'Failed to update notification settings');
+    } finally {
+      setNotificationToggleLoading(false);
     }
   };
 
@@ -642,11 +703,56 @@ export default function AppSettingsScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Notifications */}
+        <View style={styles.section}>
+          <Text style={dynamicStyles.sectionTitle}>Notifications</Text>
+          <View style={dynamicStyles.optionsContainer}>
+            <View style={dynamicStyles.settingOption}>
+              <View style={[{
+                width: 36,
+                height: 36,
+                borderRadius: 18,
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginRight: 16,
+                backgroundColor: '#10B98120'
+              }]}>
+                {notificationToggleLoading ? (
+                  <ActivityIndicator size="small" color="#10B981" />
+                ) : (
+                  <Ionicons name="notifications" size={20} color="#10B981" />
+                )}
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{
+                  fontSize: 16,
+                  fontWeight: '500',
+                  color: colors.primaryText,
+                  marginBottom: 2,
+                }}>Push Notifications</Text>
+                <Text style={{
+                  fontSize: 14,
+                  color: colors.secondaryText,
+                }}>
+                  {notificationsEnabled ? 'Receive push notifications for blood requests' : 'Push notifications are disabled'}
+                </Text>
+              </View>
+              <Switch
+                value={notificationsEnabled}
+                onValueChange={handleNotificationToggle}
+                disabled={notificationToggleLoading}
+                trackColor={{ false: colors.border, true: '#10B981' }}
+                thumbColor={notificationsEnabled ? '#fff' : '#f4f3f4'}
+              />
+            </View>
+          </View>
+        </View>
+
         {/* Privacy & Security */}
         <View style={styles.section}>
           <Text style={dynamicStyles.sectionTitle}>Privacy & Security</Text>
           <View style={dynamicStyles.optionsContainer}>
-            
+
             <SettingOption
               icon="lock-closed"
               title="Change Password"

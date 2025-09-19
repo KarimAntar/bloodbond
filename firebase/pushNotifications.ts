@@ -1775,8 +1775,8 @@ export const initializeNotifications = async () => {
                     let body = '';
 
                     if (notif) {
-                      title = notif.title || 'BloodBond';
-                      body = notif.body || '';
+                      title = notif.title || data._title || data.title || 'BloodBond';
+                      body = notif.body || data._body || data.body || '';
                     } else {
                       title = data._title || data.title || 'BloodBond';
                       body = data._body || data.body || '';

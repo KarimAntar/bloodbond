@@ -52,15 +52,15 @@ messaging.onBackgroundMessage(function(payload) {
     if (notif) {
       // FCM sent notification payload - use it directly
       console.log('[firebase-messaging-sw.js] Using FCM notification payload');
-      title = notif.title || 'Bloodbond';
-      body = notif.body || '';
+      title = notif.title || data._title || data.title || 'BloodBond';
+      body = notif.body || data._body || data.body || '';
       image = notif.image || data.image;
       tag = `bloodbond-${Date.now()}`;
       console.log('[firebase-messaging-sw.js] Title from notification:', title);
     } else {
       // Fallback to data fields (legacy support)
       console.log('[firebase-messaging-sw.js] Using data payload fallback');
-      title = data._title || data.title || 'Bloodbond';
+      title = data._title || data.title || 'BloodBond';
       body = data._body || data.body || '';
       image = data.image;
       tag = data.tag || `bloodbond-${Date.now()}`;

@@ -74,6 +74,8 @@ export default function AdminDashboard() {
   const [notificationImageUrl, setNotificationImageUrl] = useState<string>('');
   const [localImageUri, setLocalImageUri] = useState<string>('');
   const [loading, setLoading] = useState(true);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [notificationModal, setNotificationModal] = useState(false);
   const [notificationData, setNotificationData] = useState({
     title: '',
@@ -169,6 +171,8 @@ export default function AdminDashboard() {
   }, []);
 
   const pickImageFromDevice = async () => {
+    if (uploadingImage) return; // Prevent multiple uploads
+
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
@@ -179,9 +183,12 @@ export default function AdminDashboard() {
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const uri = result.assets[0].uri;
         setLocalImageUri(uri);
+        setUploadingImage(true);
+        setUploadProgress(0);
 
         try {
           // Convert image to base64
+          setUploadProgress(10);
           const response = await fetch(uri);
           const blob = await response.blob();
           const base64 = await new Promise<string>((resolve, reject) => {
@@ -191,6 +198,7 @@ export default function AdminDashboard() {
             reader.readAsDataURL(blob);
           });
 
+          setUploadProgress(30);
           const filename = uri.split('/').pop() || `notif_${Date.now()}.jpg`;
 
           // Upload via API
@@ -202,6 +210,7 @@ export default function AdminDashboard() {
           console.log('Image data length:', base64.length);
           console.log('Filename:', filename);
 
+          setUploadProgress(50);
           const uploadResponse = await fetch(`${apiOrigin}/api/uploadImage`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -211,6 +220,7 @@ export default function AdminDashboard() {
             }),
           });
 
+          setUploadProgress(80);
           console.log('Upload response status:', uploadResponse.status);
           console.log('Upload response headers:', Object.fromEntries(uploadResponse.headers.entries()));
 
@@ -224,6 +234,7 @@ export default function AdminDashboard() {
           console.log('Upload result:', uploadResult);
 
           if (uploadResult.success) {
+            setUploadProgress(100);
             setNotificationImageUrl(uploadResult.downloadUrl);
             Alert.alert('Image uploaded', 'Image uploaded and attached to notification.');
           } else {
@@ -232,11 +243,16 @@ export default function AdminDashboard() {
         } catch (uploadErr) {
           console.error('Upload error', uploadErr);
           Alert.alert('Upload failed', String((uploadErr as Error)?.message || uploadErr));
+        } finally {
+          setUploadingImage(false);
+          setUploadProgress(0);
         }
       }
     } catch (err) {
       console.error('Image pick error', err);
       Alert.alert('Error', 'Failed to pick image');
+      setUploadingImage(false);
+      setUploadProgress(0);
     }
   };
 
@@ -607,14 +623,24 @@ export default function AdminDashboard() {
             />
 
             {/* Pick image from device + preview */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-              <TouchableOpacity onPress={pickImageFromDevice} style={[dynamicStyles.roleOption, { paddingVertical: 10, paddingHorizontal: 12 }]}>
-                <Ionicons name="image-outline" size={20} color={colors.primary} />
-                <Text style={[dynamicStyles.roleOptionText, { marginLeft: 8, fontSize: 14 }]}>Pick image from device</Text>
+            <View style={{ marginBottom: 12 }}>
+              <TouchableOpacity
+                onPress={pickImageFromDevice}
+                disabled={uploadingImage}
+                style={[dynamicStyles.roleOption, { paddingVertical: 10, paddingHorizontal: 12, opacity: uploadingImage ? 0.6 : 1 }]}
+              >
+                {uploadingImage ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : (
+                  <Ionicons name="image-outline" size={20} color={colors.primary} />
+                )}
+                <Text style={[dynamicStyles.roleOptionText, { marginLeft: 8, fontSize: 14 }]}>
+                  {uploadingImage ? `Uploading... ${uploadProgress}%` : 'Pick image from device'}
+                </Text>
               </TouchableOpacity>
 
               {(localImageUri || notificationImageUrl) ? (
-                <View style={{ marginLeft: 6 }}>
+                <View style={{ marginTop: 8, alignSelf: 'flex-start' }}>
                   <Image source={{ uri: localImageUri || notificationImageUrl }} style={{ width: 56, height: 56, borderRadius: 8 }} />
                 </View>
               ) : null}
@@ -691,8 +717,16 @@ export default function AdminDashboard() {
                 <Text style={dynamicStyles.cancelButtonText}>Clear</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity onPress={handleSendNotification} style={dynamicStyles.sendButton}>
-                <Text style={dynamicStyles.sendButtonText}>Send</Text>
+              <TouchableOpacity
+                onPress={handleSendNotification}
+                disabled={uploadingImage}
+                style={[dynamicStyles.sendButton, uploadingImage && { opacity: 0.6 }]}
+              >
+                {uploadingImage ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Text style={dynamicStyles.sendButtonText}>Send</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
