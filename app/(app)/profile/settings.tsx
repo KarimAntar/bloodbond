@@ -224,6 +224,7 @@ export default function AppSettingsScreen() {
 
   // When permission becomes granted (e.g., user enabled notifications from browser site settings),
   // attempt to register token automatically if the user is signed in and we don't yet have enabled state.
+  // Note: We don't auto-enable the toggle here - let the token check determine the state based on database
   useEffect(() => {
     let mounted = true;
 
@@ -233,13 +234,15 @@ export default function AppSettingsScreen() {
         // Only auto-register when browser permission is granted AND the user has not explicitly disabled notifications.
         // Check the user's persisted preference (userProfile.notificationsEnabled). If it's explicitly false, respect user's choice.
         const userPrefAllows = userProfile?.notificationsEnabled !== false;
-        if (notificationPermission === 'granted' && user?.uid && !notificationsEnabled && userPrefAllows) {
-          console.log('Permission granted — attempting to register push token automatically');
+        if (notificationPermission === 'granted' && user?.uid && userPrefAllows) {
+          console.log('Permission granted — attempting to register push token automatically (background)');
           const deviceId = await getOrCreateDeviceId();
           const result = await ensureAndRegisterPushToken(user.uid, Platform.OS === 'web' ? 'web' : 'native', deviceId ?? undefined);
           if (!mounted) return;
           if (result?.success) {
-            setNotificationsEnabled(true);
+            // Don't auto-enable toggle here - let token check detect the new tokens and enable it
+            console.log('Auto-registered token successfully - token check will enable toggle');
+            // Optionally update user profile to indicate notifications are available
             try {
               await updateDoc(doc(db, 'users', user.uid), {
                 notificationsEnabled: true
@@ -247,7 +250,6 @@ export default function AppSettingsScreen() {
             } catch (e) {
               console.warn('Failed to persist notificationsEnabled to Firestore', e);
             }
-            Alert.alert('Notifications Enabled', 'Push notifications have been enabled for your account.');
           } else {
             console.warn('Auto-register after permission grant failed', result);
           }
@@ -260,7 +262,7 @@ export default function AppSettingsScreen() {
     tryRegisterTokenOnGrant();
 
     return () => { mounted = false; };
-  }, [notificationPermission, user, notificationsEnabled]);
+  }, [notificationPermission, user]);
 
   const handleNotificationToggle = async (value: boolean) => {
     // Prevent repeated presses while processing
