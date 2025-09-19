@@ -1703,23 +1703,32 @@ export const initializeNotifications = async () => {
             console.log('initializeNotifications: Service worker already registered:', registration.scope);
           }
 
-          // Wait for service worker to be ready
-          if (registration.installing) {
-            console.log('initializeNotifications: Waiting for service worker to install...');
-            await new Promise(resolve => {
-              const installingWorker = registration.installing;
-              installingWorker?.addEventListener('statechange', () => {
-                if (installingWorker.state === 'installed') {
-                  resolve(void 0);
-                }
-              });
-            });
+    // Wait for service worker to be ready
+    if (registration.installing) {
+      console.log('initializeNotifications: Waiting for service worker to install...');
+      await new Promise(resolve => {
+        const installingWorker = registration.installing;
+        installingWorker?.addEventListener('statechange', () => {
+          if (installingWorker.state === 'installed') {
+            resolve(void 0);
           }
+        });
+      });
+    }
 
-          if (registration.waiting) {
-            console.log('initializeNotifications: Service worker waiting, skipping waiting...');
-            registration.waiting.postMessage({ type: 'SKIP_WAITING' });
-          }
+    if (registration.waiting) {
+      console.log('initializeNotifications: Service worker waiting, skipping waiting...');
+      registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+    }
+
+    // Explicitly check for updates on every site visit
+    console.log('initializeNotifications: Checking for service worker updates...');
+    try {
+      await registration.update();
+      console.log('initializeNotifications: Service worker update check completed');
+    } catch (updateError) {
+      console.warn('initializeNotifications: Service worker update check failed:', updateError);
+    }
 
           // Test communication with service worker
           const channel = new MessageChannel();
