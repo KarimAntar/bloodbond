@@ -67,10 +67,7 @@ messaging.onBackgroundMessage(function(payload) {
       console.log('[firebase-messaging-sw.js] Title from data:', title);
     }
 
-    console.log('[firebase-messaging-sw.js] Title before prefix:', title);
-    // Add prefix to identify service worker notifications
-    title = `SW: ${title}`;
-    console.log('[firebase-messaging-sw.js] Title after prefix:', title);
+    console.log('[firebase-messaging-sw.js] Final title:', title);
 
     console.log('[firebase-messaging-sw.js] Extracted data:', { title, body, tag, image });
 

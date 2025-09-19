@@ -1689,28 +1689,49 @@ export const initializeNotifications = async () => {
         return true;
       }
 
-      // Test service worker communication
+      // Ensure service worker is registered and active
       try {
-        console.log('initializeNotifications: Testing service worker communication...');
+        console.log('initializeNotifications: Ensuring service worker registration...');
         if ('serviceWorker' in navigator) {
-          const registration = await navigator.serviceWorker.getRegistration('/');
-          if (registration) {
-            console.log('initializeNotifications: Service worker registration found:', registration.scope);
+          let registration = await navigator.serviceWorker.getRegistration('/');
 
-            // Test communication with service worker
-            const channel = new MessageChannel();
-            channel.port1.onmessage = (event) => {
-              console.log('initializeNotifications: Service worker responded:', event.data);
-            };
-
-            registration.active?.postMessage({ type: 'ping' }, [channel.port2]);
-            console.log('initializeNotifications: Ping sent to service worker');
+          if (!registration) {
+            console.log('initializeNotifications: No service worker found, registering...');
+            registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
+            console.log('initializeNotifications: Service worker registered successfully:', registration.scope);
           } else {
-            console.warn('initializeNotifications: No service worker registration found');
+            console.log('initializeNotifications: Service worker already registered:', registration.scope);
           }
+
+          // Wait for service worker to be ready
+          if (registration.installing) {
+            console.log('initializeNotifications: Waiting for service worker to install...');
+            await new Promise(resolve => {
+              const installingWorker = registration.installing;
+              installingWorker?.addEventListener('statechange', () => {
+                if (installingWorker.state === 'installed') {
+                  resolve(void 0);
+                }
+              });
+            });
+          }
+
+          if (registration.waiting) {
+            console.log('initializeNotifications: Service worker waiting, skipping waiting...');
+            registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+          }
+
+          // Test communication with service worker
+          const channel = new MessageChannel();
+          channel.port1.onmessage = (event) => {
+            console.log('initializeNotifications: Service worker responded:', event.data);
+          };
+
+          registration.active?.postMessage({ type: 'ping' }, [channel.port2]);
+          console.log('initializeNotifications: Ping sent to service worker');
         }
-      } catch (swTestError) {
-        console.warn('initializeNotifications: Service worker test failed:', swTestError);
+      } catch (swError) {
+        console.warn('initializeNotifications: Service worker setup failed:', swError);
       }
 
       // Following Firebase docs: Initialize messaging first, then set up message handler
@@ -1780,7 +1801,7 @@ export const initializeNotifications = async () => {
                       console.log('initializeNotifications: Adding image to fallback notification:', imageUrl);
                     }
 
-                    const fallbackNotification = new Notification(`Foreground: ${title}`, notificationOptions);
+                    const fallbackNotification = new Notification(title, notificationOptions);
 
                     // Auto-close after 10 seconds
                     setTimeout(() => {
