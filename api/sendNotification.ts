@@ -346,7 +346,16 @@ export default async function handler(req: any, res: any) {
             docId: d.id,
           };
         })
-        .filter((t: any) => t.token);
+        .filter((t: any) => t.token)
+        // Filter out fallback tokens that should not receive FCM messages
+        .filter((t: any) => {
+          const token = t.token;
+          const isFallbackToken = token === 'ios-safari-fallback' || token === 'browser-direct-notification';
+          if (isFallbackToken) {
+            console.log('sendNotification: skipping FCM send to fallback token:', token);
+          }
+          return !isFallbackToken;
+        });
 
       if (tokenObjs.length === 0) {
         res.status(200).json({ success: true, note: 'no-tokens-for-user', sent: 0 });
@@ -404,7 +413,16 @@ export default async function handler(req: any, res: any) {
             docId: d.id,
           };
         })
-        .filter((t: any) => t.token);
+        .filter((t: any) => t.token)
+        // Filter out fallback tokens that should not receive FCM messages
+        .filter((t: any) => {
+          const token = t.token;
+          const isFallbackToken = token === 'ios-safari-fallback' || token === 'browser-direct-notification';
+          if (isFallbackToken) {
+            console.log('sendNotification: skipping FCM send to fallback token:', token);
+          }
+          return !isFallbackToken;
+        });
 
       if (tokenObjs.length === 0) {
         res.status(200).json({ success: true, note: 'no-tokens-found', sent: 0 });
