@@ -195,21 +195,18 @@ export default function AppSettingsScreen() {
 
         console.log('settings: Found tokens:', tokens.length, 'active:', activeTokens.length);
 
-        // Determine toggle state based on user preference or conditions
+        // Determine toggle state based on user preference only
+        // Never auto-enable - only manual user choice
         let shouldEnable = false;
 
         if (userProfile?.notificationsEnabled === true) {
           // User has explicitly enabled notifications - keep them enabled
           shouldEnable = true;
           console.log('settings: User preference is ON - keeping toggle ON');
-        } else if (userProfile?.notificationsEnabled === false) {
-          // User has explicitly disabled notifications - keep them disabled
-          shouldEnable = false;
-          console.log('settings: User preference is OFF - keeping toggle OFF');
         } else {
-          // No user preference - use conditions to determine default state
-          shouldEnable = notificationPermission === 'granted' && tokens.length > 0 && activeTokens.length > 0;
-          console.log('settings: No user preference - using conditions: permission =', notificationPermission, ', tokens =', tokens.length, ', active =', activeTokens.length, ', toggle =', shouldEnable ? 'ON' : 'OFF');
+          // User has not explicitly enabled OR has disabled - keep OFF
+          shouldEnable = false;
+          console.log('settings: User preference is OFF or undefined - keeping toggle OFF, permission =', notificationPermission, ', tokens =', tokens.length, ', active =', activeTokens.length);
         }
 
         setNotificationsEnabled(shouldEnable);
