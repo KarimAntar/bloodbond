@@ -226,7 +226,7 @@ export default function AppSettingsScreen() {
     checkUserTokens();
 
     return () => { mounted = false; };
-  }, [user?.uid, userTokensChecked]);
+  }, [user?.uid, userTokensChecked, userProfile?.notificationsEnabled]);
 
 
 
