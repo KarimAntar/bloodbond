@@ -94,34 +94,43 @@ export default function AppSettingsScreen() {
       try {
         if (typeof window !== 'undefined' && Platform.OS === 'web') {
           const perm = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
-          console.log('settings: Notification.permission =', perm);
+          console.log('🔍 PERMISSION CHECK: Notification.permission =', perm);
           if (!mounted) return;
           setNotificationPermission(perm as any);
+          console.log('🔍 PERMISSION SET: notificationPermission state =', perm);
           // Don't set toggle here - let token check determine the actual state based on database
           // This prevents showing enabled when user has no tokens but had enabled previously
         } else {
           const { status } = await Notifications.getPermissionsAsync();
+          console.log('🔍 PERMISSION CHECK: Native status =', status);
           if (!mounted) return;
-          setNotificationPermission(status === 'granted' ? 'granted' : 'default');
+          const mappedStatus = status === 'granted' ? 'granted' : 'default';
+          setNotificationPermission(mappedStatus);
+          console.log('🔍 PERMISSION SET: notificationPermission state =', mappedStatus);
           // Don't set toggle here - let token check determine the actual state based on database
         }
 
         // Skip Permissions API entirely - it can cause permission revocation
         // We'll rely on focus/visibilitychange events and manual checks instead
-        console.log('settings: Skipping Permissions API to avoid permission revocation');
+        console.log('🔍 PERMISSION: Skipping Permissions API to avoid permission revocation');
       } catch (e) {
-        console.warn('settings: permission check failed', e);
+        console.warn('🔍 PERMISSION ERROR: permission check failed', e);
       }
     };
 
+    console.log('🔍 PERMISSION: Initial permission check starting');
     // Initial check
     checkPermission();
 
     // Re-check when page regains focus or becomes visible (useful after changing site permissions in browser UI)
-    const onFocus = () => checkPermission();
+    const onFocus = () => {
+      console.log('🔍 PERMISSION: Focus event triggered, re-checking permission');
+      checkPermission();
+    };
     const onVisibilityChange = () => {
       try {
         if (document.visibilityState === 'visible') {
+          console.log('🔍 PERMISSION: Visibility change to visible, re-checking permission');
           checkPermission();
         }
       } catch (e) {}
