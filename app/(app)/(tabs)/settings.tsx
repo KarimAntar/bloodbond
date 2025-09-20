@@ -23,7 +23,7 @@ import * as Location from 'expo-location';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ensureAndRegisterPushToken, unregisterPushToken, runNotificationDiagnostics } from '../../../firebase/pushNotifications';
-import { doc, updateDoc, getDoc } from 'firebase/firestore';
+import { doc, updateDoc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../../firebase/firebaseConfig';
 import { SkeletonLoader, SkeletonList } from '../../../components/SkeletonLoader';
 import { useFocusEffect } from '@react-navigation/native';
@@ -195,27 +195,46 @@ export default function SettingsTabScreen() {
 
   const loadSettings = async () => {
     try {
-      // Web: rely on the browser Permissions API to avoid using expo-notifications
-      if (typeof document !== 'undefined' && Platform.OS === 'web') {
-        try {
-          const perm = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
-          setNotificationsEnabled(perm === 'granted');
-        } catch (e) {
-          console.warn('loadSettings: failed to read Notification.permission', e);
+      console.log('🔍 SETTINGS: Loading settings...');
+
+      // Check user's existing tokens first
+      if (user?.uid) {
+        const userTokensRef = collection(db, 'userTokens');
+        const q = query(userTokensRef, where('userId', '==', user.uid));
+        const snapshot = await getDocs(q);
+        const tokens = snapshot.docs.map(doc => doc.data());
+        const activeTokens = tokens.filter(token => token.active !== false);
+
+        console.log('🔍 SETTINGS: Found tokens:', tokens.length, 'active:', activeTokens.length);
+
+        // Web: rely on the browser Permissions API to avoid using expo-notifications
+        if (typeof document !== 'undefined' && Platform.OS === 'web') {
+          try {
+            const perm = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
+            console.log('🔍 SETTINGS: Permission =', perm, ', tokens =', tokens.length, ', active =', activeTokens.length);
+            // Only enable if permission granted AND tokens exist AND tokens active
+            setNotificationsEnabled(perm === 'granted' && tokens.length > 0 && activeTokens.length > 0);
+          } catch (e) {
+            console.warn('🔍 SETTINGS: failed to read Notification.permission', e);
+            const { status: notificationStatus } = await Notifications.getPermissionsAsync();
+            setNotificationsEnabled(notificationStatus === 'granted' && tokens.length > 0 && activeTokens.length > 0);
+          }
+        } else {
+          // Native: use expo-notifications permissions
           const { status: notificationStatus } = await Notifications.getPermissionsAsync();
-          setNotificationsEnabled(notificationStatus === 'granted');
+          console.log('🔍 SETTINGS: Native permission =', notificationStatus, ', tokens =', tokens.length, ', active =', activeTokens.length);
+          setNotificationsEnabled(notificationStatus === 'granted' && tokens.length > 0 && activeTokens.length > 0);
         }
       } else {
-        // Native: use expo-notifications permissions
-        const { status: notificationStatus } = await Notifications.getPermissionsAsync();
-        setNotificationsEnabled(notificationStatus === 'granted');
+        console.log('🔍 SETTINGS: No user UID, disabling notifications');
+        setNotificationsEnabled(false);
       }
 
       // Load location permission status
       const { status: locationStatus } = await Location.getForegroundPermissionsAsync();
       setLocationEnabled(locationStatus === 'granted');
     } catch (error) {
-      console.error('Error loading settings:', error);
+      console.error('🔍 SETTINGS: Error loading settings:', error);
     }
   };
 
