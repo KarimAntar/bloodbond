@@ -195,10 +195,11 @@ export default function AppSettingsScreen() {
 
         console.log('settings: Found tokens:', tokens.length, 'active:', activeTokens.length);
 
-        // Enable toggle only if permission is granted AND user has active tokens
-        const shouldEnable = notificationPermission === 'granted' && activeTokens.length > 0;
+        // Always disable toggle by default - user must manually enable notifications
+        // Only enable if ALL THREE conditions are met: permission granted + tokens exist + tokens active
+        const shouldEnable = notificationPermission === 'granted' && tokens.length > 0 && activeTokens.length > 0;
         setNotificationsEnabled(shouldEnable);
-        console.log('settings: Permission =', notificationPermission, ', active tokens =', activeTokens.length, ', toggle =', shouldEnable ? 'ON' : 'OFF');
+        console.log('settings: Permission =', notificationPermission, ', total tokens =', tokens.length, ', active tokens =', activeTokens.length, ', toggle =', shouldEnable ? 'ON' : 'OFF');
 
         setUserTokensChecked(true);
       } catch (error) {
