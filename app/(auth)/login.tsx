@@ -395,14 +395,6 @@ export default function LoginScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.forgotPassword}
-              onPress={handleForgotPassword}
-              disabled={loading}
-            >
-              <Text style={styles.forgotPasswordText}>Forgot your password?</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
               style={[styles.loginButton, { backgroundColor: '#4285F4', marginTop: 12 }, loading && styles.buttonDisabled]}
               onPress={async () => {
                 try {
@@ -439,6 +431,14 @@ export default function LoginScreen() {
                   </Text>
                 </>
               )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.forgotPassword}
+              onPress={() => router.push('/forgot-password' as any)}
+              disabled={loading}
+            >
+              <Text style={styles.forgotPasswordText}>Forgot your password?</Text>
             </TouchableOpacity>
           </View>
 
