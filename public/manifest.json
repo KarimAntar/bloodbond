@@ -2,11 +2,12 @@
   "name": "BloodBond - Blood Donation Network",
   "short_name": "BloodBond",
   "description": "Connect blood donors and recipients in your community. Save lives through real-time blood requests and responses.",
-  "start_url": "/",
+  "start_url": "/(app)",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#E53E3E",
   "orientation": "portrait-primary",
+  "scope": "/(app)",
   "icons": [
     {
       "src": "/icon-192.png",
@@ -30,6 +31,5 @@
   "categories": ["health", "social"],
   "lang": "en-US",
   "dir": "ltr",
-  "scope": "/",
   "prefer_related_applications": false
 }

@@ -136,6 +136,36 @@ export default function RootLayout() {
       } catch (e) {
         console.warn('Error warming Firebase auth', e);
       }
+
+      // Dynamically add PWA manifest link if not present (for Expo web compatibility)
+      const existingLink = document.querySelector('link[rel="manifest"]');
+      if (!existingLink && typeof document !== 'undefined') {
+        const link = document.createElement('link');
+        link.rel = 'manifest';
+        link.href = '/manifest.json';
+        document.head.appendChild(link);
+        console.log('PWA manifest link dynamically added');
+      }
+
+      // Add apple-touch-icon if not present
+      const existingAppleIcon = document.querySelector('link[rel="apple-touch-icon"]');
+      if (!existingAppleIcon && typeof document !== 'undefined') {
+        const appleIcon = document.createElement('link');
+        appleIcon.rel = 'apple-touch-icon';
+        appleIcon.href = '/icon-192.png';
+        document.head.appendChild(appleIcon);
+        console.log('Apple touch icon dynamically added');
+      }
+
+      // Add theme color meta if not present
+      const existingThemeColor = document.querySelector('meta[name="theme-color"]');
+      if (!existingThemeColor && typeof document !== 'undefined') {
+        const themeColor = document.createElement('meta');
+        themeColor.name = 'theme-color';
+        themeColor.content = '#E53E3E';
+        document.head.appendChild(themeColor);
+        console.log('Theme color meta dynamically added');
+      }
     }
 
     // Initialize performance optimizations on app start
