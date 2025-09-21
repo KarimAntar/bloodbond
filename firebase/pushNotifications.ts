@@ -821,6 +821,105 @@ export const resetNotificationPermission = async () => {
 };
 
 /**
+ * Send iOS Safari specific browser notification
+ * This function is called specifically for iOS Safari fallback tokens
+ */
+export const sendIOSSafariNotification = async (title: string, body: string, data?: any) => {
+  try {
+    console.log('sendIOSSafariNotification: Starting iOS Safari notification', { title, body, data });
+
+    if (!isWeb) {
+      console.warn('sendIOSSafariNotification: Not on web platform');
+      return { success: false, reason: 'not-web-platform' };
+    }
+
+    // Check if this is actually iOS Safari
+    const userAgent = navigator.userAgent;
+    const isIOSSafari = /iPad|iPhone|iPod/.test(userAgent) && /Safari/.test(userAgent) && !/CriOS|Chrome/.test(userAgent);
+    
+    console.log('sendIOSSafariNotification: iOS Safari detection:', {
+      userAgent: userAgent.substring(0, 50) + '...',
+      isIOSSafari
+    });
+
+    if (!isIOSSafari) {
+      console.warn('sendIOSSafariNotification: Current browser is not iOS Safari');
+      return { success: false, reason: 'not-ios-safari' };
+    }
+
+    const permission = (typeof Notification !== 'undefined') ? Notification.permission : 'default';
+    console.log('sendIOSSafariNotification: Notification permission:', permission);
+
+    if (permission !== 'granted') {
+      console.warn('sendIOSSafariNotification: Notification permission not granted');
+      return {
+        success: false,
+        reason: 'permission-not-granted',
+        message: 'Notification permission not granted for iOS Safari'
+      };
+    }
+
+    // Create iOS Safari optimized notification
+    const notificationOptions: any = {
+      body: body,
+      icon: '/favicon.png',
+      data: data || {},
+      tag: `bloodbond-ios-safari-${Date.now()}`,
+      requireInteraction: true, // Important for iOS Safari
+      silent: false,
+      renotify: true // Ensure notification shows even if similar tag exists
+    };
+
+    // Add image if available
+    if (data?.image) {
+      notificationOptions.image = data.image;
+      console.log('sendIOSSafariNotification: Adding image:', data.image);
+    }
+
+    console.log('sendIOSSafariNotification: Creating notification with options:', notificationOptions);
+
+    const notification = new Notification(`iOS: ${title}`, notificationOptions);
+    
+    // iOS Safari notifications should stay visible longer
+    setTimeout(() => {
+      try {
+        notification.close();
+        console.log('sendIOSSafariNotification: Notification auto-closed after 8 seconds');
+      } catch (closeError) {
+        console.warn('sendIOSSafariNotification: Error closing notification:', closeError);
+      }
+    }, 8000);
+
+    // Add click handler to focus the app
+    notification.onclick = () => {
+      try {
+        notification.close();
+        window.focus();
+        console.log('sendIOSSafariNotification: Notification clicked, focusing window');
+      } catch (clickError) {
+        console.warn('sendIOSSafariNotification: Error handling notification click:', clickError);
+      }
+    };
+
+    console.log('sendIOSSafariNotification: iOS Safari notification created successfully');
+    return {
+      success: true,
+      message: 'iOS Safari notification sent successfully',
+      method: 'ios-safari-browser-notification'
+    };
+
+  } catch (error) {
+    console.error('sendIOSSafariNotification error:', error);
+    return {
+      success: false,
+      reason: 'error',
+      message: 'Failed to send iOS Safari notification',
+      error: String(error)
+    };
+  }
+};
+
+/**
  * Test notification functionality with a simple test notification
  */
 export const testNotification = async () => {
@@ -839,7 +938,16 @@ export const testNotification = async () => {
       };
     }
 
-    // Create a test notification
+    // Check if this is iOS Safari and use specific handler
+    const userAgent = navigator.userAgent;
+    const isIOSSafari = /iPad|iPhone|iPod/.test(userAgent) && /Safari/.test(userAgent) && !/CriOS|Chrome/.test(userAgent);
+
+    if (isIOSSafari) {
+      console.log('testNotification: Detected iOS Safari, using specific handler');
+      return await sendIOSSafariNotification('BloodBond Test', 'This is a test notification to verify iOS Safari setup is working.');
+    }
+
+    // Create a test notification for other platforms
     const testNotification = new Notification('BloodBond Test', {
       body: 'This is a test notification to verify your setup is working.',
       icon: '/favicon.png',
@@ -1509,8 +1617,7 @@ const sendFCMMessage = async (token: string, title: string, body: string, data?:
   }
 };
 
-// Send push notification (this function currently stores a notification doc).
-// In production you should send messages via FCM server API using server key.
+// Send push notification with enhanced iOS Safari support
 export const sendPushNotification = async (
   userId: string,
   title: string,
@@ -1544,12 +1651,15 @@ export const sendPushNotification = async (
       return token !== 'browser-direct-notification' && token !== 'ios-safari-fallback';
     });
 
-    const fallbackTokens = snapshotAll.docs.filter(doc =>
-      doc.data().token === 'browser-direct-notification' ||
+    const iosSafariTokens = snapshotAll.docs.filter(doc => 
       doc.data().token === 'ios-safari-fallback'
     );
 
-    console.log('sendPushNotification: Token analysis - Real tokens:', realTokens.length, 'Fallback tokens:', fallbackTokens.length);
+    const otherFallbackTokens = snapshotAll.docs.filter(doc =>
+      doc.data().token === 'browser-direct-notification'
+    );
+
+    console.log('sendPushNotification: Token analysis - Real tokens:', realTokens.length, 'iOS Safari tokens:', iosSafariTokens.length, 'Other fallback tokens:', otherFallbackTokens.length);
 
     // Determine notification strategy to prevent duplicates
     let notificationSent = false;
@@ -1572,7 +1682,7 @@ export const sendPushNotification = async (
           body: JSON.stringify({
             type: 'user',
             userId,
-            title: `FCM: ${title}`,
+            title: title, // Remove FCM prefix to avoid confusion
             body,
             data: data || {},
           }),
@@ -1584,10 +1694,10 @@ export const sendPushNotification = async (
           notificationSent = true;
           notificationMethod = 'fcm-api';
 
-          // Add Android-specific delay to prevent race conditions
-          if (isWeb && /Android/i.test(navigator.userAgent)) {
-            console.log('sendPushNotification: Android detected, adding delay to prevent duplicates');
-            await new Promise(resolve => setTimeout(resolve, 2000));
+          // Add delay to prevent race conditions on mobile devices
+          if (isWeb && (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent))) {
+            console.log('sendPushNotification: Mobile device detected, adding delay to prevent race conditions');
+            await new Promise(resolve => setTimeout(resolve, 1500));
           }
         } else {
           console.warn('sendPushNotification: FCM API send failed with status:', response.status);
@@ -1599,9 +1709,27 @@ export const sendPushNotification = async (
       }
     }
 
-    // Strategy 2: If FCM API failed AND no real tokens exist, try fallback tokens (only for web platforms)
-    if (!notificationSent && fallbackTokens.length > 0 && isWeb) {
-      console.log('sendPushNotification: Using fallback tokens for browser notification');
+    // Strategy 2: iOS Safari specific handling - use dedicated iOS Safari notification function
+    if (!notificationSent && iosSafariTokens.length > 0 && isWeb) {
+      console.log('sendPushNotification: iOS Safari tokens detected, using dedicated iOS Safari handler');
+
+      try {
+        const iosSafariResult = await sendIOSSafariNotification(title, body, data);
+        if (iosSafariResult.success) {
+          console.log('sendPushNotification: iOS Safari notification sent successfully');
+          notificationSent = true;
+          notificationMethod = iosSafariResult.method || 'ios-safari-browser';
+        } else {
+          console.warn('sendPushNotification: iOS Safari notification failed:', iosSafariResult);
+        }
+      } catch (iosSafariError) {
+        console.warn('sendPushNotification: iOS Safari notification exception:', iosSafariError);
+      }
+    }
+
+    // Strategy 3: If FCM API failed AND no real tokens exist, try other fallback tokens (only for web platforms)
+    if (!notificationSent && otherFallbackTokens.length > 0 && isWeb) {
+      console.log('sendPushNotification: Using other fallback tokens for browser notification');
       if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
         try {
           const notification = new Notification(`Browser: ${title}`, {
@@ -1611,7 +1739,7 @@ export const sendPushNotification = async (
             tag: `bloodbond-${Date.now()}`,
           });
           setTimeout(() => notification.close(), 5000);
-          console.log('sendPushNotification: Browser notification shown for fallback tokens');
+          console.log('sendPushNotification: Browser notification shown for other fallback tokens');
           notificationSent = true;
           notificationMethod = 'fallback-token';
         } catch (browserError) {
@@ -1622,7 +1750,7 @@ export const sendPushNotification = async (
       }
     }
 
-    // Strategy 3: If still not sent and we have permission, show browser notification as last resort (web only)
+    // Strategy 4: If still not sent and we have permission, show browser notification as last resort (web only)
     if (!notificationSent && isWeb && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
       try {
         console.log('sendPushNotification: Last resort - showing browser notification');
@@ -1645,17 +1773,18 @@ export const sendPushNotification = async (
       sent: notificationSent,
       method: notificationMethod,
       realTokens: realTokens.length,
-      fallbackTokens: fallbackTokens.length,
+      iosSafariTokens: iosSafariTokens.length,
+      otherFallbackTokens: otherFallbackTokens.length,
       platform: isWeb ? 'web' : 'native'
     });
 
-    // Strategy 4: No notification could be sent
+    // Strategy 5: No notification could be sent
     if (!notificationSent) {
       console.log('sendPushNotification: No notification method available - notification stored but cannot be delivered');
     }
 
     console.log('sendPushNotification: Push notification send completed successfully');
-    return { success: true };
+    return { success: true, method: notificationMethod };
   } catch (error) {
     console.error('sendPushNotification: Error sending push notification:', error);
     throw error;
