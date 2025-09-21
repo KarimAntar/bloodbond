@@ -689,6 +689,24 @@ export default function SettingsTabScreen() {
               color="#666"
               colors={colors}
             />
+            <ProfileOption
+              icon="add-circle"
+              title="Add to Home Screen"
+              subtitle="Install app for better experience (iOS)"
+              onPress={() => {
+                if (Platform.OS === 'web') {
+                  Alert.alert(
+                    'Add BloodBond to Home Screen',
+                    'For the best experience on iOS:\n\n1. Tap the Share button (square with arrow) at the bottom of Safari\n2. Scroll down and select "Add to Home Screen"\n3. Tap "Add" in the top right\n\nThis creates an app-like experience with full-screen mode and offline access!',
+                    [{ text: 'Got it' }]
+                  );
+                } else {
+                  Alert.alert('PWA Feature', 'This feature is available in Safari on iOS devices. Open the site in Safari to add to home screen.');
+                }
+              }}
+              color="#38A169"
+              colors={colors}
+            />
           </View>
         </View>
 
