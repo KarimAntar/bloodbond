@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" href="/favicon.png" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#E53E3E" />
+  <meta name="description" content="Connect blood donors and recipients in your community. Save lives through real-time blood requests and responses." />
+  <link rel="manifest" href="/manifest.json" />
+  <title>BloodBond - Blood Donation Network</title>
+  <!-- PWA Meta Tags for iOS -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="BloodBond" />
+  <link rel="apple-touch-icon" href="/icon-192.png" />
+  <!-- Service Worker Registration -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/firebase-messaging-sw.js')
+          .then(function(registration) {
+            console.log('ServiceWorker registration successful:', registration.scope);
+          }, function(err) {
+            console.log('ServiceWorker registration failed:', err);
+          });
+      });
+    }
+  </script>
+</head>
+<body>
+  <noscript>You need to enable JavaScript to run this app.</noscript>
+  <div id="root"></div>
+</body>
+</html>
