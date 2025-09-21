@@ -37,17 +37,22 @@ interface StatsCardProps {
 }
 
 const StatsCard: React.FC<StatsCardProps> = ({ icon, title, count, color, colors }) => (
-  <View style={[{
-    backgroundColor: colors.cardBackground,
-    width: (width - 60) / 2,
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: color,
-    boxShadow: '0px 1px 4px rgba(0,0,0,0.08)',
-
-  }]}>
+  <View style={[
+    {
+      backgroundColor: colors.cardBackground,
+      width: (width - 60) / 2,
+      padding: 16,
+      borderRadius: 12,
+      marginBottom: 12,
+      borderLeftWidth: 4,
+      borderLeftColor: color,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.08,
+      shadowRadius: 4,
+      elevation: 1,
+    }
+  ]}>
     <View style={styles.statsIconContainer}>
       <Ionicons name={icon as any} size={24} color={color} />
     </View>
@@ -69,14 +74,19 @@ interface ActionButtonProps {
 
 const ActionButton: React.FC<ActionButtonProps> = ({ icon, title, subtitle, onPress, color, colors }) => (
   <TouchableOpacity 
-    style={[{
-      flexDirection: 'row',
-      alignItems: 'center',
-      padding: 16,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.border,
-    }]} 
+    style={[
+      {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.border,
+      }
+    ]} 
     onPress={onPress}
+    accessible={true}
+    accessibilityRole="button"
+    accessibilityLabel={title}
   >
     <View style={[styles.actionIconContainer, { backgroundColor: color + '15' }]}>
       <Ionicons name={icon as any} size={24} color={color} />
@@ -225,8 +235,11 @@ export default function HomeScreen() {
       backgroundColor: colors.cardBackground,
       borderRadius: 12,
       padding: 20,
-      boxShadow: '0px 2px 8px rgba(0,0,0,0.1)',
-
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 8,
+      elevation: 2,
     },
     profileName: {
       fontSize: 18,
@@ -248,8 +261,11 @@ export default function HomeScreen() {
       backgroundColor: colors.cardBackground,
       borderRadius: 12,
       overflow: 'hidden',
-      boxShadow: '0px 2px 8px rgba(0,0,0,0.1)',
-
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 8,
+      elevation: 2,
     },
   });
 
@@ -294,7 +310,7 @@ export default function HomeScreen() {
         <PullToRefresh refreshing={refreshing} onRefresh={onRefresh}>
           <ScrollView showsVerticalScrollIndicator={false}>
           <LinearGradient
-            colors={['#E53E3E', '#C53030']}
+            colors={[colors.primary, colors.danger]}
             style={styles.heroSection}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
@@ -351,17 +367,29 @@ export default function HomeScreen() {
             <Text style={dynamicStyles.userName}>{firstName} 👋</Text>
           </View>
           <View style={styles.headerRight}>
-            <TouchableOpacity style={styles.notificationButton} onPress={() => router.push('/notifications')}>
+            <TouchableOpacity 
+              style={styles.notificationButton} 
+              onPress={() => router.push('/notifications')}
+              accessible={true}
+              accessibilityRole="button"
+              accessibilityLabel="Notifications"
+            >
               <Ionicons name="notifications-outline" size={24} color={colors.secondaryText} />
               {unreadCount > 0 && (
-                <View style={styles.notificationBadge}>
+                <View style={[styles.notificationBadge, { backgroundColor: colors.primary }]}>
                   <Text style={styles.notificationBadgeText}>
                     {unreadCount > 99 ? '99+' : unreadCount.toString()}
                   </Text>
                 </View>
               )}
             </TouchableOpacity>
-            <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+            <TouchableOpacity 
+              onPress={handleLogout} 
+              style={styles.logoutButton}
+              accessible={true}
+              accessibilityRole="button"
+              accessibilityLabel="Logout"
+            >
               <Ionicons name="log-out-outline" size={24} color={colors.secondaryText} />
             </TouchableOpacity>
           </View>
@@ -370,7 +398,7 @@ export default function HomeScreen() {
         <ScrollView showsVerticalScrollIndicator={false}>
           {/* --- The rest of your home screen JSX is correct and can stay here --- */}
           <LinearGradient
-            colors={['#E53E3E', '#C53030']}
+            colors={[colors.primary, colors.danger]}
             style={styles.heroSection}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
@@ -400,7 +428,7 @@ export default function HomeScreen() {
               <View style={styles.profileInfo}>
                 <View style={styles.profileNameRow}>
                   <Text style={dynamicStyles.profileName}>{userProfile.fullName}</Text>
-                  <View style={[styles.bloodTypeBadge, { backgroundColor: '#E53E3E' }]}>
+                  <View style={[styles.bloodTypeBadge, { backgroundColor: colors.primary }]}>
                     <Text style={styles.bloodTypeText}>{userProfile.bloodType}</Text>
                   </View>
                 </View>
@@ -418,28 +446,28 @@ export default function HomeScreen() {
                 icon="pulse"
                 title="Total Requests"
                 count={stats.totalRequests}
-                color="#E53E3E"
+                color={colors.primary}
                 colors={colors}
               />
               <StatsCard
                 icon="time"
                 title="Active Requests"
                 count={stats.activeRequests}
-                color="#F56500"
+                color={colors.warning}
                 colors={colors}
               />
               <StatsCard
                 icon="chatbubble-ellipses"
                 title="Responses Given"
                 count={stats.responsesGiven}
-                color="#38A169"
+                color={colors.success}
                 colors={colors}
               />
               <StatsCard
                 icon="people"
                 title="Lives Touched"
                 count={stats.peopleSaved}
-                color="#3182CE"
+                color={colors.secondary}
                 colors={colors}
               />
             </View>
@@ -453,7 +481,7 @@ export default function HomeScreen() {
                 title="Create Request"
                 subtitle="Request blood donation"
                 onPress={() => router.push('/requests/create')}
-                color="#E53E3E"
+                color={colors.primary}
                 colors={colors}
               />
               <ActionButton
@@ -461,7 +489,7 @@ export default function HomeScreen() {
                 title="Browse Requests"
                 subtitle="Find people who need help"
                 onPress={() => router.push('/requests')}
-                color="#3182CE"
+                color={colors.secondary}
                 colors={colors}
               />
               <ActionButton
@@ -469,7 +497,7 @@ export default function HomeScreen() {
                 title="Update Profile"
                 subtitle="Manage your information"
                 onPress={() => router.push('/(app)/profile/edit')}
-                color="#38A169"
+                color={colors.success}
                 colors={colors}
               />
               <ActionButton
@@ -477,7 +505,7 @@ export default function HomeScreen() {
                 title="Notifications"
                 subtitle="Stay updated on responses"
                 onPress={() => router.push('/notifications')}
-                color="#F56500"
+                color={colors.warning}
                 colors={colors}
               />
             </View>
@@ -538,7 +566,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 4,
     right: 4,
-    backgroundColor: '#E53E3E',
     borderRadius: 8,
     minWidth: 16,
     height: 16,
@@ -581,8 +608,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderRadius: 12,
     padding: 20,
-    boxShadow: '0px 2px 8px rgba(0,0,0,0.1)',
-
   },
   profileHeader: {
     flexDirection: 'row',
@@ -653,8 +678,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 12,
     borderLeftWidth: 4,
-    boxShadow: '0px 1px 4px rgba(0,0,0,0.08)',
-
   },
   statsIconContainer: {
     marginBottom: 8,
@@ -680,8 +703,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderRadius: 12,
     overflow: 'hidden',
-    boxShadow: '0px 2px 8px rgba(0,0,0,0.1)',
-
   },
   actionButton: {
     flexDirection: 'row',

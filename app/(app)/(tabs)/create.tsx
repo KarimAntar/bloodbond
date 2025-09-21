@@ -9,7 +9,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useAuth } from '../../../contexts/AuthContext'; // CORRECTED PATH
+import { useAuth } from '../../../contexts/AuthContext';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { Colors } from '../../../constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,12 +18,18 @@ import { LinearGradient } from 'expo-linear-gradient';
 const ActionCard: React.FC<{
   title: string;
   subtitle: string;
-  icon: any; // Changed to any to support all Ionicons names
+  icon: any;
   color: string;
   onPress: () => void;
   styles: any;
 }> = ({ title, subtitle, icon, color, onPress, styles }) => (
-  <TouchableOpacity style={styles.actionCard} onPress={onPress}>
+  <TouchableOpacity 
+    style={styles.actionCard} 
+    onPress={onPress}
+    accessible={true}
+    accessibilityRole="button"
+    accessibilityLabel={title}
+  >
     <LinearGradient
       colors={[color, color + '80']}
       style={styles.actionGradient}
@@ -47,7 +53,7 @@ const ActionCard: React.FC<{
 );
 
 const InfoCard: React.FC<{
-  icon: any; // Changed to any to support all Ionicons names
+  icon: any;
   title: string;
   description: string;
   color: string;
@@ -89,13 +95,10 @@ export default function CreateTabScreen() {
       router.push('/(auth)/login');
       return;
     }
-    // Navigate to the profile edit screen, which is more appropriate
-    // for existing users than the initial setup screen.
     router.push('/profile/edit');
   };
 
   const handleFindDonors = () => {
-    // Corrected path to navigate to the requests tab
     router.push('/requests');
   };
 
@@ -147,8 +150,11 @@ export default function CreateTabScreen() {
       marginBottom: 12,
       borderRadius: 16,
       overflow: 'hidden',
-      boxShadow: '0px 2px 8px rgba(0,0,0,0.1)',
-
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 8,
+      elevation: 2,
     },
     actionGradient: {
       padding: 20,
@@ -184,8 +190,11 @@ export default function CreateTabScreen() {
       padding: 16,
       borderRadius: 12,
       marginBottom: 12,
-      boxShadow: '0px 1px 4px rgba(0,0,0,0.08)',
-
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.08,
+      shadowRadius: 4,
+      elevation: 1,
     },
     infoIcon: {
       width: 48,
@@ -213,8 +222,12 @@ export default function CreateTabScreen() {
       backgroundColor: colors.cardBackground,
       borderRadius: 12,
       padding: 20,
-      boxShadow: '0px 1px 4px rgba(0,0,0,0.08)',
-
+      marginBottom: 12,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.08,
+      shadowRadius: 4,
+      elevation: 1,
     },
     emergencyHeader: {
       flexDirection: 'row',
@@ -247,8 +260,11 @@ export default function CreateTabScreen() {
       backgroundColor: colors.cardBackground,
       borderRadius: 12,
       padding: 20,
-      boxShadow: '0px 1px 4px rgba(0,0,0,0.08)',
-
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.08,
+      shadowRadius: 4,
+      elevation: 1,
     },
     statItem: {
       flex: 1,
@@ -291,7 +307,7 @@ export default function CreateTabScreen() {
             title="Request Blood"
             subtitle="Create a request for blood donation"
             icon="add-circle"
-            color="#E53E3E"
+            color={colors.primary}
             onPress={handleCreateRequest}
             styles={dynamicStyles}
           />
@@ -300,7 +316,7 @@ export default function CreateTabScreen() {
             title="Become a Donor"
             subtitle="Update your profile to help"
             icon="heart"
-            color="#38A169"
+            color={colors.success}
             onPress={handleBecomeDonor}
             styles={dynamicStyles}
           />
@@ -309,7 +325,7 @@ export default function CreateTabScreen() {
             title="Find Donors"
             subtitle="Browse available blood requests"
             icon="search"
-            color="#3182CE"
+            color={colors.secondary}
             onPress={handleFindDonors}
             styles={dynamicStyles}
           />
@@ -323,7 +339,7 @@ export default function CreateTabScreen() {
             icon="pulse"
             title="Save Lives"
             description="One donation can help up to 3 patients in need"
-            color="#E53E3E"
+            color={colors.primary}
             styles={dynamicStyles}
           />
 
@@ -331,7 +347,7 @@ export default function CreateTabScreen() {
             icon="time"
             title="Quick Process"
             description="Donation takes only 10-15 minutes of your time"
-            color="#F56500"
+            color={colors.warning}
             styles={dynamicStyles}
           />
 
@@ -339,7 +355,7 @@ export default function CreateTabScreen() {
             icon="refresh"
             title="Regular Impact"
             description="You can donate every 56 days and make ongoing impact"
-            color="#38A169"
+            color={colors.success}
             styles={dynamicStyles}
           />
 
@@ -347,7 +363,7 @@ export default function CreateTabScreen() {
             icon="shield-checkmark"
             title="Health Benefits"
             description="Regular donation can improve your cardiovascular health"
-            color="#3182CE"
+            color={colors.secondary}
             styles={dynamicStyles}
           />
         </View>
@@ -361,7 +377,13 @@ export default function CreateTabScreen() {
               <Ionicons name="medical" size={24} color={colors.primary} />
               <Text style={dynamicStyles.emergencyTitle}>Egyptian Red Crescent</Text>
             </View>
-            <TouchableOpacity style={dynamicStyles.emergencyButton}>
+            <TouchableOpacity 
+              style={dynamicStyles.emergencyButton}
+              accessible={true}
+              accessibilityRole="button"
+              accessibilityLabel="Call Egyptian Red Crescent at 15333"
+              onPress={() => { /* Handle call */ }}
+            >
               <Ionicons name="call" size={20} color="white" />
               <Text style={dynamicStyles.emergencyButtonText}>Call 15333</Text>
             </TouchableOpacity>
@@ -372,7 +394,13 @@ export default function CreateTabScreen() {
               <Ionicons name="shield-checkmark" size={24} color={colors.primary} />
               <Text style={dynamicStyles.emergencyTitle}>Blood Bank Hotline</Text>
             </View>
-            <TouchableOpacity style={dynamicStyles.emergencyButton}>
+            <TouchableOpacity 
+              style={dynamicStyles.emergencyButton}
+              accessible={true}
+              accessibilityRole="button"
+              accessibilityLabel="Call Blood Bank Hotline at 16023"
+              onPress={() => { /* Handle call */ }}
+            >
               <Ionicons name="call" size={20} color="white" />
               <Text style={dynamicStyles.emergencyButtonText}>Call 16023</Text>
             </TouchableOpacity>
@@ -383,7 +411,13 @@ export default function CreateTabScreen() {
               <Ionicons name="warning" size={24} color={colors.primary} />
               <Text style={dynamicStyles.emergencyTitle}>Medical Emergency</Text>
             </View>
-            <TouchableOpacity style={dynamicStyles.emergencyButton}>
+            <TouchableOpacity 
+              style={dynamicStyles.emergencyButton}
+              accessible={true}
+              accessibilityRole="button"
+              accessibilityLabel="Call Medical Emergency at 122"
+              onPress={() => { /* Handle call */ }}
+            >
               <Ionicons name="call" size={20} color="white" />
               <Text style={dynamicStyles.emergencyButtonText}>Call 122</Text>
             </TouchableOpacity>

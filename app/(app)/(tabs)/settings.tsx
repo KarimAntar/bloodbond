@@ -39,17 +39,22 @@ const ProfileOption: React.FC<{
   colors: any;
 }> = ({ icon, title, subtitle, onPress, rightElement, color = '#666', colors }) => (
   <TouchableOpacity 
-    style={[{
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: 20,
-      paddingVertical: 16,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.border,
-    }]} 
+    style={[
+      {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.border,
+      }
+    ]} 
     onPress={onPress}
+    accessible={true}
+    accessibilityRole="button"
+    accessibilityLabel={title}
   >
-    <View style={[{ 
+    <View style={[{
       width: 36,
       height: 36,
       borderRadius: 18,
@@ -388,6 +393,11 @@ export default function SettingsTabScreen() {
       paddingVertical: 20,
       backgroundColor: colors.cardBackground,
       marginBottom: 8,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.08,
+      shadowRadius: 4,
+      elevation: 1,
     },
     statValue: {
       fontSize: 20,
@@ -415,6 +425,11 @@ export default function SettingsTabScreen() {
     },
     optionsContainer: {
       backgroundColor: colors.cardBackground,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.08,
+      shadowRadius: 4,
+      elevation: 1,
     },
     profileOption: {
       flexDirection: 'row',
@@ -444,7 +459,7 @@ export default function SettingsTabScreen() {
   if (!user) {
     return (
       <SafeAreaView style={dynamicStyles.loadingContainer}>
-        <ActivityIndicator size="large" color="#E53E3E" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </SafeAreaView>
     );
   }
@@ -455,7 +470,7 @@ export default function SettingsTabScreen() {
       <SafeAreaView style={dynamicStyles.container}>
         <ScrollView showsVerticalScrollIndicator={false}>
           {/* Profile Header Skeleton */}
-          <View style={[styles.profileHeader, { backgroundColor: '#E53E3E' }]}>
+          <View style={[styles.profileHeader, { backgroundColor: colors.primary }]}>
             <View style={styles.profileInfo}>
               <SkeletonLoader width={80} height={80} borderRadius={40} marginBottom={16} />
               <SkeletonLoader width="60%" height={24} marginBottom={4} />
@@ -500,7 +515,7 @@ export default function SettingsTabScreen() {
       <ScrollView showsVerticalScrollIndicator={false}>
          {/* Profile Header */}
         <LinearGradient
-          colors={['#E53E3E', '#C53030']}
+          colors={[colors.primary, colors.danger]}
           style={styles.profileHeader}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
@@ -548,14 +563,14 @@ export default function SettingsTabScreen() {
             title="Requests"
             value={stats.requestsCreated.toString()}
             icon="add-circle"
-            color="#E53E3E"
+            color={colors.primary}
             colors={colors}
           />
           <StatCard
             title="Responses"
             value={stats.responsesSent.toString()}
             icon="paper-plane"
-            color="#3182CE"
+            color={colors.secondary}
             colors={colors}
           />
         </View>
@@ -565,22 +580,31 @@ export default function SettingsTabScreen() {
           <Text style={dynamicStyles.quickActionsTitle}>Quick Actions</Text>
           <View style={styles.quickActionsGrid}>
             <TouchableOpacity
-              style={[styles.quickActionButton, { backgroundColor: '#E53E3E' }]}
+              style={[styles.quickActionButton, { backgroundColor: colors.primary }]}
               onPress={() => router.push('/requests/create')}
+              accessible={true}
+              accessibilityRole="button"
+              accessibilityLabel="Create Request"
             >
               <Ionicons name="add-circle" size={24} color="white" />
               <Text style={styles.quickActionText}>Create Request</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.quickActionButton, { backgroundColor: '#3182CE' }]}
+              style={[styles.quickActionButton, { backgroundColor: colors.secondary }]}
               onPress={() => router.push('/requests')}
+              accessible={true}
+              accessibilityRole="button"
+              accessibilityLabel="Find Donors"
             >
               <Ionicons name="search" size={24} color="white" />
               <Text style={styles.quickActionText}>Find Donors</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.quickActionButton, { backgroundColor: '#38A169' }]}
+              style={[styles.quickActionButton, { backgroundColor: colors.success }]}
               onPress={handleDonationHistory}
+              accessible={true}
+              accessibilityRole="button"
+              accessibilityLabel="Donation History"
             >
               <Ionicons name="heart" size={24} color="white" />
               <Text style={styles.quickActionText}>History</Text>
@@ -597,7 +621,7 @@ export default function SettingsTabScreen() {
               title="Edit Profile"
               subtitle="Update your information"
               onPress={handleEditProfile}
-              color="#E53E3E"
+              color={colors.primary}
               colors={colors}
             />
             <ProfileOption
@@ -605,7 +629,7 @@ export default function SettingsTabScreen() {
               title="My Requests"
               subtitle="View your blood requests"
               onPress={handleMyRequests}
-              color="#3182CE"
+              color={colors.secondary}
               colors={colors}
             />
             <ProfileOption
@@ -613,7 +637,7 @@ export default function SettingsTabScreen() {
               title="My Responses"
               subtitle="Track your donation offers"
               onPress={handleMyResponses}
-              color="#38A169"
+              color={colors.success}
               colors={colors}
             />
             <ProfileOption
@@ -621,7 +645,7 @@ export default function SettingsTabScreen() {
               title="Donation History"
               subtitle="View past donations"
               onPress={handleDonationHistory}
-              color="#F56500"
+              color={colors.warning}
               colors={colors}
             />
             {userProfile?.role?.trim()?.toLowerCase() === 'admin' && (
@@ -630,7 +654,7 @@ export default function SettingsTabScreen() {
                 title="Admin Dashboard"
                 subtitle="Manage users and requests"
                 onPress={() => router.push('/(app)/admin')}
-                color="#8B5CF6"
+                color={colors.purple}
                 colors={colors}
               />
             )}
@@ -650,11 +674,11 @@ export default function SettingsTabScreen() {
                 <Switch
                   value={notificationsEnabled}
                   onValueChange={handleNotificationToggle}
-                  trackColor={{ false: '#e1e5e9', true: '#E53E3E' }}
-                  thumbColor={notificationsEnabled ? '#fff' : '#f4f3f4'}
+                  trackColor={{ false: colors.border, true: colors.primary }}
+                  thumbColor={notificationsEnabled ? 'white' : colors.secondaryText}
                 />
               }
-              color="#F56500"
+              color={colors.warning}
               colors={colors}
             />
             <ProfileOption
@@ -666,11 +690,11 @@ export default function SettingsTabScreen() {
                 <Switch
                   value={locationEnabled}
                   onValueChange={handleLocationToggle}
-                  trackColor={{ false: '#e1e5e9', true: '#E53E3E' }}
-                  thumbColor={locationEnabled ? '#fff' : '#f4f3f4'}
+                  trackColor={{ false: colors.border, true: colors.primary }}
+                  thumbColor={locationEnabled ? 'white' : colors.secondaryText}
                 />
               }
-              color="#3182CE"
+              color={colors.secondary}
               colors={colors}
             />
             <ProfileOption
@@ -678,7 +702,7 @@ export default function SettingsTabScreen() {
               title="Emergency Contacts"
               subtitle="Manage emergency numbers"
               onPress={handleEmergencyContacts}
-              color="#E53E3E"
+              color={colors.primary}
               colors={colors}
             />
             <ProfileOption
@@ -686,7 +710,7 @@ export default function SettingsTabScreen() {
               title="App Settings"
               subtitle="Privacy, security & more"
               onPress={handleSettings}
-              color="#666"
+              color={colors.secondaryText}
               colors={colors}
             />
             <ProfileOption
@@ -704,7 +728,7 @@ export default function SettingsTabScreen() {
                   Alert.alert('PWA Feature', 'This feature is available in Safari on iOS devices. Open the site in Safari to add to home screen.');
                 }
               }}
-              color="#38A169"
+              color={colors.success}
               colors={colors}
             />
           </View>
@@ -719,7 +743,7 @@ export default function SettingsTabScreen() {
               title="Help & FAQ"
               subtitle="Get answers to common questions"
               onPress={() => router.push('/(app)/profile/support')}
-              color="#38A169"
+              color={colors.success}
               colors={colors}
             />
             <ProfileOption
@@ -727,7 +751,7 @@ export default function SettingsTabScreen() {
               title="Contact Support"
               subtitle="Get help from our team"
               onPress={() => router.push('/(app)/profile/support')}
-              color="#3182CE"
+              color={colors.secondary}
               colors={colors}
             />
             <ProfileOption
@@ -735,7 +759,7 @@ export default function SettingsTabScreen() {
               title="About BloodBond"
               subtitle="Learn more about our mission"
               onPress={() => router.push('/(app)/profile/support')}
-              color="#F56500"
+              color={colors.warning}
               colors={colors}
             />
           </View>
@@ -748,7 +772,7 @@ export default function SettingsTabScreen() {
               icon="log-out"
               title="Logout"
               onPress={handleLogout}
-              color="#DC2626"
+              color={colors.danger}
               colors={colors}
             />
           </View>
@@ -892,8 +916,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 12,
     marginHorizontal: 4,
-    boxShadow: '0px 2px 8px rgba(0,0,0,0.1)',
-
   },
   quickActionText: {
     fontSize: 14,
