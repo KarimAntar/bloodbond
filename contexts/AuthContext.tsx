@@ -16,6 +16,7 @@ import {
 import { collection, doc, getDoc } from 'firebase/firestore';
 import { auth, db, googleClientIdIOS, googleClientIdWeb } from '../firebase/firebaseConfig';
 import { LoadingScreen } from '../components/LoadingScreen';
+import { Platform } from 'react-native';
 
 interface UserProfile {
   fullName: string;
@@ -362,16 +363,39 @@ useEffect(() => {
         try {
           // Check if we're on web or mobile
           if (typeof window !== 'undefined' && window.document && window.location.protocol.startsWith('http')) {
-            // Web: use popup
-            console.log('Using Google sign-in popup for web');
+            // Web environment - check for iOS specifically
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
             const provider = new GoogleAuthProvider();
-            const result = await signInWithPopup(auth, provider);
-            setLoading(false);
-            return result.user;
+            provider.setCustomParameters({
+              client_id: googleClientIdWeb
+            });
+
+            if (isIOS) {
+              // iOS web/PWA: use redirect to avoid popup issues
+              console.log('Using Google sign-in redirect for iOS web/PWA');
+              await signInWithRedirect(auth, provider);
+              setLoading(false);
+              return null; // User will be set by onAuthStateChanged after redirect
+            } else {
+              // Non-iOS web: use popup
+              console.log('Using Google sign-in popup for web');
+              const result = await signInWithPopup(auth, provider);
+              setLoading(false);
+              return result.user;
+            }
           } else {
-            // Mobile (iOS/Android): use Firebase signInWithRedirect
+            // Mobile (iOS/Android native): use Firebase signInWithRedirect
             console.log('Using Firebase signInWithRedirect for Google sign-in on mobile');
             const provider = new GoogleAuthProvider();
+            if (Platform.OS === 'ios') {
+              provider.setCustomParameters({
+                client_id: googleClientIdIOS
+              });
+            } else {
+              provider.setCustomParameters({
+                client_id: googleClientIdWeb
+              });
+            }
             await signInWithRedirect(auth, provider);
             // Note: signInWithRedirect doesn't return a user immediately
             // The user will be available through onAuthStateChanged after redirect
