@@ -26,11 +26,24 @@ const InitialLayout = () => {
       return;
     }
 
-    // Start proximity notification listener only when user is authenticated
+    // Start proximity notification listener only when user is authenticated, but defer on web
     if (user && !proximityListener) {
-      console.log('Starting proximity notification listener for authenticated user');
-      const unsubscribe = startProximityNotificationListener();
-      setProximityListener(() => unsubscribe);
+      // Defer on web to avoid init delays
+      if (typeof window !== 'undefined') {
+        // On web/PWA, start after a short delay or use lighter polling
+        const timer = setTimeout(() => {
+          console.log('Starting deferred proximity notification listener for web user');
+          const unsubscribe = startProximityNotificationListener();
+          setProximityListener(() => unsubscribe);
+        }, 5000); // 5 second delay
+
+        return () => clearTimeout(timer);
+      } else {
+        // Native: start immediately
+        console.log('Starting proximity notification listener for authenticated user');
+        const unsubscribe = startProximityNotificationListener();
+        setProximityListener(() => unsubscribe);
+      }
 
       // Register web push token for authenticated users (only if permission granted)
       // Disabled automatic registration on startup to avoid non-user-gesture permission flows
@@ -81,25 +94,8 @@ const InitialLayout = () => {
         // User has completed profile and is currently on profile setup page, redirecting to main app
         console.log('User profile complete and on profile setup page, redirecting to main app...');
         router.replace('/(app)/(tabs)');
-      } else if (inAppGroup && currentPath.includes('/profile/setup') && userProfile) {
-        // If user is on profile setup page and has a profile, check if it's complete by fetching fresh data
-        const checkProfileComplete = async () => {
-          try {
-            const userDocRef = doc(db, 'users', user?.uid);
-            const userDocSnap = await getDoc(userDocRef);
-            if (userDocSnap.exists()) {
-              const freshProfile = userDocSnap.data();
-              if (freshProfile?.profileComplete === true) {
-                console.log('Fresh profile check: profile is complete, redirecting to main app...');
-                router.replace('/(app)/(tabs)');
-              }
-            }
-          } catch (error) {
-            console.error('Error checking fresh profile:', error);
-          }
-        };
-        checkProfileComplete();
       }
+      // Removed async fresh check to avoid delays; rely on AuthContext profile
       // Don't redirect users who are already on profile page with completed profiles
       // They should be able to modify their profile freely
       // If user is verified and in app group, or unverified and on auth screens, do nothing

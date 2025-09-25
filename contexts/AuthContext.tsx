@@ -57,37 +57,35 @@ interface AuthProviderProps {
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<any>(null);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(() => {
-    try {
-      if (typeof window === 'undefined') return null;
-      const raw = localStorage.getItem('bb_user_profile');
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      return parsed?.profile ?? null;
-    } catch (e) {
-      console.error('Error reading profile from localStorage', e);
-      return null;
-    }
-  });
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [initializing, setInitializing] = useState<boolean>(true);
-  const [profileCache] = useState<Map<string, UserProfile>>(() => {
-    const m = new Map<string, UserProfile>();
-    try {
-      if (typeof window !== 'undefined') {
+  const [profileCache] = useState<Map<string, UserProfile>>(new Map());
+
+  // Async load profile cache from localStorage after mount
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const loadProfileCache = async () => {
+      try {
         const raw = localStorage.getItem('bb_user_profile');
         if (raw) {
           const parsed = JSON.parse(raw);
           if (parsed?.uid && parsed?.profile) {
-            m.set(parsed.uid, parsed.profile);
+            profileCache.set(parsed.uid, parsed.profile);
+            // If current user matches, set it immediately
+            if (user?.uid === parsed.uid) {
+              setUserProfile(parsed.profile);
+            }
           }
         }
+      } catch (e) {
+        console.error('Error loading profile cache from localStorage', e);
       }
-    } catch (e) {
-      console.error('Error hydrating profileCache from localStorage', e);
-    }
-    return m;
-  });
+    };
+
+    loadProfileCache();
+  }, []);
 
   const fetchUserProfile = async (userId: string): Promise<UserProfile | null> => {
     // Check cache first for faster loading
