@@ -362,9 +362,14 @@ export default function CreateRequestScreen() {
   const [currentLocation, setCurrentLocation] = useState<LocationData | null>(null);
   const [locationLoading, setLocationLoading] = useState(false);
   const [verificationLoading, setVerificationLoading] = useState(false);
+  const [mapPreviewUrl, setMapPreviewUrl] = useState<string | null>(null);
+  const [showMapPreview, setShowMapPreview] = useState(false);
+  const [mapsLink, setMapsLink] = useState<string | null>(null);
 
   const router = useRouter();
   const { user, userProfile } = useAuth();
+
+  const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
 
   React.useEffect(() => {
     // Pre-fill with user profile data
@@ -425,14 +430,27 @@ const handleUseCurrentLocation = async () => {
     if (location) {
       setCurrentLocation(location);
       const address = await getAddressFromCoordinates(location.latitude, location.longitude);
-      let displayAddress = address;
+      const lat = location.latitude.toFixed(6);
+      const lng = location.longitude.toFixed(6);
+      const mapsLink = `https://www.google.com/maps?q=${lat},${lng}`;
+      let displayAddress = address || `Current Location (Lat: ${lat}, Lng: ${lng})`;
+
+      // Generate static map preview if API key available
+      if (apiKey) {
+        const staticMapUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=15&size=300x200&maptype=roadmap&key=${apiKey}`;
+        setMapPreviewUrl(staticMapUrl);
+        setShowMapPreview(true);
+      } else {
+        setShowMapPreview(false);
+        setMapPreviewUrl(null);
+      }
+
+      setMapsLink(mapsLink);
+
       if (!address) {
-        // Fallback to Google Maps link for better usability
-        const mapsLink = `https://www.google.com/maps?q=${location.latitude.toFixed(6)},${location.longitude.toFixed(6)}`;
-        displayAddress = `View on Google Maps: ${mapsLink}`;
         Alert.alert(
           'Location Set',
-          'Precise address not available. A Google Maps link has been set for the drop-off location. Tap the link to view/open in Maps.',
+          'Precise address not available. Location coordinates and map preview have been set.',
           [{ text: 'OK', style: 'default' }]
         );
       } else {
@@ -442,7 +460,7 @@ const handleUseCurrentLocation = async () => {
           [{ text: 'OK', style: 'default' }]
         );
       }
-      handleInputChange('dropOffAddress', displayAddress || '');
+      handleInputChange('dropOffAddress', displayAddress);
     } else {
       Alert.alert(
         'Location Error',
@@ -459,6 +477,12 @@ const handleUseCurrentLocation = async () => {
     );
   } finally {
     setLocationLoading(false);
+  }
+};
+
+const openInGoogleMaps = () => {
+  if (mapsLink) {
+    Linking.openURL(mapsLink).catch(err => console.error('Error opening Maps:', err));
   }
 };
 
