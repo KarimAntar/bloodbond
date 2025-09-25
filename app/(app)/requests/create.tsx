@@ -15,7 +15,9 @@ import {
   Switch,
   Modal,
   FlatList,
+  Image,
 } from 'react-native';
+import { Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { db } from '../../../firebase/firebaseConfig';
 import { collection, addDoc, Timestamp } from 'firebase/firestore';
@@ -416,39 +418,49 @@ export default function CreateRequestScreen() {
     }
   };
 
-  const handleUseCurrentLocation = async () => {
-    setLocationLoading(true);
-    try {
-      const location = await getCurrentLocation();
-      if (location) {
-        setCurrentLocation(location);
-        const address = await getAddressFromCoordinates(location.latitude, location.longitude);
-        if (address) {
-          handleInputChange('dropOffAddress', address);
-        }
+const handleUseCurrentLocation = async () => {
+  setLocationLoading(true);
+  try {
+    const location = await getCurrentLocation();
+    if (location) {
+      setCurrentLocation(location);
+      const address = await getAddressFromCoordinates(location.latitude, location.longitude);
+      let displayAddress = address;
+      if (!address) {
+        // Fallback to Google Maps link for better usability
+        const mapsLink = `https://www.google.com/maps?q=${location.latitude.toFixed(6)},${location.longitude.toFixed(6)}`;
+        displayAddress = `View on Google Maps: ${mapsLink}`;
+        Alert.alert(
+          'Location Set',
+          'Precise address not available. A Google Maps link has been set for the drop-off location. Tap the link to view/open in Maps.',
+          [{ text: 'OK', style: 'default' }]
+        );
+      } else {
         Alert.alert(
           'Location Found',
           `Current location has been set as the drop-off location.`,
           [{ text: 'OK', style: 'default' }]
         );
-      } else {
-        Alert.alert(
-          'Location Error',
-          'Unable to get your current location. Please make sure location services are enabled and try again.',
-          [{ text: 'OK', style: 'default' }]
-        );
       }
-    } catch (error) {
-      console.error('Error getting current location:', error);
+      handleInputChange('dropOffAddress', displayAddress || '');
+    } else {
       Alert.alert(
         'Location Error',
-        'Failed to get your current location. Please try again or enter the address manually.',
+        'Unable to get your current location. Please make sure location services are enabled and try again.',
         [{ text: 'OK', style: 'default' }]
       );
-    } finally {
-      setLocationLoading(false);
     }
-  };
+  } catch (error) {
+    console.error('Error getting current location:', error);
+    Alert.alert(
+      'Location Error',
+      'Failed to get your current location. Please try again or enter the address manually.',
+      [{ text: 'OK', style: 'default' }]
+    );
+  } finally {
+    setLocationLoading(false);
+  }
+};
 
   const handleSubmit = async () => {
     if (!validateForm()) return;
