@@ -238,10 +238,10 @@ useEffect(() => {
 useEffect(() => {
   if (initializing) {
     const timer = setTimeout(() => {
-      // If still initializing after 10s, force it to false to avoid long hangs
+      // If still initializing after 5s, force it to false to avoid long hangs
       console.warn('Initialization timeout reached, forcing initializing = false');
       setInitializing(false);
-    }, 10000); // 10 seconds
+    }, 5000); // 5 seconds
 
     return () => clearTimeout(timer);
   }
@@ -361,22 +361,24 @@ useEffect(() => {
         try {
           // Check if we're on web or mobile
           if (typeof window !== 'undefined' && window.document && window.location.protocol.startsWith('http')) {
-            // Web environment - check for iOS specifically
-            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+            // Web environment - detect mobile for redirect preference
+            const userAgent = navigator.userAgent.toLowerCase();
+            const isMobile = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent);
             const provider = new GoogleAuthProvider();
             provider.setCustomParameters({
               client_id: googleClientIdWeb
             });
 
-            if (isIOS) {
-              // iOS web/PWA: use redirect to avoid popup issues
-              console.log('Using Google sign-in redirect for iOS web/PWA');
+            if (isMobile) {
+              // Mobile web/PWA (iOS/Android): use redirect for reliability
+              console.log('Using Google sign-in redirect for mobile web/PWA');
               await signInWithRedirect(auth, provider);
+              console.log('Redirect initiated - page should navigate to Google');
               setLoading(false);
               return null; // User will be set by onAuthStateChanged after redirect
             } else {
-              // Non-iOS web: use popup
-              console.log('Using Google sign-in popup for web');
+              // Desktop web: use popup
+              console.log('Using Google sign-in popup for desktop web');
               const result = await signInWithPopup(auth, provider);
               setLoading(false);
               return result.user;
@@ -400,7 +402,8 @@ useEffect(() => {
             setLoading(false);
             return null; // User will be set by onAuthStateChanged listener
           }
-        } catch (error) {
+        } catch (error: any) {
+          console.error('Google sign-in error details:', error.code, error.message);
           setLoading(false);
           throw error;
         }
