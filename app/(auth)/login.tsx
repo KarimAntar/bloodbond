@@ -63,7 +63,7 @@ const Toast = ({ message, type, visible, onHide }: {
 export default function LoginScreen() {
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
-  const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [errors, setErrors] = useState<{ [key: string]: string }>({}); 
   const [needsVerification, setNeedsVerification] = useState(false);
   const [verificationTimer, setVerificationTimer] = useState(0);
   const [toast, setToast] = useState<{ visible: boolean; message: string; type: 'success' | 'error' | 'info' | 'warning'}>({
@@ -71,6 +71,28 @@ export default function LoginScreen() {
   });
   const router = useRouter();
   const { login, loginWithGoogle, loading, user } = useAuth();
+
+  // Handle Google redirect result on login page mount
+  useEffect(() => {
+    const processRedirect = async () => {
+      try {
+        console.log('Checking for Google redirect result on login page...');
+        const result = await getRedirectResult(auth);
+        if (result) {
+          console.log('Redirect result received on login page:', result.user.uid);
+          showToast('Google sign-in complete! Loading app...', 'success');
+          router.replace('/(app)/(tabs)');
+        } else {
+          console.log('No redirect result on login page - normal load');
+        }
+      } catch (error: any) {
+        console.error('Error processing redirect on login page:', error);
+        showToast(`Auth error: ${error.message}`, 'error');
+      }
+    };
+
+    processRedirect();
+  }, []);
   // ... (showToast, hideToast, useEffect for timer, validateForm, handleInputChange remain the same)
   const showToast = (message: string, type: 'success' | 'error' | 'info' | 'warning') => {
     setToast({ visible: true, message, type });
@@ -401,7 +423,7 @@ export default function LoginScreen() {
                   showToast('Starting Google sign-in...', 'info');
                   await loginWithGoogle();
                   showToast('Redirecting to Google - please approve and return...', 'info');
-                  // For redirect, don't navigate here - let handler and auth listener handle it
+                  // For redirect, don't navigate here - let the useEffect on mount handle the result
                 } catch (error: any) {
                   console.error('Google sign-in error:', error);
                   let message = 'Google sign-in failed';
