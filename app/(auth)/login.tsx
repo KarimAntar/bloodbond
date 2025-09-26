@@ -398,12 +398,10 @@ export default function LoginScreen() {
               style={[styles.loginButton, { backgroundColor: '#4285F4', marginTop: 12 }, loading && styles.buttonDisabled]}
               onPress={async () => {
                 try {
-                  showToast('Signing in with Google...', 'info');
-                  const user = await loginWithGoogle();
-                  if (user) {
-                    showToast('Signed in with Google!', 'success');
-                    router.replace('/(app)/(tabs)');
-                  }
+                  showToast('Starting Google sign-in...', 'info');
+                  await loginWithGoogle();
+                  showToast('Redirecting to Google - please approve and return...', 'info');
+                  // For redirect, don't navigate here - let handler and auth listener handle it
                 } catch (error: any) {
                   console.error('Google sign-in error:', error);
                   let message = 'Google sign-in failed';
@@ -415,6 +413,8 @@ export default function LoginScreen() {
                     message = 'Another sign-in is in progress.';
                   } else if (error.code === 'auth/operation-not-supported-in-this-environment') {
                     message = 'Google sign-in is not supported in this environment. Please use email/password login.';
+                  } else if (error.code === 'auth/redirect-cancelled-by-user') {
+                    message = 'Sign-in was cancelled during redirect.';
                   }
                   showToast(message, 'error');
                 }
