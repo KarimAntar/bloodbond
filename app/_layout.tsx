@@ -15,14 +15,15 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase/firebaseConfig';
 
 const InitialLayout = () => {
-  const { user, userProfile, initializing } = useAuth();
+  const { user, userProfile, initializing, loading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
   const [proximityListener, setProximityListener] = useState<(() => void) | null>(null);
 
   useEffect(() => {
-    // Wait until the auth state is no longer initializing.
-    if (initializing) {
+    // Wait until the auth state is no longer initializing and profile is loaded
+    if (initializing || loading) {
+      console.log('Auth still initializing or loading profile, skipping redirect logic');
       return;
     }
 
@@ -105,7 +106,7 @@ const InitialLayout = () => {
       router.replace('/(auth)/login');
     }
     // If user not authenticated and on auth screens, do nothing
-  }, [user, userProfile, initializing, segments, proximityListener]);
+  }, [user, userProfile, initializing, loading, segments, proximityListener]);
 
   // Show a loading screen only while initializing
   if (initializing) {

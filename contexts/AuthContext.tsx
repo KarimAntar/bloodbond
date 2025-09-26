@@ -17,6 +17,7 @@ import { collection, doc, getDoc } from 'firebase/firestore';
 import { auth, db, googleClientIdIOS, googleClientIdWeb } from '../firebase/firebaseConfig';
 import { LoadingScreen } from '../components/LoadingScreen';
 import { Platform } from 'react-native';
+import { browserLocalPersistence, setPersistence } from 'firebase/auth';
 
 interface UserProfile {
   fullName: string;
@@ -85,6 +86,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
 
     loadProfileCache();
+  }, []);
+
+  // Set auth persistence to local for web to ensure login survives page reloads
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setPersistence(auth, browserLocalPersistence)
+        .then(() => {
+          console.log('Auth persistence set to local for web');
+        })
+        .catch((error) => {
+          console.error('Error setting auth persistence:', error);
+        });
+    }
   }, []);
 
   const fetchUserProfile = async (userId: string): Promise<UserProfile | null> => {
