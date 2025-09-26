@@ -100,10 +100,12 @@ const InitialLayout = () => {
       // Don't redirect users who are already on profile page with completed profiles
       // They should be able to modify their profile freely
       // If user is verified and in app group, or unverified and on auth screens, do nothing
-    } else if (inAppGroup) {
+    } else if (inAppGroup && !window.location.search.includes('debug=true')) {
       // User not authenticated but trying to access app
       console.log('User not authenticated, redirecting to login...');
       router.replace('/(auth)/login');
+    } else if (inAppGroup && window.location.search.includes('debug=true')) {
+      console.log('Debug mode - skipping auth redirect for testing');
     }
     // If user not authenticated and on auth screens, do nothing
   }, [user, userProfile, initializing, loading, segments, proximityListener]);
