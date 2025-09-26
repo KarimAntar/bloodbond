@@ -375,21 +375,41 @@ useEffect(() => {
         try {
           // Check if we're on web or mobile
           if (typeof window !== 'undefined' && window.document && window.location.protocol.startsWith('http')) {
-            // Web environment - detect mobile for redirect preference
+          // Web environment - detect mobile for redirect preference
             const userAgent = navigator.userAgent.toLowerCase();
             const isMobile = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent);
+            const isIOS = /iphone|ipad|ipod/.test(userAgent);
             const provider = new GoogleAuthProvider();
             provider.setCustomParameters({
               client_id: googleClientIdWeb
             });
 
             if (isMobile) {
-              // Mobile web/PWA (iOS/Android): use redirect for reliability
-              console.log('Using Google sign-in redirect for mobile web/PWA');
-              await signInWithRedirect(auth, provider);
-              console.log('Redirect initiated - page should navigate to Google');
-              setLoading(false);
-              return null; // User will be set by onAuthStateChanged after redirect
+              // On iOS Safari/Chrome mobile browsers Firebase redirect/popup can fail due to
+              // intelligent tracking prevention and third-party cookie restrictions.
+              // Try popup first on iOS and fall back to redirect if popup fails.
+              if (isIOS) {
+                console.log('iOS mobile detected - attempting popup first to avoid Safari redirect issues');
+                try {
+                  const result = await signInWithPopup(auth, provider);
+                  setLoading(false);
+                  return result.user;
+                } catch (popupError: any) {
+                  console.warn('Popup failed on iOS, falling back to redirect', popupError);
+                  // If popup is blocked or unsupported, fallback to redirect
+                  await signInWithRedirect(auth, provider);
+                  console.log('Redirect initiated - page should navigate to Google');
+                  setLoading(false);
+                  return null;
+                }
+              } else {
+                // Non-iOS mobile: use redirect for reliability
+                console.log('Using Google sign-in redirect for mobile web/PWA');
+                await signInWithRedirect(auth, provider);
+                console.log('Redirect initiated - page should navigate to Google');
+                setLoading(false);
+                return null; // User will be set by onAuthStateChanged after redirect
+              }
             } else {
               // Desktop web: use popup
               console.log('Using Google sign-in popup for desktop web');

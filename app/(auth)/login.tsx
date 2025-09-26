@@ -78,8 +78,12 @@ export default function LoginScreen() {
       try {
         console.log('Checking for Google redirect result on login page...');
         const result = await getRedirectResult(auth);
-        if (result) {
-          console.log('Redirect result received on login page:', result.user.uid);
+        const current = auth.currentUser;
+        // If getRedirectResult is empty but auth.currentUser exists (race or redirect consumed elsewhere),
+        // treat this as a successful sign-in and enter the app.
+        if (result || current) {
+          const uid = result?.user?.uid || current?.uid;
+          console.log('Redirect result or existing user on login page:', uid);
           showToast('Google sign-in complete! Loading app...', 'success');
           router.replace('/(app)/(tabs)');
         } else {
@@ -87,7 +91,13 @@ export default function LoginScreen() {
         }
       } catch (error: any) {
         console.error('Error processing redirect on login page:', error);
-        showToast(`Auth error: ${error.message}`, 'error');
+        // If the error happened but we already have an authenticated user, continue into the app.
+        if (auth.currentUser) {
+          showToast('Google sign-in complete! Loading app...', 'success');
+          router.replace('/(app)/(tabs)');
+        } else {
+          showToast(`Auth error: ${error.message}`, 'error');
+        }
       }
     };
 
