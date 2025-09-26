@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../contexts/AuthContext';
-import { sendEmailVerification, sendPasswordResetEmail } from 'firebase/auth';
+import { sendEmailVerification, sendPasswordResetEmail, getRedirectResult } from 'firebase/auth';
 import { auth, db } from '../../firebase/firebaseConfig';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
