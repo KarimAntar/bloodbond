@@ -102,8 +102,17 @@ const InitialLayout = () => {
       // If user is verified and in app group, or unverified and on auth screens, do nothing
     } else if (inAppGroup && !window.location.search.includes('debug=true')) {
       // User not authenticated but trying to access app
-      console.log('User not authenticated, redirecting to login...');
-      router.replace('/(auth)/login');
+      // If the browser is currently on the Firebase OAuth handler path (/__/auth/handler),
+      // defer redirect to /login so the client-side handler can process the redirect result
+      // and allow onAuthStateChanged/getRedirectResult to settle.
+      const pathname = (typeof window !== 'undefined') ? window.location.pathname : '';
+      const isFirebaseAuthHandler = pathname.includes('/__/auth/handler');
+      if (isFirebaseAuthHandler) {
+        console.log('Detected Firebase auth handler path - deferring redirect to allow handler to finish');
+      } else {
+        console.log('User not authenticated, redirecting to login...');
+        router.replace('/(auth)/login');
+      }
     } else if (inAppGroup && window.location.search.includes('debug=true')) {
       console.log('Debug mode - skipping auth redirect for testing');
     }

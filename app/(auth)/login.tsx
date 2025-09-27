@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../contexts/AuthContext';
-import { sendEmailVerification, sendPasswordResetEmail, getRedirectResult } from 'firebase/auth';
+import { sendEmailVerification, sendPasswordResetEmail, getRedirectResult, onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from '../../firebase/firebaseConfig';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -84,8 +84,10 @@ export default function LoginScreen() {
     }
   }, []);
 
-  // Handle Google redirect result on login page mount
+  // Handle Google redirect result on login page mount and watch for auth state changes
   useEffect(() => {
+    let unsub: (() => void) | undefined;
+
     const processRedirect = async () => {
       try {
         console.log('Checking for Google redirect result on login page...');
@@ -98,22 +100,42 @@ export default function LoginScreen() {
           console.log('Redirect result or existing user on login page:', uid);
           showToast('Google sign-in complete! Loading app...', 'success');
           router.replace('/(app)/(tabs)');
-        } else {
-          console.log('No redirect result on login page - normal load');
+          return;
         }
+        console.log('No redirect result on login page - normal load');
       } catch (error: any) {
         console.error('Error processing redirect on login page:', error);
         // If the error happened but we already have an authenticated user, continue into the app.
         if (auth.currentUser) {
           showToast('Google sign-in complete! Loading app...', 'success');
           router.replace('/(app)/(tabs)');
+          return;
         } else {
           showToast(`Auth error: ${error.message}`, 'error');
         }
       }
+
+      // Fallback: listen for auth state changes and redirect when a user appears.
+      try {
+        unsub = onAuthStateChanged(auth, (u) => {
+          if (u) {
+            console.log('onAuthStateChanged detected user on login page:', u.uid);
+            showToast('Authentication detected — redirecting...', 'success');
+            router.replace('/(app)/(tabs)');
+          }
+        });
+      } catch (e) {
+        console.warn('Failed to attach onAuthStateChanged fallback on login page', e);
+      }
     };
 
     processRedirect();
+
+    return () => {
+      try {
+        if (unsub) unsub();
+      } catch (e) {}
+    };
   }, []);
   // ... (showToast, hideToast, useEffect for timer, validateForm, handleInputChange remain the same)
   const showToast = (message: string, type: 'success' | 'error' | 'info' | 'warning') => {
