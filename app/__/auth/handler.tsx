@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Alert } from 'react-native';
 import { useRouter } from 'expo-router';
-import { getRedirectResult } from 'firebase/auth';
+import { getRedirectResult, onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../../../firebase/firebaseConfig';
 import { useAuth } from '../../../contexts/AuthContext';
 
@@ -12,20 +12,49 @@ export default function AuthHandler() {
     useEffect(() => {
     const processRedirect = async () => {
       try {
-        console.log('Processing auth redirect in handler...');
+        console.log('Processing auth redirect in handler (improved) ...');
+
+        // First attempt to read the redirect result directly
         const result = await getRedirectResult(auth);
-        const current = auth.currentUser;
-        // If we either got a redirect result OR there is already an authenticated user (onAuthStateChanged handled it),
-        // treat the sign-in as successful and navigate into the app. This avoids false negatives when getRedirectResult
-        // was consumed elsewhere or the auth state updated before this handler runs.
-        if (result || current) {
-          const uid = result?.user?.uid || current?.uid;
-          console.log('Redirect result or existing user processed in handler:', uid);
+        if (result && result.user) {
+          console.log('getRedirectResult returned a user:', result.user.uid);
+          Alert.alert('Success', 'Google sign-in complete! Loading app...', [
+            { text: 'OK', onPress: () => router.replace('/(app)/(tabs)') }
+          ]);
+          return;
+        }
+
+        // If getRedirectResult returned nothing, wait briefly for the auth state to settle.
+        // Some browsers or environments update onAuthStateChanged before getRedirectResult is available,
+        // or the redirect result can be consumed earlier — so wait up to 3s for an authenticated user.
+        const waitedUser: any = await new Promise((resolve) => {
+          let settled = false;
+          const timeout = setTimeout(() => {
+            if (!settled) {
+              settled = true;
+              try { unsubscribe(); } catch (e) {}
+              resolve(null);
+            }
+          }, 3000);
+
+          const unsubscribe = onAuthStateChanged(auth, (u) => {
+            if (u && !settled) {
+              settled = true;
+              clearTimeout(timeout);
+              try { unsubscribe(); } catch (e) {}
+              resolve(u);
+            }
+          });
+        });
+
+        const current = waitedUser || auth.currentUser;
+        if (current) {
+          console.log('Authenticated user detected after waiting:', current.uid);
           Alert.alert('Success', 'Google sign-in complete! Loading app...', [
             { text: 'OK', onPress: () => router.replace('/(app)/(tabs)') }
           ]);
         } else {
-          console.log('No redirect result and no authenticated user in handler - redirecting to login');
+          console.log('No redirect result and no authenticated user in handler after wait - redirecting to login');
           Alert.alert('Auth Failed', 'No Google response found. Please try sign-in again.', [
             { text: 'OK', onPress: () => router.replace('/(auth)/login') }
           ]);
