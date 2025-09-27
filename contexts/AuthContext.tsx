@@ -403,9 +403,35 @@ useEffect(() => {
                       localStorage.setItem('bb_oauth_flow', 'external');
 
                       // Open the login page in a new browser tab which will initiate the redirect there.
-                      // Using target "_blank" opens Safari from a PWA on iOS.
-                      const target = `${window.location.origin}/(auth)/login?startGoogle=1`;
-                      window.open(target, '_blank', 'noopener');
+                      // Some iOS PWAs ignore window.open — create an anchor and click it programmatically
+                      // which is more reliable in standalone PWA contexts.
+                      try {
+                        const target = `${window.location.origin}/(auth)/login?startGoogle=1`;
+                        const a = document.createElement('a');
+                        a.href = target;
+                        a.target = '_blank';
+                        a.rel = 'noopener noreferrer';
+                        // iOS PWAs often require the click to be trusted — dispatch inside a microtask
+                        setTimeout(() => {
+                          try {
+                            document.body.appendChild(a);
+                            a.click();
+                            a.remove();
+                          } catch (e) {
+                            console.warn('Programmatic anchor click failed, falling back to window.open', e);
+                            try { window.open(target, '_blank', 'noopener'); } catch (ee) {}
+                          }
+                        }, 0);
+                      } catch (e) {
+                        console.warn('Could not open external Safari tab for OAuth flow (anchor fallback)', e);
+                        // Fallback to in-PWA redirect if opening a new tab fails
+                        try {
+                          localStorage.setItem('bb_oauth_flow', 'redirect');
+                        } catch (err) {}
+                        await signInWithRedirect(auth, provider);
+                        setLoading(false);
+                        return null;
+                      }
                     }
                   } catch (e) {
                     console.warn('Could not open external Safari tab for OAuth flow', e);
