@@ -434,15 +434,18 @@ const handleUseCurrentLocation = async () => {
       const lng = location.longitude.toFixed(6);
       const mapsLink = `https://www.google.com/maps?q=${lat},${lng}`;
 
-      // Generate static map preview if API key available
+      // Generate static map preview if API key available (store URL), otherwise clear it.
       if (apiKey) {
         const staticMapUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=15&size=300x200&maptype=roadmap&key=${apiKey}`;
         setMapPreviewUrl(staticMapUrl);
-        setShowMapPreview(true);
       } else {
-        setShowMapPreview(false);
         setMapPreviewUrl(null);
       }
+
+      // Always show the preview area after using current location.
+      // The preview will render a static image when mapPreviewUrl is available,
+      // otherwise it will show the coordinates + Open in Google Maps link.
+      setShowMapPreview(true);
 
       setMapsLink(mapsLink);
 
@@ -759,17 +762,54 @@ const openInGoogleMaps = () => {
                   </Text>
                 </TouchableOpacity>
                 <Text style={styles.orText}>or</Text>
-                <View style={styles.inputContainer}>
-                  <Ionicons name="map-outline" size={20} color="#666" />
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="Enter drop-off address"
-                    placeholderTextColor="#999"
-                    value={formData.dropOffAddress}
-                    onChangeText={(value) => handleInputChange('dropOffAddress', value)}
-                    editable={!loading}
-                  />
-                </View>
+                {showMapPreview ? (
+                  <View style={styles.mapPreviewContainer}>
+                    <Text style={styles.mapPreviewTitle}>Selected Location</Text>
+                    {mapPreviewUrl ? (
+                      <Image source={{ uri: mapPreviewUrl }} style={styles.mapPreviewImage} />
+                    ) : (
+                      <View style={styles.mapLinkRow}>
+                        <Text style={styles.mapLinkText}>
+                          {currentLocation
+                            ? `${currentLocation.latitude.toFixed(6)}, ${currentLocation.longitude.toFixed(6)}`
+                            : mapsLink}
+                        </Text>
+                      </View>
+                    )}
+
+                    <View style={styles.mapPreviewActions}>
+                      <TouchableOpacity style={styles.openMapsButton} onPress={openInGoogleMaps}>
+                        <Ionicons name="map-outline" size={16} color="white" />
+                        <Text style={styles.openMapsButtonText}>Open in Google Maps</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.editLocationButton}
+                        onPress={() => {
+                          // allow user to manually enter an address instead
+                          setShowMapPreview(false);
+                          setMapPreviewUrl(null);
+                          setMapsLink(null);
+                          handleInputChange('dropOffAddress', '');
+                        }}
+                      >
+                        <Text style={styles.editLocationButtonText}>Edit Address</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : (
+                  <View style={styles.inputContainer}>
+                    <Ionicons name="map-outline" size={20} color="#666" />
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="Enter drop-off address"
+                      placeholderTextColor="#999"
+                      value={formData.dropOffAddress}
+                      onChangeText={(value) => handleInputChange('dropOffAddress', value)}
+                      editable={!loading}
+                    />
+                  </View>
+                )}
               </View>
             </View>
 
@@ -1239,5 +1279,76 @@ const styles = StyleSheet.create({
     color: '#92400E',
     marginLeft: 12,
     fontWeight: '500',
+  },
+  mapPreviewContainer: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e1e5e9',
+  },
+  mapPreviewTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1a1a1a',
+    marginBottom: 8,
+  },
+  mapPreviewImage: {
+    width: '100%',
+    height: 200,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  mapLinkRow: {
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e6e8eb',
+    marginBottom: 8,
+  },
+  mapLinkText: {
+    color: '#333',
+    fontSize: 14,
+  },
+  mapPreviewActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  openMapsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#4285F4',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    flex: 1,
+    marginRight: 8,
+  },
+  openMapsButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '500',
+    marginLeft: 6,
+  },
+  editLocationButton: {
+    flex: 1,
+    borderRadius: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: '#e1e5e9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+  },
+  editLocationButtonText: {
+    color: '#1a1a1a',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
