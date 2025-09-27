@@ -397,18 +397,52 @@ useEffect(() => {
                 } catch (popupError: any) {
                   console.warn('Popup failed on iOS, falling back to redirect', popupError);
                   // If popup is blocked or unsupported, fallback to redirect
+                  try {
+                    if (typeof window !== 'undefined') {
+                      localStorage.setItem('bb_oauth_flow', 'redirect');
+                    }
+                  } catch (e) {}
                   await signInWithRedirect(auth, provider);
                   console.log('Redirect initiated - page should navigate to Google');
                   setLoading(false);
                   return null;
                 }
               } else {
-                // Non-iOS mobile: use redirect for reliability
-                console.log('Using Google sign-in redirect for mobile web/PWA');
-                await signInWithRedirect(auth, provider);
-                console.log('Redirect initiated - page should navigate to Google');
-                setLoading(false);
-                return null; // User will be set by onAuthStateChanged after redirect
+                // Non-iOS mobile: prefer popup on Chrome Android (popups usually work) and fall back to redirect.
+                // This avoids environments where redirect responses are not preserved by the browser.
+                const ua = navigator.userAgent.toLowerCase();
+                const isChromeAndroid = ua.includes('chrome') && ua.includes('android');
+                if (isChromeAndroid) {
+                  console.log('Chrome on Android detected — attempting popup first (preferred)');
+                  try {
+                    const result = await signInWithPopup(auth, provider);
+                    setLoading(false);
+                    return result.user;
+                  } catch (popupError: any) {
+                    console.warn('Popup failed on Chrome Android, falling back to redirect', popupError);
+                    try {
+                      if (typeof window !== 'undefined') {
+                        localStorage.setItem('bb_oauth_flow', 'redirect');
+                      }
+                    } catch (e) {}
+                    await signInWithRedirect(auth, provider);
+                    console.log('Redirect initiated - page should navigate to Google');
+                    setLoading(false);
+                    return null;
+                  }
+                } else {
+                  // Other mobile browsers: use redirect for reliability, but mark flow in localStorage
+                  console.log('Using Google sign-in redirect for mobile web/PWA (non-iOS non-Chrome-Android)');
+                  try {
+                    if (typeof window !== 'undefined') {
+                      localStorage.setItem('bb_oauth_flow', 'redirect');
+                    }
+                  } catch (e) {}
+                  await signInWithRedirect(auth, provider);
+                  console.log('Redirect initiated - page should navigate to Google');
+                  setLoading(false);
+                  return null; // User will be set by onAuthStateChanged after redirect
+                }
               }
             } else {
               // Desktop web: use popup
