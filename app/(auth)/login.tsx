@@ -107,10 +107,60 @@ export default function LoginScreen() {
           console.log('Auto-starting Google sign-in because startGoogle flag or external flow was detected');
           // Clear flag (best-effort)
           try { localStorage.removeItem('bb_oauth_flow'); } catch (e) {}
+          // Start the Google flow. In an external Safari tab this will navigate away.
           await loginWithGoogle();
           console.log('loginWithGoogle returned (redirect flow started or popup result)');
+
+          // If the flow returned quickly (blank popup or returned to PWA), give the auth state a short moment.
+          // If no authenticated user appears within a few seconds, prompt the user to open the flow in Safari manually.
+          setTimeout(() => {
+            try {
+              if (!auth?.currentUser) {
+                console.warn('No auth detected after external flow attempt — prompting user to open in Safari');
+                Alert.alert(
+                  'Complete sign-in in Safari',
+                  'The PWA could not complete the Google sign-in automatically. Open this flow in Safari to complete sign-in.',
+                  [
+                    {
+                      text: 'Open in Safari',
+                      onPress: () => {
+                        try {
+                          const target = `${window.location.origin}/(auth)/login?startGoogle=1`;
+                          window.open(target, '_blank', 'noopener');
+                        } catch (e) {
+                          console.error('Failed to open Safari tab', e);
+                        }
+                      }
+                    },
+                    { text: 'OK' }
+                  ]
+                );
+              }
+            } catch (e) {
+              console.error('Error checking auth after external flow', e);
+            }
+          }, 2500);
         } catch (e) {
           console.error('Auto-start Google sign-in failed', e);
+          // If the auto-start failed, show a friendly alert with a manual fallback.
+          Alert.alert(
+            'Google sign-in failed to start',
+            'Tap "Open in Safari" to continue the sign-in flow in the external browser.',
+            [
+              {
+                text: 'Open in Safari',
+                onPress: () => {
+                  try {
+                    const target = `${window.location.origin}/(auth)/login?startGoogle=1`;
+                    window.open(target, '_blank', 'noopener');
+                  } catch (err) {
+                    console.error('Failed to open Safari tab', err);
+                  }
+                }
+              },
+              { text: 'Cancel', style: 'cancel' }
+            ]
+          );
         }
       })();
     }
