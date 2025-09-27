@@ -433,7 +433,6 @@ const handleUseCurrentLocation = async () => {
       const lat = location.latitude.toFixed(6);
       const lng = location.longitude.toFixed(6);
       const mapsLink = `https://www.google.com/maps?q=${lat},${lng}`;
-      let displayAddress = address || `Current Location (Lat: ${lat}, Lng: ${lng})`;
 
       // Generate static map preview if API key available
       if (apiKey) {
@@ -450,17 +449,20 @@ const handleUseCurrentLocation = async () => {
       if (!address) {
         Alert.alert(
           'Location Set',
-          'Precise address not available. Location coordinates and map preview have been set.',
+          'Precise address not available. A map preview/link has been added — edit the drop-off address manually if needed.',
           [{ text: 'OK', style: 'default' }]
         );
       } else {
         Alert.alert(
           'Location Found',
-          `Current location has been set as the drop-off location.`,
+          'Current location has been set as the drop-off location.',
           [{ text: 'OK', style: 'default' }]
         );
       }
-      handleInputChange('dropOffAddress', displayAddress);
+
+      // Only populate the input with a human-readable address when reverse geocoding succeeded.
+      // Do NOT insert raw coordinates or a URL into the editable drop-off input.
+      handleInputChange('dropOffAddress', address || '');
     } else {
       Alert.alert(
         'Location Error',
