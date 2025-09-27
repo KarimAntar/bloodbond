@@ -389,6 +389,42 @@ useEffect(() => {
               // intelligent tracking prevention and third-party cookie restrictions.
               // Try popup first on iOS and fall back to redirect if popup fails.
               if (isIOS) {
+                // Detect standalone PWA on iOS (added to Home Screen)
+                const isStandalone = (typeof navigator !== 'undefined' && ((navigator as any).standalone || (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)));
+                if (isStandalone) {
+                  // In iOS PWAs the in-app browser context can prevent the OAuth redirect result
+                  // from being processed correctly. Work around by opening the login flow in
+                  // the external Safari browser (new tab) which preserves the OAuth round-trip.
+                  console.log('iOS PWA standalone detected — opening external Safari tab for Google sign-in');
+
+                  try {
+                    if (typeof window !== 'undefined') {
+                      // Mark that we initiated an external flow so the app can detect the return.
+                      localStorage.setItem('bb_oauth_flow', 'external');
+
+                      // Open the login page in a new browser tab which will initiate the redirect there.
+                      // Using target "_blank" opens Safari from a PWA on iOS.
+                      const target = `${window.location.origin}/(auth)/login?startGoogle=1`;
+                      window.open(target, '_blank', 'noopener');
+                    }
+                  } catch (e) {
+                    console.warn('Could not open external Safari tab for OAuth flow', e);
+                    // Fallback to in-PWA redirect if opening a new tab fails
+                    try {
+                      localStorage.setItem('bb_oauth_flow', 'redirect');
+                    } catch (err) {}
+                    await signInWithRedirect(auth, provider);
+                    setLoading(false);
+                    return null;
+                  }
+
+                  setLoading(false);
+                  // Stop here — the external tab will run the OAuth flow and the app will pick up the result
+                  // when the user returns (or via the handler).
+                  return null;
+                }
+
+                // Non-standalone iOS (regular Safari tab or other): try popup first and fall back to redirect
                 console.log('iOS mobile detected - attempting popup first to avoid Safari redirect issues');
                 try {
                   const result = await signInWithPopup(auth, provider);

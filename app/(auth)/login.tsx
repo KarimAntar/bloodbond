@@ -84,6 +84,38 @@ export default function LoginScreen() {
     }
   }, []);
 
+  // If this page was opened by the external iOS-Safari fallback, or has a startGoogle flag,
+  // automatically start the Google flow. This allows an external tab (opened from the PWA)
+  // to initiate the OAuth redirect in Safari where the round-trip is preserved.
+  useEffect(() => {
+    const shouldStart = (() => {
+      try {
+        if (typeof window === 'undefined') return false;
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('startGoogle') === '1') return true;
+        const flow = localStorage.getItem('bb_oauth_flow');
+        if (flow === 'external') return true;
+      } catch (e) {
+        console.warn('Error checking startGoogle/localStorage flag', e);
+      }
+      return false;
+    })();
+
+    if (shouldStart) {
+      (async () => {
+        try {
+          console.log('Auto-starting Google sign-in because startGoogle flag or external flow was detected');
+          // Clear flag (best-effort)
+          try { localStorage.removeItem('bb_oauth_flow'); } catch (e) {}
+          await loginWithGoogle();
+          console.log('loginWithGoogle returned (redirect flow started or popup result)');
+        } catch (e) {
+          console.error('Auto-start Google sign-in failed', e);
+        }
+      })();
+    }
+  }, []);
+  
   // Handle Google redirect result on login page mount and watch for auth state changes
   useEffect(() => {
     let unsub: (() => void) | undefined;
