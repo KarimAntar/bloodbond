@@ -72,6 +72,18 @@ export default function LoginScreen() {
   const router = useRouter();
   const { login, loginWithGoogle, loading, user } = useAuth();
 
+  // Debug helper: on mobile web open the site with ?debugAuth=1 to show the final redirect URL,
+  // referrer and user agent in a native alert so you can capture what the browser was sent back to.
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.search.includes('debugAuth=1')) {
+      const href = window.location.href;
+      const ref = (typeof document !== 'undefined' && document.referrer) ? document.referrer : '';
+      const ua = (typeof navigator !== 'undefined' && navigator.userAgent) ? navigator.userAgent : '';
+      console.log('DEBUG_AUTH', { href, ref, ua });
+      Alert.alert('Debug Auth Info', `href:\n${href}\n\nreferrer:\n${ref}\n\nuserAgent:\n${ua}`, [{ text: 'OK' }]);
+    }
+  }, []);
+
   // Handle Google redirect result on login page mount
   useEffect(() => {
     const processRedirect = async () => {
