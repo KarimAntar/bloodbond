@@ -102,13 +102,19 @@ const InitialLayout = () => {
       // If user is verified and in app group, or unverified and on auth screens, do nothing
     } else if (inAppGroup && !window.location.search.includes('debug=true')) {
       // User not authenticated but trying to access app
-      // If the browser is currently on the Firebase OAuth handler path (/__/auth/handler),
-      // defer redirect to /login so the client-side handler can process the redirect result
-      // and allow onAuthStateChanged/getRedirectResult to settle.
+      // Defer redirect to /login if we detect the Firebase OAuth handler or OAuth callback params.
+      // Some Android browsers return to the app with query params (code/state) rather than the
+      // hosting handler path, so treat those as in-flight auth and allow the client handler to settle.
       const pathname = (typeof window !== 'undefined') ? window.location.pathname : '';
+      const search = (typeof window !== 'undefined') ? window.location.search : '';
       const isFirebaseAuthHandler = pathname.includes('/__/auth/handler');
-      if (isFirebaseAuthHandler) {
-        console.log('Detected Firebase auth handler path - deferring redirect to allow handler to finish');
+      const oauthParams = ['code=', 'state=', 'access_token=', 'id_token=', 'g_csrf_token', 'oauth_token', 'session_state'];
+      const hasOAuthParams = oauthParams.some(p => search.includes(p));
+
+      if (isFirebaseAuthHandler || hasOAuthParams) {
+        console.log('Detected OAuth handler or callback params - deferring redirect to allow handler to finish', { pathname, search });
+        // Give the auth handler a short grace period to run (it will redirect into the app when ready)
+        // No navigation here — the handler/login page will perform the final router.replace when auth settles.
       } else {
         console.log('User not authenticated, redirecting to login...');
         router.replace('/(auth)/login');
