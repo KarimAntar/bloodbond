@@ -11,6 +11,7 @@ import {
   Share,
   Alert,
   Linking,
+  Image,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { db } from '../../../firebase/firebaseConfig';
@@ -20,6 +21,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { Colors } from '../../../constants/Colors';
 import { LinearGradient } from 'expo-linear-gradient';
+import { getCurrentLocation } from '../../../utils/locationServices';
 
 interface BloodRequest {
   id: string;
@@ -32,6 +34,9 @@ interface BloodRequest {
   notes?: string;
   urgent?: boolean;
   createdAt: any;
+  // Optional fields saved when the requester used "Use Current Location"
+  dropOffAddress?: string;
+  location?: { latitude: number; longitude: number } | null;
 }
 
 interface Response {
@@ -114,6 +119,7 @@ export default function RequestDetailScreen() {
   const { user } = useAuth();
   const { currentTheme } = useTheme();
   const colors = Colors[currentTheme];
+  const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
 
   useEffect(() => {
     const fetchRequestData = async () => {
@@ -320,6 +326,70 @@ export default function RequestDetailScreen() {
             />
           </View>
         </View>
+
+        {/* Drop-off Location Preview */}
+        {request.location && (
+          <View style={styles.mapSection}>
+            <Text style={[styles.sectionTitle, { color: colors.primaryText }]}>Drop-off Location</Text>
+            <View style={[styles.mapCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+              <Text style={[styles.mapAddressText, { color: colors.primaryText }]}>
+                {request.dropOffAddress || `${request.location.latitude.toFixed(6)}, ${request.location.longitude.toFixed(6)}`}
+              </Text>
+
+              {apiKey ? (
+                <Image
+                  source={{
+                    uri: `https://maps.googleapis.com/maps/api/staticmap?center=${request.location.latitude},${request.location.longitude}&zoom=15&size=600x300&maptype=roadmap&markers=color:red%7C${request.location.latitude},${request.location.longitude}&key=${apiKey}`
+                  }}
+                  style={styles.detailMapImage}
+                />
+              ) : (
+                <View style={styles.mapFallback}>
+                  <Text style={{ color: colors.secondaryText }}>
+                    Map preview unavailable. Open map to get directions.
+                  </Text>
+                </View>
+              )}
+
+              <View style={styles.mapActionsRow}>
+                <TouchableOpacity
+                  style={[styles.getDirectionsButton, { backgroundColor: colors.primary }]}
+                onPress={async () => {
+                    try {
+                      const dest = `${request.location!.latitude},${request.location!.longitude}`;
+                      const originLoc = await getCurrentLocation();
+                      const origin = originLoc ? `${originLoc.latitude.toFixed(6)},${originLoc.longitude.toFixed(6)}` : '';
+                      const url = origin
+                        ? `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${dest}`
+                        : `https://www.google.com/maps/dir/?api=1&destination=${dest}`;
+                      Linking.openURL(url).catch(err => console.error('Error opening directions:', err));
+                    } catch (err) {
+                      console.error('Error getting user location for directions:', err);
+                      const dest = `${request.location!.latitude},${request.location!.longitude}`;
+                      const url = `https://www.google.com/maps/dir/?api=1&destination=${dest}`;
+                      Linking.openURL(url).catch(e => console.error('Error opening directions:', e));
+                    }
+                  }}
+                >
+                  <Ionicons name="navigate" size={18} color="#fff" />
+                  <Text style={styles.getDirectionsText}>Get Directions</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.openMapsButtonAlt, { borderColor: colors.border }]}
+                  onPress={() => {
+                    const q = `${request.location!.latitude},${request.location!.longitude}`;
+                    const url = `https://www.google.com/maps/search/?api=1&query=${q}`;
+                    Linking.openURL(url).catch(err => console.error('Error opening map:', err));
+                  }}
+                >
+                  <Ionicons name="map-outline" size={18} color={colors.primary} />
+                  <Text style={[styles.openMapsButtonAltText, { color: colors.primary }]}>Open Map</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
 
         {/* Notes */}
         {request.notes && (
@@ -730,5 +800,71 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#166534',
     lineHeight: 20,
+  },
+
+  /* Map preview styles */
+  mapSection: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  mapCard: {
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    width: '100%',
+  },
+  mapAddressText: {
+    fontSize: 14,
+    marginBottom: 8,
+  },
+  detailMapImage: {
+    width: '100%',
+    height: 180,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  mapFallback: {
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  mapActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  getDirectionsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    flex: 1,
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  getDirectionsText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  openMapsButtonAlt: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    flex: 1,
+    justifyContent: 'center',
+  },
+  openMapsButtonAltText: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 8,
   },
 });
