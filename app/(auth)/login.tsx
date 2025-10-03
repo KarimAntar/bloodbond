@@ -169,10 +169,61 @@ export default function LoginScreen() {
   // Handle Google redirect result on login page mount and watch for auth state changes
   useEffect(() => {
     let unsub: (() => void) | undefined;
+    let processedRedirect = false;
 
     const processRedirect = async () => {
       try {
         console.log('Checking for Google redirect result on login page...');
+        
+        // Check localStorage flag to see if this was a PWA redirect
+        const flow = localStorage.getItem('bb_oauth_flow');
+        if (flow === 'pwa_redirect') {
+          console.log('PWA redirect flow detected - checking auth state with extended wait');
+          localStorage.removeItem('bb_oauth_flow');
+          
+          // For iOS PWA, the redirect result might take longer to process
+          // Wait up to 5 seconds for the auth state to settle
+          let attempts = 0;
+          const maxAttempts = 10;
+          
+          const checkAuthState = async () => {
+            attempts++;
+            console.log(`Checking auth state attempt ${attempts}/${maxAttempts}`);
+            
+            try {
+              const result = await getRedirectResult(auth);
+              const current = auth.currentUser;
+              
+              if (result || current) {
+                const uid = result?.user?.uid || current?.uid;
+                console.log('PWA redirect auth successful:', uid);
+                if (!processedRedirect) {
+                  processedRedirect = true;
+                  showToast('Google sign-in complete! Loading app...', 'success');
+                  setTimeout(() => router.replace('/(app)/(tabs)'), 100);
+                }
+                return;
+              }
+              
+              if (attempts < maxAttempts) {
+                setTimeout(checkAuthState, 500);
+              } else {
+                console.warn('PWA redirect auth check timed out');
+                showToast('Sign-in may have failed. Please try again.', 'warning');
+              }
+            } catch (error) {
+              console.error('Error in PWA auth check:', error);
+              if (attempts < maxAttempts) {
+                setTimeout(checkAuthState, 500);
+              }
+            }
+          };
+          
+          checkAuthState();
+          return;
+        }
+        
+        // Regular redirect processing
         const result = await getRedirectResult(auth);
         const current = auth.currentUser;
         // If getRedirectResult is empty but auth.currentUser exists (race or redirect consumed elsewhere),
@@ -180,15 +231,19 @@ export default function LoginScreen() {
         if (result || current) {
           const uid = result?.user?.uid || current?.uid;
           console.log('Redirect result or existing user on login page:', uid);
-          showToast('Google sign-in complete! Loading app...', 'success');
-          router.replace('/(app)/(tabs)');
+          if (!processedRedirect) {
+            processedRedirect = true;
+            showToast('Google sign-in complete! Loading app...', 'success');
+            router.replace('/(app)/(tabs)');
+          }
           return;
         }
         console.log('No redirect result on login page - normal load');
       } catch (error: any) {
         console.error('Error processing redirect on login page:', error);
         // If the error happened but we already have an authenticated user, continue into the app.
-        if (auth.currentUser) {
+        if (auth.currentUser && !processedRedirect) {
+          processedRedirect = true;
           showToast('Google sign-in complete! Loading app...', 'success');
           router.replace('/(app)/(tabs)');
           return;
@@ -200,7 +255,8 @@ export default function LoginScreen() {
       // Fallback: listen for auth state changes and redirect when a user appears.
       try {
         unsub = onAuthStateChanged(auth, (u) => {
-          if (u) {
+          if (u && !processedRedirect) {
+            processedRedirect = true;
             console.log('onAuthStateChanged detected user on login page:', u.uid);
             showToast('Authentication detected — redirecting...', 'success');
             router.replace('/(app)/(tabs)');
