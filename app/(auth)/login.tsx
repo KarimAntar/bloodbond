@@ -208,8 +208,20 @@ export default function LoginScreen() {
               if (attempts < maxAttempts) {
                 setTimeout(checkAuthState, 500);
               } else {
-                console.warn('PWA redirect auth check timed out');
-                showToast('Sign-in may have failed. Please try again.', 'warning');
+                console.warn('PWA redirect auth check timed out - showing manual workaround');
+                Alert.alert(
+                  'Complete Sign-In',
+                  'Google sign-in completed successfully, but iOS PWA needs a refresh. Tap "Continue" to finish signing in.',
+                  [
+                    {
+                      text: 'Continue',
+                      onPress: () => {
+                        // Force refresh the PWA to pick up the auth state
+                        window.location.reload();
+                      }
+                    }
+                  ]
+                );
               }
             } catch (error) {
               console.error('Error in PWA auth check:', error);
